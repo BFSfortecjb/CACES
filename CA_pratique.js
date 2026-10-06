@@ -131,6 +131,9 @@ async function afficherPratique(st, cat) {
   let consignesVues = !(ops || []).length;
   const chrono = Object.fromEntries(PHASES.map(([k]) => [k, { ms: 0, depuis: null, valide: false }]));
   const ms = k => chrono[k].ms + (chrono[k].depuis ? Date.now() - chrono[k].depuis : 0);
+  const refMin = (S.referentiel.categories.find(c => c.referentiel_code === cat.referentiel_code && c.code === cat.categorie_code) || {}).temps_reference_min || null;
+  const totalValideMs = () => PHASES.reduce((s2, [k]) => s2 + (chrono[k].valide ? chrono[k].ms : 0), 0);
+  const tempsDepasse = () => !!refMin && PHASES.every(([k]) => chrono[k].valide) && totalValideMs() > 1.3 * refMin * 60000;
 
   const actifs = () => criteres.filter(c => {
     if (c.variante && c.variante.includes('/')) { const [g, t] = c.variante.split('/'); if (typesDuGroupe(g).length > 1 && (typeChoisi[g] || typesDuGroupe(g)[0]) !== t) return false; }
@@ -232,7 +235,8 @@ async function afficherPratique(st, cat) {
              <button type="button" class="principal" data-ch="${k}" data-act="valider" ${ms(k) ? '' : 'disabled'}>✔ Valider</button>
              <button type="button" class="icone" data-ch="${k}" data-act="saisie" title="Saisir à la main (minutes)">✎</button>`}</div></div>`; }).join('')}
       <div class="chrono total"><div class="chrono-lib">Durée totale validée</div><div class="chrono-temps" id="chrono-total">${fmtDuree(total / 1000)}</div></div></div>
-      <p class="aide">Au-delà de 130 % du temps de référence, attribuer 0 au(x) point(s) d'évaluation concerné(s).</p>`;
+      <p class="aide">${refMin ? `Temps de référence : <b>${refMin} min</b> — limite à 130 % : <b>${(refMin * 1.3).toFixed(1)} min</b>.${tempsDepasse() ? ' <b style="color:#b00020">⚠ Durée dépassée : une note 0 sera à attribuer au point concerné à l\'enregistrement.</b>' : ''}`
+        : 'Temps de référence non défini pour cette catégorie (à renseigner dans Catégories) : règle des 130 % non contrôlée automatiquement.'}</p>`;
     $$('[data-ch]', z).forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.ch, c = chrono[k];
       if (b.dataset.act === 'start') c.depuis = Date.now();
@@ -242,7 +246,8 @@ async function afficherPratique(st, cat) {
       else if (b.dataset.act === 'saisie') { const m = prompt('Durée en minutes :'); if (m === null) return;
         const n = Number(String(m).replace(',', '.')); if (!(n >= 0)) return toast('Durée invalide.', 'erreur');
         if (c.depuis) c.depuis = null; c.ms = Math.round(n * 60000); c.valide = true; }
-      dessinerChrono(); majResultat();
+      if (!tempsDepasse()) for (let i = elim.length - 1; i >= 0; i--) if (elim[i].type === 'temps') elim.splice(i, 1);   // durée corrigée : la note 0 « temps » tombe
+      dessinerChrono(); dessiner();
     }));
   }
   const minuteur = setInterval(() => {
@@ -342,36 +347,77 @@ async function afficherPratique(st, cat) {
   }));
   $$('[data-opt]').forEach(i => i.addEventListener('change', () => { i.checked ? choisies.add(i.dataset.opt) : choisies.delete(i.dataset.opt); dessiner(); }));
 
+  /** Dépassement de 130 % du temps de référence : le testeur désigne le point d'évaluation à mettre à 0. */
+  function demanderPointTemps() {
+    const f = $('#prat-feuille'); f.hidden = false;
+    const pts = [...new Set(actifs().map(c => c.point_numero).filter(x => x != null))].sort((a, b) => a - b);
+    f.innerHTML = `<div class="feuille-fond" data-fermer></div><div class="feuille"><div class="feuille-haut"><span>Durée > 130 % du temps de référence</span></div>
+      <p class="feuille-lib">Durée totale ${fmtDuree(totalValideMs() / 1000)} pour un temps de référence de ${refMin} min. Règle officielle : note 0 au(x) point(s) d'évaluation concerné(s), donc échec à l'évaluation pratique.</p>
+      <label>Point d'évaluation concerné <select id="temps-pt"><option value="">— choisir —</option>${pts.map(n => `<option value="${n}">Point ${n}</option>`).join('')}</select></label>
+      <div class="feuille-nav"><button type="button" data-fermer>Annuler</button><button type="button" class="principal" id="temps-ok">Appliquer la note 0</button></div></div>`;
+    $$('[data-fermer]', f).forEach(e => e.addEventListener('click', () => { f.hidden = true; f.innerHTML = ''; }));
+    $('#temps-ok', f).addEventListener('click', () => {
+      const n = Number($('#temps-pt', f).value); if (!n) return toast('Choisis le point concerné.', 'erreur');
+      elim.push({ id: null, type: 'temps', libelle: 'Dépassement de 130 % du temps de référence', point: n });
+      f.hidden = true; f.innerHTML = ''; dessiner(); toast('Note 0 appliquée au point ' + n + ' — vérifie le résultat puis enregistre.');
+    });
+  }
+
+  /** Récapitulatif avant enregistrement (le résultat est définitif) : résolu à true si le testeur confirme. */
+  function recapitulatif(r) {
+    return new Promise(resolve => {
+      const f = $('#prat-feuille'); f.hidden = false;
+      const themes = Object.values(r.themes).map(t => `<tr class="${2 * t.o < t.b ? 'bas' : ''}"><td>${esc(t.lib)}</td><td>${t.o} / ${t.b}</td></tr>`).join('');
+      const opts = Object.entries(r.optionsRes || {}).map(([k, x]) => `<li>Option ${esc(OPTIONS_PRATIQUE[k].libelle)} : ${x.obtenu}/${x.bareme} — ${x.reussi ? 'acquise' : 'non acquise'}</li>`).join('');
+      f.innerHTML = `<div class="feuille-fond"></div><div class="feuille"><div class="feuille-haut"><span>Récapitulatif avant enregistrement</span></div>
+        <div class="verdict ${r.reussi ? 'ok' : 'ko'}">${r.score} / 100 — ${r.reussi ? 'ADMIS' : 'NON ADMIS'}</div>
+        <table class="tableau"><tbody>${themes}</tbody></table>
+        <p class="aide">T1 ${fmtDuree(chrono.t1.ms / 1000)} · T2 ${fmtDuree(chrono.t2.ms / 1000)} · T3 ${fmtDuree(chrono.t3.ms / 1000)} — total ${fmtDuree(totalValideMs() / 1000)}${refMin ? ' (référence ' + refMin + ' min)' : ''}</p>
+        ${opts ? `<ul>${opts}</ul>` : ''}${elim.length ? `<p class="erreur-discrete">À 0 : ${elim.map(e => esc(e.libelle) + (e.point ? ' (point ' + e.point + ')' : '')).join(' ; ')}</p>` : ''}
+        ${r.pointsZero.length ? `<p class="erreur-discrete">Point(s) à 0 : ${r.pointsZero.join(', ')}</p>` : ''}
+        <p class="aide">L'enregistrement est définitif pour ce passage.</p>
+        <div class="feuille-nav"><button type="button" id="recap-non">Revenir à la grille</button><button type="button" class="principal" id="recap-oui">Enregistrer définitivement</button></div></div>`;
+      const fin = v => { f.hidden = true; f.innerHTML = ''; resolve(v); };
+      $('#recap-non', f).addEventListener('click', () => fin(false)); $('#recap-oui', f).addEventListener('click', () => fin(true));
+    });
+  }
+
   $('#prat-enregistrer').addEventListener('click', async ev => {
     const liste = actifs(), r = calculerPratique(liste, points, optCalc());
     if (r.nonNotes) return toast(`Il reste ${r.nonNotes} critère(s) à noter (surlignés en jaune).`, 'erreur', 5000);
     const nonValides = PHASES.filter(([k]) => !chrono[k].valide);
     if (nonValides.length) return toast('Valide les durées : ' + nonValides.map(p => p[1].split(' · ')[0]).join(', ') + '.', 'erreur', 5000);
-    if (!confirm(`Enregistrer : ${r.score}/100 — ${r.reussi ? 'ADMIS' : 'NON ADMIS'} ?`)) return;
+    if (tempsDepasse() && !elim.some(e => e.type === 'temps')) return demanderPointTemps();
+    if (!(await recapitulatif(r))) return;
     ev.target.disabled = true;
-    try {
-      const opts = [...choisies], engins = $$('.prat-engin').map(s => s.value || null);
-      const { data: ep, error: e1 } = await sb.from('epreuves_pratique').insert({
+    const opts = [...choisies], engins = $$('.prat-engin').map(s => s.value || null);
+    const acquises = opts.filter(k => r.optionsRes[k]?.reussi);
+    const job = {   // payload complet : peut être rejoué plus tard (identifiant client = enregistrement sans doublon)
+      id: (crypto.randomUUID ? crypto.randomUUID() : null),
+      epreuve: {
         stagiaire_id: st.id, session_id: S.session.id, referentiel_code: cat.referentiel_code, categorie_code: cat.categorie_code,
         formateur_id: S.session.formateur_id, testeur_id: S.session.testeur_id,
         mode_essai: !!$('#prat-essai')?.checked,
-        engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: opts.filter(k => r.optionsRes[k]?.reussi).length ? opts.filter(k => r.optionsRes[k]?.reussi) : null,
-        ut_options: opts.reduce((s, k) => s + OPTIONS_PRATIQUE[k].ut, 0),
+        engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: acquises.length ? acquises : null,
+        ut_options: opts.reduce((s2, k) => s2 + OPTIONS_PRATIQUE[k].ut, 0),
         duree_prise_poste_s: Math.round(chrono.t1.ms / 1000), duree_production_s: Math.round(chrono.t2.ms / 1000),
         duree_fin_poste_s: Math.round(chrono.t3.ms / 1000), eliminatoires: elim.length ? elim : null,
         score_global: r.score, reussi: r.reussi,
-      }).select().single();
-      if (e1) throw e1;
-      const { error: e2 } = await sb.from('epreuve_pratique_resultats')
-        .insert(liste.map(c => ({ epreuve_id: ep.id, critere_id: c.id, points_obtenus: optCalc().zeroPoints.has(c.point_numero) ? 0 : Math.min(c.bareme_points, Number(points[c.id]) || 0) })));
-      if (e2) { await sb.from('epreuves_pratique').delete().eq('id', ep.id); throw e2; }
-      const { error: e3 } = await sb.from('stagiaire_categories').update({
-        pratique_validee: r.reussi, date_validation_pratique: r.reussi ? new Date().toISOString().slice(0, 10) : null,
-      }).eq('stagiaire_id', st.id).eq('referentiel_code', cat.referentiel_code).eq('categorie_code', cat.categorie_code);
-      if (e3) throw e3;
+      },
+      resultats: liste.map(c => ({ critere_id: c.id, points_obtenus: optCalc().zeroPoints.has(c.point_numero) ? 0 : Math.min(c.bareme_points, Number(points[c.id]) || 0) })),
+      date_validation: r.reussi ? new Date().toISOString().slice(0, 10) : null,
+      libelle: `${st.nom} ${st.prenom} — ${cat.referentiel_code} ${cat.categorie_code} — ${r.score}/100`,
+    };
+    try {
+      await persisterEpreuve(job);
       clearInterval(minuteur);
       toast('Résultat enregistré'); fermerModale(); rendreDetailSession($('#contenu'));
     } catch (e) {
+      if (erreurReseau(e)) {          // coupure réseau : on garde le résultat sur l'appareil et on le renvoie dès le retour de la connexion
+        mettreEnFile(job); clearInterval(minuteur);
+        toast('Pas de connexion : résultat conservé sur cet appareil, il sera envoyé automatiquement au retour du réseau.', 'erreur', 10000);
+        fermerModale(); rendreDetailSession($('#contenu')); return;
+      }
       ev.target.disabled = false;
       if (e && /Limite atteinte/.test(e.message || '')) toast(e.message, 'erreur', 9000);
       else erreurSupabase('Enregistrement de l\'épreuve', e);
@@ -380,3 +426,48 @@ async function afficherPratique(st, cat) {
 
   etape();
 }
+
+/* ============ Enregistrement différé (coupure réseau) ============
+   Le résultat d'une épreuve terminée est conservé dans le stockage local de l'appareil (clé « caces-file-attente »)
+   puis rejoué : l'identifiant de l'épreuve est fixé côté appareil, donc aucun doublon même si l'envoi est répété. */
+const CLE_FILE = 'caces-file-attente';
+const erreurReseau = e => !navigator.onLine || /failed to fetch|networkerror|load failed|network request/i.test(String(e && (e.message || e)));
+const lireFile = () => { try { return JSON.parse(localStorage.getItem(CLE_FILE) || '[]'); } catch (e) { return []; } };
+const ecrireFile = f => { try { localStorage.setItem(CLE_FILE, JSON.stringify(f)); } catch (e) { toast('Stockage local plein : note le résultat à la main !', 'erreur', 15000); } majBandeauFile(); };
+function mettreEnFile(job) { const f = lireFile(); f.push(job); ecrireFile(f); }
+
+async function persisterEpreuve(job) {
+  const { error: e1 } = await sb.from('epreuves_pratique').insert({ ...(job.id ? { id: job.id } : {}), ...job.epreuve });
+  if (e1 && e1.code !== '23505') throw e1;                   // 23505 = déjà enregistrée lors d'un essai précédent
+  const epId = job.id;
+  let ep = epId;
+  if (!ep) { const { data } = await sb.from('epreuves_pratique').select('id').eq('stagiaire_id', job.epreuve.stagiaire_id).order('date_passage', { ascending: false }).limit(1).single(); ep = data.id; }
+  const { error: e2 } = await sb.from('epreuve_pratique_resultats').upsert(job.resultats.map(x => ({ epreuve_id: ep, ...x })));
+  if (e2) throw e2;
+  const { error: e3 } = await sb.from('stagiaire_categories').update({ pratique_validee: job.epreuve.reussi, date_validation_pratique: job.date_validation })
+    .eq('stagiaire_id', job.epreuve.stagiaire_id).eq('referentiel_code', job.epreuve.referentiel_code).eq('categorie_code', job.epreuve.categorie_code);
+  if (e3) throw e3;
+}
+
+let syncFileEnCours = false;
+async function synchroniserFile() {
+  if (syncFileEnCours || !navigator.onLine || !lireFile().length || !S.utilisateur) return;
+  syncFileEnCours = true;
+  try {
+    for (const job of lireFile()) {
+      try { await persisterEpreuve(job); ecrireFile(lireFile().filter(j => j.id !== job.id)); toast('Résultat envoyé : ' + job.libelle); }
+      catch (e) { if (erreurReseau(e)) break; DEBUG.erreur('Synchronisation différée', e.message); job.erreur = e.message; ecrireFile(lireFile().map(j => j.id === job.id ? job : j)); }
+    }
+  } finally { syncFileEnCours = false; majBandeauFile(); }
+}
+function majBandeauFile() {
+  let b = document.getElementById('bandeau-file');
+  const n = lireFile().length;
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'bandeau-file'; b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#b45309;color:#fff;padding:8px 12px;z-index:9999;text-align:center;font-size:14px';
+    b.addEventListener('click', synchroniserFile); document.body.appendChild(b); }
+  b.textContent = `⏳ ${n} résultat(s) d'épreuve en attente d'envoi (touche pour réessayer)` + (lireFile().some(j => j.erreur) ? ' — une erreur est survenue (voir la console)' : '');
+}
+window.addEventListener('online', synchroniserFile);
+setInterval(synchroniserFile, 30000);
+window.addEventListener('load', () => setTimeout(() => { majBandeauFile(); synchroniserFile(); }, 3000));

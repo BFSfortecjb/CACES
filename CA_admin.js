@@ -197,8 +197,8 @@ function rendreCategories(zone) {
     ${refs.map(r => `<div class="carte"><h3>${esc(r.code)} — ${esc(r.libelle)} ${r.actif === false ? '<i>(inactif)</i>' : ''}
         <button class="lien" onclick="modifierReferentiel('${esc(r.code)}')">Modifier</button></h3>
       <p class="aide">Validité ${r.duree_validite_mois} mois · seuil théorie ${r.seuil_reussite_global_pct} % · UT théorie ${r.ut_theorique}</p>
-      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th>UT pratique</th><th></th></tr></thead><tbody>
-      ${cats.filter(c => c.referentiel_code === r.code).map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.libelle)}</td><td>${c.ut_pratique}</td>
+      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th>UT pratique</th><th>Temps de référence</th><th></th></tr></thead><tbody>
+      ${cats.filter(c => c.referentiel_code === r.code).map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.libelle)}</td><td>${c.ut_pratique}</td><td>${c.temps_reference_min ? c.temps_reference_min + ' min' : '<i>non défini</i>'}</td>
         <td><button class="lien" onclick="modifierCategorie('${esc(r.code)}','${esc(c.code)}')">Modifier</button></td></tr>`).join('')}</tbody></table>
       <button onclick="modifierCategorie('${esc(r.code)}',null)">+ Catégorie</button></div>`).join('')}`;
 }
@@ -222,15 +222,17 @@ function modifierReferentiel(code) {
 }
 
 function modifierCategorie(ref, code) {
-  const c = code ? S.referentiel.categories.find(x => x.referentiel_code === ref && x.code === code) : { code: '', libelle: '', ut_pratique: 1 };
+  const c = code ? S.referentiel.categories.find(x => x.referentiel_code === ref && x.code === code) : { code: '', libelle: '', ut_pratique: 1, temps_reference_min: null };
   ouvrirModale(code ? `Catégorie ${ref} ${code}` : 'Nouvelle catégorie ' + ref, `<form class="formulaire" id="form-cat">
     <label>Code <input name="code" required value="${esc(c.code)}" ${code ? 'readonly' : ''}></label>
     <label>Libellé <input name="lib" required value="${esc(c.libelle)}"></label>
     <label>UT pratique <input type="number" step="0.1" name="ut" value="${c.ut_pratique}"></label>
+    <label>Temps de référence de l'épreuve (minutes, durée totale T1+T2+T3) <input type="number" name="tref" min="0" value="${c.temps_reference_min ?? ''}" placeholder="vide = pas de contrôle"></label>
+    <p class="aide">Au-delà de 130 % de ce temps, la règle officielle impose la note 0 au(x) point(s) concerné(s) (échec à l'évaluation pratique).</p>
     <button class="principal" type="submit">Enregistrer</button></form>`);
   $('#form-cat').addEventListener('submit', async ev => {
     ev.preventDefault(); const f = ev.target;
-    const ligne = { libelle: f.lib.value.trim(), ut_pratique: Number(f.ut.value) };
+    const ligne = { libelle: f.lib.value.trim(), ut_pratique: Number(f.ut.value), temps_reference_min: f.tref.value ? Number(f.tref.value) : null };
     const { error } = code ? await sb.from('categories_referentiel').update(ligne).eq('referentiel_code', ref).eq('code', code)
       : await sb.from('categories_referentiel').insert({ referentiel_code: ref, code: f.code.value.trim(), ...ligne });
     if (error) return erreurSupabase('Enregistrement', error);

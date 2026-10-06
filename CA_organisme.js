@@ -9,11 +9,13 @@ async function rendreOrganisme(zone) {
       <p class="aide">Engins du centre, sélectionnables directement dans les sessions. Les engins de location y sont aussi mémorisés (même marque + n° de série = même engin : on ne remet à jour que les documents).</p>
       <div id="zone-parc"></div></div>
     <div class="carte"><h3>Agences (cachet, signataire, secrétariat)</h3><div id="zone-carton"><p class="chargement">Chargement…</p></div></div>
+    <div class="carte"><h3>Données personnelles (RGPD)</h3><div id="zone-rgpd"><p class="chargement">Chargement…</p></div></div>
     <div class="carte"><h3>Google Drive</h3><div id="zone-drive"><p class="chargement">Chargement…</p></div></div>`;
   await chargerTypesDocEngin();
   rendreParcEngins($('#zone-parc'));
   rendreEtatDrive();
   rendreParametresCarton();
+  rendreRgpd();
 }
 
 async function rendreEtatDrive() {
@@ -87,5 +89,29 @@ async function modifierAgence(id) {
       }
       await chargerReferentiel(); toast('Agence enregistrée'); fermerModale(); rendreParametresCarton();
     } catch (e) { erreurSupabase('Enregistrement de l\'agence', e); }
+  });
+}
+
+/* ---- Purge RGPD : anonymise les stagiaires des sessions clôturées (sauf ceux qui ont un titre délivré) ---- */
+async function rendreRgpd() {
+  const z = $('#zone-rgpd'); if (!z) return;
+  const { data: p, error } = await sb.from('parametres_application').select('purge_active, purge_delai_jours').eq('id', 1).single();
+  if (error) { z.innerHTML = ''; return erreurSupabase('Lecture des paramètres RGPD', error); }
+  z.innerHTML = `<p class="aide">Après clôture d'une session, les données personnelles des stagiaires (nom, prénom, date de naissance, entreprise, fonction, e-mail, photo)
+      peuvent être anonymisées automatiquement. Les stagiaires ayant un <b>titre délivré</b> sont conservés (vérification du titre par QR code, traçabilité) ;
+      l'archivage réglementaire des dossiers (10 ans) se fait hors application (Galaxy). Les fichiers de photos déjà envoyés sur le Drive ne sont pas supprimés par cette purge.</p>
+    <form class="formulaire" id="form-rgpd"><div class="grille-2">
+      <label><input type="checkbox" name="actif" ${p.purge_active ? 'checked' : ''}> Purge activée</label>
+      <label>Délai après clôture (jours) <input type="number" min="1" name="delai" value="${esc(p.purge_delai_jours)}"></label></div>
+      <button class="principal" type="submit">Enregistrer</button>
+      <button type="button" id="btn-purge" ${p.purge_active ? '' : 'disabled'}>Lancer la purge maintenant</button></form>`;
+  $('#form-rgpd', z).addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const { error: e } = await sb.from('parametres_application').update({ purge_active: ev.target.actif.checked, purge_delai_jours: Number(ev.target.delai.value) }).eq('id', 1);
+    if (e) return erreurSupabase('Enregistrement', e); toast('Paramètres enregistrés'); rendreRgpd();
+  });
+  $('#btn-purge', z).addEventListener('click', async () => {
+    if (!confirmer('Anonymiser maintenant les stagiaires des sessions clôturées depuis plus de ' + p.purge_delai_jours + ' jours (hors titulaires d\'un titre) ? Irréversible.')) return;
+    try { const n = await rpc('caces_purger_sessions_cloturees'); toast(n + ' stagiaire(s) anonymisé(s)'); } catch (e) { erreurSupabase('Purge', e); }
   });
 }
