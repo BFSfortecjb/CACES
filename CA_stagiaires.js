@@ -6,7 +6,7 @@ function codeIndividuel() { return genererCodeAcces(8); }
 
 /** Calcule l'âge à partir d'une date de naissance (contrôle de saisie, comme Habelec). */
 async function editerStagiaire(id) {
-  let st = { nom: '', prenom: '', fonction: '', entreprise: S.session.entreprise || '', date_naissance: null, email: '' };
+  let st = { nom: '', prenom: '', fonction: '', entreprise: S.session.entreprise || '', date_naissance: null };
   let visees = new Set((S.session._categories || []).map(c => c.referentiel_code + '|' + c.categorie_code));
   if (id) {
     const { data } = await sb.from('stagiaires')
@@ -25,7 +25,6 @@ async function editerStagiaire(id) {
         <label>Entreprise (employeur) <input name="entreprise" value="${esc(st.entreprise)}"></label>
         <label>Date de naissance
           <input name="date_naissance" type="date" max="${dateNaissanceMax()}" value="${esc(st.date_naissance || '')}"></label>
-        <label>E-mail <input name="email" type="email" value="${esc(st.email || '')}"></label>
       </div>
       <fieldset><legend>Catégories de CACES visées par ce stagiaire</legend>
         ${categoriesSession.map(c => `<label class="case"><input type="checkbox" name="categorie"
@@ -46,7 +45,7 @@ async function editerStagiaire(id) {
       session_id: S.session.id,
       nom: f.nom.value.trim().toUpperCase(), prenom: f.prenom.value.trim(),
       fonction: f.fonction.value.trim() || null, entreprise: f.entreprise.value.trim() || null,
-      date_naissance: f.date_naissance.value || null, email: f.email.value.trim() || null,
+      date_naissance: f.date_naissance.value || null,
     };
     if (donnees.date_naissance && !dateNaissanceValide(donnees.date_naissance)) {
       return toast('Cette date de naissance donne moins de 16 ans — vérifie qu\'il ne s\'agit pas de '
@@ -110,6 +109,7 @@ function ouvrirActionsStagiaire(id, nom, prenom) {
     <div class="liste-actions-stagiaire">
       ${d.ecriture ? `<button onclick="fermerModale();editerStagiaire('${id}')">✎ Modifier le stagiaire et ses catégories</button>` : ''}
       <button onclick="fermerModale();appelModule('ouvrirPhoto','${id}')">📷 Photo du titulaire</button>
+      <button onclick="fermerModale();appelModule('ouvrirParcours','${id}')">🔁 Parcours : recyclage / autre catégorie (photo ancien CACES)</button>
       <button onclick="fermerModale();appelModule('voirCopie','${id}')">📄 Voir la copie corrigée du QCM</button>
       <button onclick="fermerModale();appelModule('${S.session.type_session === 'autorisation' ? 'genererAutorisationPdf' : 'genererCartonPdf'}','${id}')">${S.session.type_session === 'autorisation' ? '🪪 Générer l\'autorisation de conduite (PDF)' : '🪪 Générer le carton CACES (PDF)'}</button>
       ${d.ecriture ? `<button class="danger" onclick="fermerModale();supprimerStagiaire('${id}')">🗑 Supprimer le stagiaire</button>` : ''}
@@ -117,12 +117,12 @@ function ouvrirActionsStagiaire(id, nom, prenom) {
 }
 
 /* ===================== Import / export Excel ========================= */
-const COLONNES_STAGIAIRE = ['Nom', 'Prenom', 'Fonction', 'Entreprise', 'Date de naissance', 'Email'];
+const COLONNES_STAGIAIRE = ['Nom', 'Prenom', 'Fonction', 'Entreprise', 'Date de naissance'];
 
 function modeleExcelStagiaires() {
   const cats = (S.session?._categories || []).map(c => c.referentiel_code + ' ' + c.categorie_code);
   const entetes = [...COLONNES_STAGIAIRE, ...cats];
-  const exemple = ['DUPONT', 'Jean', 'Cariste', 'Entreprise Client', '1985-04-12', 'jean.dupont@exemple.fr',
+  const exemple = ['DUPONT', 'Jean', 'Cariste', 'Entreprise Client', '1985-04-12',
     ...cats.map((c, i) => (i === 0 ? 'x' : ''))];
   const ws = XLSX.utils.aoa_to_sheet([entetes, exemple]);
   const wb = XLSX.utils.book_new();
@@ -168,7 +168,7 @@ async function importerStagiairesExcel(input) {
       const { data, error } = await sb.from('stagiaires').insert({
         session_id: S.session.id, nom: nom.toUpperCase(), prenom,
         fonction: val('Fonction') || null, entreprise: val('Entreprise') || S.session.entreprise || null,
-        date_naissance: naissance, email: val('Email') || null, code_acces_individuel: codeIndividuel(),
+        date_naissance: naissance, code_acces_individuel: codeIndividuel(),
       }).select().single();
       if (error) { DEBUG.erreur('Import ligne', error.message); ignorees++; continue; }
 
