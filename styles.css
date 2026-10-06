@@ -619,3 +619,9 @@ button.danger { background: #fff; color: var(--rouge); border: 2px solid var(--r
 .feuille-bande button.choisi { box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 7px var(--gris-fonce); }
 .feuille-nav { display: flex; justify-content: space-between; margin-top: 12px; } .feuille-nav button { min-height: 48px; }
 .prat-elim ul { margin: 8px 0 14px 18px; } .prat-elim li { margin: 4px 0; }
+/* Photo du titulaire */
+.photo-zone { text-align: center; }
+.photo-cadre { width: 240px; height: 320px; margin: 0 auto 14px; border: 2px solid var(--gris-bord); border-radius: 8px; overflow: hidden; background: var(--gris-fond);
+  display: flex; align-items: center; justify-content: center; }
+.photo-cadre img { width: 100%; height: 100%; object-fit: cover; } .photo-vide { color: var(--gris-doux); }
+.photo-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; } .photo-actions .bouton-fichier { min-height: 52px; display: inline-flex; align-items: center; padding: 0 18px; }
