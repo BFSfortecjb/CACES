@@ -49,7 +49,7 @@ async function genererCartonPdf(stagiaireId) { return genererDocumentPdf(stagiai
  * (numéros attribués ici, une seule fois), la moitié basse l'autorisation de conduite.
  * Sans carton (session « autorisation ») : autorisation seule, pleine page.
  */
-async function genererDocumentPdf(stagiaireId, avecCarton) {
+async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
   if (!window.jspdf) return toast('Bibliothèque PDF non chargée (connexion ?).', 'erreur');
   const { data: st, error } = await sb.from('stagiaires').select('id, nom, prenom, date_naissance, photo_path').eq('id', stagiaireId).single();
   if (error) return erreurSupabase('Lecture du stagiaire', error);
@@ -58,7 +58,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton) {
 
   let certs = {};
   if (avecCarton) {
-    if (!confirmer('Générer le carton attribue définitivement les numéros CACES aux catégories validées. Continuer ?')) return;
+    if (!opts.silencieux && !confirmer('Générer le carton attribue définitivement les numéros CACES aux catégories validées. Continuer ?')) return;
     try {
       for (const c of cats) {
         const { data, error: e } = await sb.rpc('caces_emettre_certificat',
@@ -68,7 +68,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton) {
       }
     } catch (e) { return erreurSupabase('Numérotation CACES', e); }
   }
-  toast('Génération du PDF…');
+  if (!opts.silencieux) toast('Génération du PDF…');
   try {
     const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const nomComplet = `${st.nom} ${st.prenom}`.trim();
@@ -192,6 +192,8 @@ async function genererDocumentPdf(stagiaireId, avecCarton) {
       doc.setFontSize(7.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 105, 285, { align: 'center' });
     });
 
-    doc.save(`${avecCarton ? 'Carton_CACES' : 'Autorisation_conduite'}_${st.nom}_${st.prenom}.pdf`.replace(/\s+/g, '_'));
-  } catch (e) { erreurSupabase('Génération du PDF', e); }
+    const nomPdf = `${avecCarton ? 'Carton_CACES' : 'Autorisation_conduite'}_${st.nom}_${st.prenom}.pdf`.replace(/\s+/g, '_');
+    if (opts.retour) return { nom: nomPdf, base64: doc.output('datauristring').split(',')[1] };
+    doc.save(nomPdf);
+  } catch (e) { if (opts.retour) throw e; erreurSupabase('Génération du PDF', e); }
 }

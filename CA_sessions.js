@@ -316,6 +316,7 @@ async function rendreDetailSession(zone) {
       <button onclick="appelModule('ouvrirEnginsSession')">Renseigner les engins</button>
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
       <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
+      ${d.ecriture ? `<button onclick="appelModule('envoyerSecretariat')">✉️ Envoi au secrétariat</button>` : ''}
     </div>
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
