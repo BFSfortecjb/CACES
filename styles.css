@@ -625,3 +625,6 @@ button.danger { background: #fff; color: var(--rouge); border: 2px solid var(--r
   display: flex; align-items: center; justify-content: center; }
 .photo-cadre img { width: 100%; height: 100%; object-fit: cover; } .photo-vide { color: var(--gris-doux); }
 .photo-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; } .photo-actions .bouton-fichier { min-height: 52px; display: inline-flex; align-items: center; padding: 0 18px; }
+
+/* L'attribut hidden doit toujours cacher (sinon un display:flex le contourne) */
+[hidden] { display: none !important; }
