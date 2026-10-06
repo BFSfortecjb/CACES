@@ -113,21 +113,20 @@ async function afficherCharges(quota, quotaPratique) {
     <p class="aide">« Prévu » est une estimation à partir des sessions dont la date de début est ce jour ; seul le « réalisé » est contrôlé et bloquant.</p>`;
 }
 
-/** Bandeau de charge du testeur dans le détail d'une session (jour de début de la session). */
+/** Bandeau de charge du testeur dans le détail d'une session (jours de test, ou jour de début à défaut). */
 async function bandeauChargeTesteur(s) {
-  if (!s.testeur_id || !s.date_debut) return '';
-  const [prm, r, p] = await Promise.all([
-    sb.from('parametres_application').select('quota_ut_jour, quota_ut_pratique_jour').eq('id', 1).single(),
-    sb.rpc('caces_charge_testeur', { p_testeur: s.testeur_id, p_jour: s.date_debut }),
-    sb.rpc('caces_charge_prevue', { p_testeur: s.testeur_id, p_jour: s.date_debut }),
-  ]);
-  const quota = Number(prm.data?.quota_ut_jour ?? 7), quotaPrat = Number(prm.data?.quota_ut_pratique_jour ?? 6);
-  const reel = Number((r.data && r.data[0]?.ut_total) || 0);
-  const prevu = Number((p.data && p.data[0]?.ut_total) || 0), prevuPrat = Number((p.data && p.data[0]?.ut_pratique) || 0);
-  const depasse = prevu > quota || prevuPrat > quotaPrat;
-  return `<div class="carte ${depasse ? 'refus' : ''}"><b>Charge du testeur le ${esc(dateFr(s.date_debut))}</b> —
-    prévu ${prevu.toFixed(2)} UT / ${quota} (dont ${prevuPrat.toFixed(2)} pratique / ${quotaPrat}) ; réalisé ${reel.toFixed(2)} UT.
-    ${depasse ? '<br><b>Attention :</b> la charge prévue dépasse la limite — des épreuves seront refusées au-delà ; répartis les candidats sur un autre testeur ou une autre journée.' : ''}</div>`;
+  if (!s.testeur_id) return '';
+  const jt = typeof joursSession === 'function' ? (await joursSession(s.id)).test : [];
+  const jours = jt.length ? jt : [s.date_debut].filter(Boolean);
+  if (!jours.length) return '';
+  const res = await Promise.all(jours.map(j => chargePrevueJour(s.testeur_id, j)));
+  const depasse = res.some(c => c.depasse);
+  return `<div class="carte ${depasse ? 'refus' : ''}"><b>Charge du testeur</b>
+    <button class="lien" onclick="appelModule('ouvrirPlanning')">📅 Planning</button>
+    ${jours.map((j, i) => `<div>${esc(dateFr(j))} — prévu ${res[i].tot.toFixed(2)} UT / ${res[i].quota}
+      (dont ${res[i].prat.toFixed(2)} pratique / ${res[i].quotaPrat}) ; réalisé ${res[i].reel.toFixed(2)} UT
+      ${res[i].depasse ? ' ⚠' : ''}</div>`).join('')}
+    ${depasse ? '<b>Attention :</b> charge prévue au-delà de la limite un jour au moins — des épreuves seraient refusées ; répartis les candidats sur un autre jour de test (📅 Planning) ou un autre testeur.' : ''}</div>`;
 }
 
 

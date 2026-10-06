@@ -102,6 +102,7 @@ function nouvelleSession() {
         <label>Intitulé <input name="nom" required value="CACES — ${new Date().getFullYear()}"></label>
         <label>Entreprise (client) <input name="entreprise"></label>
         <label>Date de début <input type="date" name="date_debut" value="${new Date().toISOString().slice(0, 10)}"></label>
+        <label>Date de fin <span class="aide">(si la formation dure plusieurs jours)</span> <input type="date" name="date_fin"></label>
         <label>Formateur de la session
           <select name="formateur_id">${optionsPersonnes(S.profil.id)}</select></label>
         <label>Testeur de la session <span class="aide" id="aide-testeur">(différent du formateur)</span>
@@ -147,6 +148,12 @@ function nouvelleSession() {
         lieu: f.lieu.value.trim() || null, en_cdt: f.en_cdt.checked, code_acces: code, statut: 'brouillon',
       }).select().single();
       if (error) throw error;
+      if (f.date_fin.value && f.date_debut.value && f.date_fin.value >= f.date_debut.value) {
+        const jours = [], d0 = new Date(f.date_debut.value + 'T12:00:00'), d1 = new Date(f.date_fin.value + 'T12:00:00');
+        for (let d = d0; d <= d1 && jours.length < 31; d.setDate(d.getDate() + 1))
+          jours.push({ session_id: s.id, jour: d.toISOString().slice(0, 10), type: 'formation' });
+        await sb.from('session_jours').insert(jours);
+      }
       const { error: e2 } = await sb.from('session_categories')
         .insert(categories.map(c => ({ session_id: s.id, ...c })));
       if (e2) throw e2;
@@ -308,6 +315,7 @@ async function rendreDetailSession(zone) {
       <b>🚜 Engins utilisés :</b> ${engins.nb}${engins.rouges ? ` <span class="etat erreur">${engins.rouges} non conforme(s)</span>` : ''}
       <button onclick="appelModule('ouvrirEnginsSession')">Renseigner les engins</button>
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
+      <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
     </div>
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
