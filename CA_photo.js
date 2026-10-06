@@ -24,10 +24,15 @@ function recadrerPortrait(fichier, largeur = 600, hauteur = 800) {
   });
 }
 
+/** Télécharge la photo avec la session de l'utilisateur (pas de lien temporaire) → URL locale affichable. */
 async function urlPhotoStagiaire(path) {
   if (!path) return null;
-  const { data } = await sb.storage.from('caces-photos-stagiaires').createSignedUrl(path, 3600);
-  return data?.signedUrl || null;
+  const { data, error } = await sb.storage.from('caces-photos-stagiaires').download(path);
+  if (error || !data) {
+    toast('Photo introuvable : ' + ((error && (error.message || error.error)) || 'fichier vide') + ' (' + path + ')', 'erreur', 8000);
+    return null;
+  }
+  return URL.createObjectURL(data);
 }
 
 async function ouvrirPhoto(stagiaireId) {
