@@ -1,0 +1,2174 @@
+{
+  "version": "3.0",
+  "date_generation": "2026-08-05",
+  "note": "Banque de 400 questions vrai/faux extraite des supports papier officiels OTC (dossier ressources/TESTS CASTEST PAPIER) pour R485, R489, R482A, R486A. Réponses lues sur les grilles de correction formateur couleur (vert=VRAI, rouge=FAUX). 16 questions (4 par référentiel) n'avaient aucune case coloriée dans la grille de correction source (probablement questions annulées côté OTC) : leur champ 'reponse' est une estimation et porte le marqueur 'a_verifier': true — à confirmer par un formateur avant mise en production.",
+  "referentiels": [
+    {
+      "code": "R485",
+      "libelle": "Gerbeurs à conducteur accompagnant",
+      "seuil_reussite_global_pct": 70,
+      "seuil_reussite_par_theme": "moyenne",
+      "themes": [
+        {
+          "code": "connaissances_generales",
+          "libelle": "Connaissances générales",
+          "bareme_officiel_sur_100": 15,
+          "questions": [
+            {
+              "id": "R485-CONN-01",
+              "enonce": "Le marquage CE du gerbeur est de la responsabilité du constructeur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-02",
+              "enonce": "L'autorisation de conduite n’est pas nécessaire pour une utilisation occasionnelle du gerbeur.",
+              "reponse": false
+            },
+            {
+              "id": "R485-CONN-03",
+              "enonce": "Le conducteur accompagnant doit conduire son gerbeur en appliquant les règles de sécurité prévues dans l'entreprise.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-04",
+              "enonce": "Le conducteur accompagnant doit connaître les consignes à respecter en cas d'accident.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-05",
+              "enonce": "Le conducteur accompagnant ne peut pas être tenu pénalement responsable d'un accident, s'il a effectué une manœuvre dangereuse.",
+              "reponse": false
+            },
+            {
+              "id": "R485-CONN-06",
+              "enonce": "Le conducteur accompagnant peut conduire un gerbeur, sans posséder l'autorisation de conduite.",
+              "reponse": false
+            },
+            {
+              "id": "R485-CONN-07",
+              "enonce": "Le conducteur accompagnant peut utiliser le droit de retrait si l'environnement ne lui permet pas de travailler en sécurité.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-08",
+              "enonce": "Le droit de retrait peut s'appliquer quand un travailleur se trouve dans une situation de danger grave et imminent.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-09",
+              "enonce": "Le conducteur accompagnant doit connaître les spécificités décrites dans la notice d'utilisation du gerbeur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-10",
+              "enonce": "La CARSAT aide l'entreprise à améliorer la prévention des accidents du travail.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-11",
+              "enonce": "La recommandation R 485 de la CNAM concerne deux catégories de gerbeurs à conducteur accompagnant.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-12",
+              "enonce": "La catégorie 2 concerne les gerbeurs automoteurs à conducteur accompagnant avec une hauteur de levée supérieure à 2,5 mètres.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-13",
+              "enonce": "La catégorie 1 concerne les gerbeurs automoteurs à conducteur accompagnant avec une hauteur de levée supérieure à 2,5 mètres.",
+              "reponse": false
+            },
+            {
+              "id": "R485-CONN-14",
+              "enonce": "La R 485 concerne aussi les gerbeurs à conducteur accompagnant équipés d’une plate- forme rabattable.",
+              "reponse": true
+            },
+            {
+              "id": "R485-CONN-15",
+              "enonce": "Ce gerbeur avec une hauteur de levée de 4,30 mètres fait partie de catégorie 2 de la R 485.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "technologie_stabilite",
+          "libelle": "Technologie et stabilité",
+          "bareme_officiel_sur_100": 25,
+          "questions": [
+            {
+              "id": "R485-TECH-01",
+              "enonce": "En fin de charge de la batterie, le conducteur accompagnant doit refaire les niveaux avec de l'eau distillée.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-02",
+              "enonce": "Lors du branchement et du débranchement des batteries, le chargeur doit être coupé électriquement.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-03",
+              "enonce": "Le système de translation est souvent composé d'un moteur électrique, d'une roue motrice et directrice et de deux galets.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R485-TECH-04",
+              "enonce": "Les chaines et (le ou) les vérins permettent la levée des fourches.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-05",
+              "enonce": "Le système de levage est composé d'un réservoir d'huile hydraulique, d'une pompe, d'un distributeur et de vérins.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-06",
+              "enonce": "En cas de danger, l'arrêt d'urgence permet au conducteur accompagnant d'arrêter tous les mouvements du gerbeur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-07",
+              "enonce": "La neutralisation du dispositif anti-écrasement du conducteur situé sur le timon est autorisée lorsque le conducteur accompagnant doit récupérer l'usage de ses 2 mains.",
+              "reponse": false
+            },
+            {
+              "id": "R485-TECH-08",
+              "enonce": "Le dispositif de condamnation (clé de contact ou code) permet d'éviter qu'une personne non autorisée, utilise le gerbeur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-09",
+              "enonce": "L'avertisseur sonore (Klaxon) permet de signaler l'existence d'un danger potentiel.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-10",
+              "enonce": "Des gâchettes positionnées de part et d'autre du timon, permettent de commander la mise en mouvement du chariot.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-11",
+              "enonce": "La vitesse de déplacement du gerbeur dépend de l'effort exercé sur la gâchette de commande.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-12",
+              "enonce": "Les paramètres d'ajustement de la vitesse du gerbeur ne peuvent être modifiés qu'en usine.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-13",
+              "enonce": "Les paramètres doivent être ajustés en fonction de l'environnement et du travail à effectuer.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-14",
+              "enonce": "L'option de mise à hauteur automatique permet de ne plus avoir à gérer la hauteur des fourches lors de la prise de charge en palettier.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-15",
+              "enonce": "L'option de mise à hauteur automatique peut permettre d'avoir les fourches à hauteur de chargement lors de prise en picking (Lutte contre les troubles musculosquelettiques).",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-16",
+              "enonce": "Une charge de densité de 2,5 tonnes/m3 qui mesure 2m*1m*1m, pèse 5 tonnes.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-17",
+              "enonce": "Une charge d'1m3 de bois pèse 2 tonnes (Densité du bois: 0,8t/m3)",
+              "reponse": false
+            },
+            {
+              "id": "R485-TECH-18",
+              "enonce": "Le centre de gravité de cette charge est situé au point A.",
+              "reponse": false
+            },
+            {
+              "id": "R485-TECH-19",
+              "enonce": "Le centre de gravité d'une palette 80*120, prise correctement sur les fourches dans le sens de la longueur, se situe à 600mm du talon des fourches.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-20",
+              "enonce": "La plaque de charge indique le poids que le gerbeur peut lever à une hauteur donnée, en tenant compte de la distance entre le centre de gravité et le talon de la fourche.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-21",
+              "enonce": "Le renversement du gerbeur peut être dû à une circulation avec la charge haute.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-22",
+              "enonce": "Le renversement du gerbeur peut être dû à une vitesse excessive en virage.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-23",
+              "enonce": "Le renversement du gerbeur peut être dû à une prise incorrecte de la charge avec le centre de gravité décalé par rapport à l'axe du gerbeur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-24",
+              "enonce": "Le basculement du gerbeur peut être dû à une surcharge, fourches en hauteur, lors d'une opération de picking.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TECH-25",
+              "enonce": "Le basculement du gerbeur peut être dû à un arrêt brusque, avec la charge en hauteur, en marche avant.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "tableau_charges",
+          "libelle": "Tableau de charges",
+          "bareme_officiel_sur_100": 10,
+          "questions": [
+            {
+              "id": "R485-TABL-01",
+              "enonce": "Ce gerbeur peut déplacer une charge de 1200kg dont le centre de gravité se situe à une distance D de 600mm du talon des fourches .",
+              "reponse": true
+            },
+            {
+              "id": "R485-TABL-02",
+              "enonce": "Ce gerbeur peut déplacer une charge de 1556 kg maximum dont le centre de gravité se situe à une distance D de 300mm du talon des fourches.",
+              "reponse": false
+            },
+            {
+              "id": "R485-TABL-03",
+              "enonce": "Ce gerbeur peut manutentionner une charge de 630 kg dont le centre de gravité se situe à une distance D de 300mm du talon des fourches à une hauteur de 4300mm.",
+              "reponse": false,
+              "a_verifier": true
+            },
+            {
+              "id": "R485-TABL-04",
+              "enonce": "Ce gerbeur peut manutentionner une charge de 630kg dont le centre de gravité se situe à une distance D de 300mm du talon des fourches à une hauteur de 4000mm.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TABL-05",
+              "enonce": "Ce gerbeur peut manutentionner une charge de 300kg dont le centre de gravité se situe à une distance D de 700mm du talon des fourches à une hauteur de 4300mm.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TABL-06",
+              "enonce": "Avec une charge de 600kg et un CDG à 600mm du talon des fourches, ce gerbeur peut lever cette charge à une hauteur de 4 200mm.",
+              "reponse": false
+            },
+            {
+              "id": "R485-TABL-07",
+              "enonce": "Avec une charge de 360kg et un CDG à 700mm du talon des fourches, ce gerbeur peut lever cette charge à une hauteur de 4 000mm.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TABL-08",
+              "enonce": "Ce gerbeur peut lever une charge de 640kg sur une palette de 1m*1m au contact du talon des fourches, à une hauteur de 4 000mm.",
+              "reponse": false
+            },
+            {
+              "id": "R485-TABL-09",
+              "enonce": "Ce gerbeur peut lever une charge de 320kg sur une palette de 1,4m*1,4m au contact du talon des fourches, à une hauteur de 4 300mm.",
+              "reponse": true
+            },
+            {
+              "id": "R485-TABL-10",
+              "enonce": "Ce gerbeur peut lever une charge de 550kg dont le centre de gravité se situe à 500mm du talon des fourches, à une hauteur de 4 300mm.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "exploitation",
+          "libelle": "Exploitation",
+          "bareme_officiel_sur_100": 50,
+          "questions": [
+            {
+              "id": "R485-EXPL-01",
+              "enonce": "Effectuer un demi tour à grande vitesse sur un quai de chargement ne présente aucun risque particulier.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-02",
+              "enonce": "En circulation, passer au bord d'un quai non protégé présente un risque de chute.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-03",
+              "enonce": "Lors de l'utilisation d'un hayon élévateur pour monter et descendre le gerbeur, celui-ci risque de glisser et de tomber.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-04",
+              "enonce": "Lorsque le poids du gerbeur est incompatible avec la capacité du hayon, celui-ci peut céder.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-05",
+              "enonce": "Lors de l'utilisation d'un pont de liaison, le conducteur accompagnant doit vérifier que le camion est correctement immobilisé.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-06",
+              "enonce": "Avant de passer sur un pont de liaison, le conducteur accompagnant doit contrôler la capacité de celui-ci.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-07",
+              "enonce": "Circuler à vitesse excessive en charge, en virage, ne présente aucun risque.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-08",
+              "enonce": "Circuler avec une charge haute en marche avant, augmente le risque de basculement.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-09",
+              "enonce": "Un mauvais centrage de la charge sur les fourches augmente le risque de renversement de celle-ci.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-10",
+              "enonce": "Circuler à allure lente avec une charge longue dont le CDG est déporté, ne présente aucun risque.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-11",
+              "enonce": "Avant de poser des palettes sur un palettier, je dois vérifier son état.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-12",
+              "enonce": "Avant de poser des palettes sur un palettier, je dois vérifier sa capacité.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-13",
+              "enonce": "L'absence de sabots de protection en pied de palettier n'a pas d'importance lors de l'utilisation du gerbeur.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-14",
+              "enonce": "Le gerbeur doit avoir les fourches au sol, lors de son arrêt, afin de limiter le risque qu'un piéton ne trébuche sur celles-ci.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-15",
+              "enonce": "Le risque de chute de plain-pied du conducteur accompagnant augmente lors d’une circulation en marche arrière.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-16",
+              "enonce": "Pour limiter le risque de coincement, le conducteur accompagnant doit garder ses 2 mains sur le timon lors de l'élévation de la charge.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-17",
+              "enonce": "Les gerbeurs sont tous dotés d'un dispositif de sécurité, qui rend l'écrasement des pieds du conducteur accompagnant impossible.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-18",
+              "enonce": "Pour éviter qu'un collègue n'ait à marcher, le conducteur accompagnant peut le transporter sur les fourches, sous condition de rouler prudemment.",
+              "reponse": false,
+              "a_verifier": true
+            },
+            {
+              "id": "R485-EXPL-19",
+              "enonce": "Si une palette est coincée dans le palettier à une hauteur de 1,5m, le conducteur accompagnant est autorisé à lever un collègue, sur une palette européenne avec les fourches, pour la décoincer.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-20",
+              "enonce": "Le conducteur accompagnant circule avec une charge volumineuse sans visibilité en marche arrière. Il risque de heurter un piéton.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-21",
+              "enonce": "L'ajustement du niveau d'eau distillée dans les batteries, sans lunettes de protection, expose le conducteur accompagnant à un risque de brûlure des yeux.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-22",
+              "enonce": "Un conducteur accompagnant, prenant des médicaments, doit vérifier l'absence d'incompatibilité de ceux-ci avec la conduite.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-23",
+              "enonce": "En roulant lentement avec un gerbeur à conducteur accompagnant, on peut consulter ses SMS tout en conduisant.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-24",
+              "enonce": "Le coupe circuit est un dispositif permettant de lutter contre le risque d'incendie par court-circuit électrique.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-25",
+              "enonce": "L'absence de formation du conducteur est l'une des principales causes d'accident.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-26",
+              "enonce": "La chute de la charge est une cause fréquente d'accident.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-27",
+              "enonce": "L'écrasement ou le coincement du corps du conducteur accompagnant contre un obstacle, est un accident improbable.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-28",
+              "enonce": "La chute de plain-pied du conducteur accompagnant, pendant le roulage, est une cause fréquente d'accident.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-29",
+              "enonce": "Le heurt, pendant le roulage, des pieds ou des talons est un accident lié à l'inattention du conducteur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-30",
+              "enonce": "Le départ accidentel du camion lors du passage du gerbeur sur le pont de liaison génère des accidents graves.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-31",
+              "enonce": "Circuler bras tendu, avec le gerbeur, limite le risque de coincement du conducteur accompagnant.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-32",
+              "enonce": "Circuler charge haute améliore la visibilité et diminue le risque d'accident.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-33",
+              "enonce": "En circulation, le conducteur accompagnant doit précéder le gerbeur en se mettant de côté pour ne pas se faire accrocher l'arrière du pied par le châssis de ce dernier.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-34",
+              "enonce": "Si le gerbeur est équipé d'une fonction circulation lente le conducteur accompagnant peut l'utiliser pour limiter les risques d'accident en circulation, dans des endroits exigus.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-35",
+              "enonce": "Lâcher le timon en présence d'un danger est le seul moyen d'éviter un accident.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-36",
+              "enonce": "Klaxonner lors du franchissement d'une porte permet d'éviter de ralentir.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-37",
+              "enonce": "Pour circuler sur une pente, en montant, le conducteur accompagnant doit être devant son gerbeur, en bas de la pente, pour ne pas se faire écraser par la charge.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-38",
+              "enonce": "Ce pictogramme indique la position du centre de gravité de la charge.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-39",
+              "enonce": "Ce panneau signifie douche obligatoire.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-40",
+              "enonce": "Le respect du plan de circulation et des procédures de sécurité sont obligatoires.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-41",
+              "enonce": "Le conducteur accompagnant doit vérifier le calage et l'immobilisation d'un camion, avant de le charger.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-42",
+              "enonce": "Le protocole de sécurité définit, entre autres, les mesures à prendre avant de charger un véhicule.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-43",
+              "enonce": "La vérification de la mise en place correcte du pont de liaison est du ressort du conducteur accompagnant.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R485-EXPL-44",
+              "enonce": "Le protocole de chargement concerne uniquement le conducteur du camion.",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-45",
+              "enonce": "Ce pictogramme interdit l'accès au conducteur accompagnant, porteur d’un pacemaker (stimulateur cardiaque).",
+              "reponse": false
+            },
+            {
+              "id": "R485-EXPL-46",
+              "enonce": "Le stockage de certains produits dangereux nécessite que le conducteur accompagnant maîtrise les consignes décrites dans les fiches de sécurité produit.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-47",
+              "enonce": "En fin de poste, le conducteur accompagnant doit rendre compte des anomalies observées sur le gerbeur.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-48",
+              "enonce": "Le conducteur accompagnant doit vérifier le niveau d'électrolyte de ses batteries avant leur mise en charge.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-49",
+              "enonce": "En cas de heurt d'un palettier, le conducteur accompagnant doit faire un compte- rendu immédiatement à sa hiérarchie.",
+              "reponse": true
+            },
+            {
+              "id": "R485-EXPL-50",
+              "enonce": "En cas de défaillance du gerbeur, il est préférable que le conducteur accompagnant attende la fin de poste pour signaler cette dernière.",
+              "reponse": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "R489",
+      "libelle": "Chariots de manutention automoteurs à conducteur porté",
+      "seuil_reussite_global_pct": 70,
+      "seuil_reussite_par_theme": "moyenne",
+      "themes": [
+        {
+          "code": "connaissances_generales",
+          "libelle": "Connaissances générales",
+          "bareme_officiel_sur_100": 15,
+          "questions": [
+            {
+              "id": "R489-CONN-01",
+              "enonce": "La déclaration de conformité européenne d’un chariot est délivrée par le constructeur.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-02",
+              "enonce": "L’employeur est responsable de faire effectuer, dans les délais, une vérification générale périodique d’un chariot élévateur.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-03",
+              "enonce": "Le conducteur doit vérifier l’état de son chariot et faire des essais avant toute utilisation.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-04",
+              "enonce": "Le conducteur n’est pas obligé de posséder une autorisation de conduite pour conduire un chariot dans son entreprise.",
+              "reponse": false
+            },
+            {
+              "id": "R489-CONN-05",
+              "enonce": "Le ou les CACES® R 489 détenus par le conducteur ont une durée de validité de 7 ans.",
+              "reponse": false
+            },
+            {
+              "id": "R489-CONN-06",
+              "enonce": "Le cariste est chargé de faire remonter, verbalement et par écrit, les anomalies observées sur son chariot à sa hiérarchie.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-07",
+              "enonce": "L’employeur est obligé de faire lever les anomalies, liées à la sécurité de son chariot inscrites sur le rapport de vérification générale périodique, avant toute utilisation par un salarié.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-08",
+              "enonce": "Au démarrage de sa journée et après avoir fait un contrôle visuel de l’état général du chariot, le conducteur est dispensé de faire des essais à vide.",
+              "reponse": false
+            },
+            {
+              "id": "R489-CONN-09",
+              "enonce": "Le chariot a un souci majeur concernant sa sécurité, le conducteur habituel continue de travailler.",
+              "reponse": false
+            },
+            {
+              "id": "R489-CONN-10",
+              "enonce": "Un des rôles de l’inspecteur du travail est de contrôler l’application de la législation concernant le code du travail dans l’entreprise.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-11",
+              "enonce": "Un chariot de catégorie 3 est plus adapté pour travailler dans les installations de stockage à rayonnages métalliques de grande hauteur.",
+              "reponse": false
+            },
+            {
+              "id": "R489-CONN-12",
+              "enonce": "Un chariot de catégorie 5 est utilisé dans les magasins d'entrepôts en distribution, pour gerber dans les installations à rayonnages métalliques de grande hauteur.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-13",
+              "enonce": "Ce chariot est classé dans la catégorie 2.",
+              "reponse": false
+            },
+            {
+              "id": "R489-CONN-14",
+              "enonce": "Ce chariot de capacité nominale de 1500kg est classé dans la catégorie 3.",
+              "reponse": true
+            },
+            {
+              "id": "R489-CONN-15",
+              "enonce": "Ce chariot translateur est classé dans la catégorie 5.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "technologie_stabilite",
+          "libelle": "Technologie et stabilité",
+          "bareme_officiel_sur_100": 25,
+          "questions": [
+            {
+              "id": "R489-TECH-01",
+              "enonce": "Un chariot élévateur peut avoir comme source d’énergie le gaz.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-02",
+              "enonce": "Les éléments d’une batterie, d’un chariot électrique, sont branchés en parallèle.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-03",
+              "enonce": "Sur un chariot thermique à gaz, il faut ouvrir d’¼ le robinet de la bouteille d’alimentation.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-04",
+              "enonce": "Pour intervenir sur le bloc de batterie d’un chariot électrique, des lunettes de protection sont obligatoires.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-05",
+              "enonce": "Sur ce chariot, le dispositif de sécurité N°3 est un dosseret de charge.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R489-TECH-06",
+              "enonce": "La clef de contact peut rester sur le chariot quand le conducteur est absent.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-07",
+              "enonce": "Ce dispositif de sécurité est un arrêt d'urgence.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-08",
+              "enonce": "La pédale du frein de service se trouve à droite de l'accélérateur.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-09",
+              "enonce": "La ceinture de sécurité empêche l'éjection du conducteur.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-10",
+              "enonce": "La ceinture de sécurité n’est pas obligatoire pour un petit trajet.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-11",
+              "enonce": "La flèche en rouge indique le clapet de sécurité ou le clapet anti-retour.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-12",
+              "enonce": "La flèche en rouge indique le dosseret de charge.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-13",
+              "enonce": "Les réglages sur un siège permettent d'amortir les secousses en fonction du poids du cariste.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-14",
+              "enonce": "Le réglage des accoudoirs, volant, siège …, contribue à faire augmenter les Troubles Musculo Squelettique (maladie professionnelle).",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-15",
+              "enonce": "Un container de 1m3, rempli à moitié d’eau, pèse 1 tonne.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-16",
+              "enonce": "Le poids d’un bloc de béton armé mesurant ( L : 2m* l : 1m*h : 0,5m) est approximativement de 2,5 tonnes.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-17",
+              "enonce": "Ce pictogramme signifie centre de gravité.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-18",
+              "enonce": "Le centre de gravité de cette pièce est bien placé.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-19",
+              "enonce": "Plus la charge est lourde et encombrante, plus le chariot restera en équilibre .",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-20",
+              "enonce": "La vitesse excessive dans un virage est un facteur d’accident ayant pour conséquence le renversement latéral d’un chariot.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-21",
+              "enonce": "Circuler avec la charge haute n’est pas un facteur de renversement latéral d’un chariot.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-22",
+              "enonce": "Faire un demi-tour avec mon chariot sur un plan incliné ou une pente est un facteur d’accident ayant pour conséquence le renversement latéral de mon chariot.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-23",
+              "enonce": "Circuler avec une charge qui dépasse la capacité nominale du chariot est un facteur d’accident ayant pour conséquence le basculement.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TECH-24",
+              "enonce": "Descendre une pente avec la charge vers le bas, n’est pas un facteur d’accident ayant pour conséquence le basculement.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TECH-25",
+              "enonce": "Se déplacer avec une charge très longue dépassant la distance prévue par le constructeur, mais de poids accepté par le chariot, n’est pas un facteur d’accident ayant pour conséquence le basculement.",
+              "reponse": false
+            }
+          ]
+        },
+        {
+          "code": "tableau_charges",
+          "libelle": "Tableau de charges",
+          "bareme_officiel_sur_100": 10,
+          "questions": [
+            {
+              "id": "R489-TABL-01",
+              "enonce": "Avec ce chariot, je peux élever une charge au-dessus de 6m.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TABL-02",
+              "enonce": "Avec ce chariot, le centre de gravité de ma charge doit se trouver au maximum à 500mm du talon des fourches.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TABL-03",
+              "enonce": "Avec ce chariot, je peux gerber une charge à une hauteur de 6,5m.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TABL-04",
+              "enonce": "Avec ce chariot, je peux gerber une charge d’une longueur maximale de 1m.",
+              "reponse": false
+            },
+            {
+              "id": "R489-TABL-05",
+              "enonce": "Je circule avec ce chariot. Mon employeur me demande de gerber une charge à 6,5m de haut, sachant que celle-ci a une longueur de 2,10 m. J’effectue le gerbage sans problème.",
+              "reponse": false,
+              "a_verifier": true
+            },
+            {
+              "id": "R489-TABL-06",
+              "enonce": "Avec ce type de chariot, je peux gerber une charge de 1880kg mesurant 1400mm de long à une hauteur de 4,20m.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TABL-07",
+              "enonce": "Avec ce type de chariot, je peux gerber une charge de 2000kg mesurant 1200mm de long à une hauteur de 4,20m.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TABL-08",
+              "enonce": "En conduisant ce chariot, je peux lever une charge de 1,20m de long et pesant 800kg à 3m de haut le mât vertical.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TABL-09",
+              "enonce": "En évoluant avec ce chariot, je peux gerber une charge de 700kg ayant un centre de gravité de 700mm à une hauteur de 6,275m.",
+              "reponse": true
+            },
+            {
+              "id": "R489-TABL-10",
+              "enonce": "Ce type de chariot me permet de gerber une charge de 1,10m et pesant 1300kg à une hauteur de 4m.",
+              "reponse": false
+            }
+          ]
+        },
+        {
+          "code": "exploitation",
+          "libelle": "Exploitation",
+          "bareme_officiel_sur_100": 50,
+          "questions": [
+            {
+              "id": "R489-EXPL-01",
+              "enonce": "Lors de l’utilisation d’un chariot, le manque de formation est souvent une cause d’accident.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-02",
+              "enonce": "Le comportement du conducteur est un facteur important dans les accidents de chariot.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-03",
+              "enonce": "Le manque d’entretien de son chariot peut être une cause d’accident.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-04",
+              "enonce": "Lors de l’utilisation d’un chariot élévateur, l’un des principaux risques d’accident est le renversement.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-05",
+              "enonce": "La prise de tranquillisants diminue le risque d’accident.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-06",
+              "enonce": "L’abaque doit être bien interprété afin d’éviter le renversement d’un chariot.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-07",
+              "enonce": "La circulation avec une charge haute n’est pas un risque d’accident.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-08",
+              "enonce": "Lors d’un gerbage en pile, laisser le mât gerbeur incliné en position arrière est un facteur d’accident.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-09",
+              "enonce": "Circuler sur une pente ne présente pas de risques particuliers.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-10",
+              "enonce": "En gerbage, j’accroche un rack avec mon chariot. Je continue mon travail sans le signaler.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-11",
+              "enonce": "Je viens de percuter violemment un mur avec les fourches de mon chariot. Je signale à ma hiérarchie, ce dommage, causé à la structure.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-12",
+              "enonce": "Afin d’éviter tout heurt avec des piétons ou manutentionnaires, je dois toujours regarder en arrière avant d’entreprendre une marche arrière.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-13",
+              "enonce": "Si je transporte un passager sur mon chariot et que la personne chute, ma responsabilité civile est engagée.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-14",
+              "enonce": "Il est possible de transporter un passager sur les fourches du chariot si mon responsable me donne la permission.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-15",
+              "enonce": "Je peux demander à mon collègue de me hisser en hauteur, sur une palette, avec le chariot en prenant toutes les précautions.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-16",
+              "enonce": "Utiliser un chariot à gaz dans un espace intérieur non ventilé est dangereux.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-17",
+              "enonce": "Manipuler des batteries sans gants et lunettes est dangereux pour l’opérateur.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-18",
+              "enonce": "La conduite sous l’emprise faible d’alcool augmente le risque d’accident.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-19",
+              "enonce": "La prise d’alcool ou de drogue diminue le temps de réaction.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-20",
+              "enonce": "L’utilisation de mon téléphone portable en conduisant n’a pas d’incidence sur ma conduite.",
+              "reponse": false,
+              "a_verifier": true
+            },
+            {
+              "id": "R489-EXPL-21",
+              "enonce": "L’activité de cariste n’interdit pas de communiquer avec un téléphone pendant une manœuvre.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-22",
+              "enonce": "Contrôler les niveaux de mon chariot avec une cigarette allumée est un risque d’accident.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-23",
+              "enonce": "Les gaz d’échappement peuvent provoquer une intoxication et des maladies professionnelles sur du long terme.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-24",
+              "enonce": "Le port de bouchons d’oreille ou casque anti-bruit est obligatoire pour la conduite d’un chariot ayant un niveau sonore supérieur à 90dB.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-25",
+              "enonce": "Les vibrations ressenties sur mon chariot, peuvent provoquer des arrêts de travail et des maladies professionnelles.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-26",
+              "enonce": "La distance de freinage dépend aussi de l’état de mes freins et pneumatiques.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-27",
+              "enonce": "Si le sol est mouillé, la distance de freinage de mon chariot diminue.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-28",
+              "enonce": "Un temps de réaction plus long permet de réduire la distance d’arrêt.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-29",
+              "enonce": "Un sol humide contribue à l’allongement de la distance d’arrêt.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-30",
+              "enonce": "Je suis piéton. Ce panneau m’interdit de passer.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-31",
+              "enonce": "Ce pictogramme signifie que le colis contient du verre.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-32",
+              "enonce": "A chaque passage de porte, le cariste qui actionne son gyrophare, est prioritaire.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-33",
+              "enonce": "Une allée de circulation à sens unique doit avoir une largeur équivalente à la largeur d’un chariot (ou de la charge) + 2m de large.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-34",
+              "enonce": "Je peux doubler un chariot seulement si le cariste me donne la permission et me fait signe de le dépasser.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-35",
+              "enonce": "J’exerce le métier de cariste dans une entreprise pour la première fois. Je prends connaissance du plan de circulation avant de débuter mon travail.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-36",
+              "enonce": "Pour franchir une voie ferrée avec mon chariot de catégorie 3, je passe perpendiculairement aux rails.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-37",
+              "enonce": "Si la signalisation routière est utilisée dans la cour de l’usine, elle s’applique uniquement aux poids lourds venant charger ou décharger et non aux chariots de manutention.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-38",
+              "enonce": "Pour effectuer le déchargement d’un camion sur la voie publique, je dois obligatoirement baliser la zone de déchargement.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-39",
+              "enonce": "Charger un camion par l’arrière, sans vérifier le calage de celui-ci, est un facteur d’accident.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-40",
+              "enonce": "Lors d’un déchargement par l’arrière d’un camion, ressortir de celui-ci sans avertir est un facteur d’accident.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-41",
+              "enonce": "Pour m’engager sur un pont de liaison entre le quai et le véhicule, je vérifie en amont le poids total de mon chariot et de ma charge.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-42",
+              "enonce": "Savoir répartir le chargement sur un camion est une des compétences du cariste.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-43",
+              "enonce": "Ce pictogramme signifie matières toxiques.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-44",
+              "enonce": "Ce pictogramme signifie matières cancérigènes.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-45",
+              "enonce": "Il y a un risque de brûlures graves en manutentionnant, sans précaution, ces produits dangereux.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R489-EXPL-46",
+              "enonce": "Seul le port des gants de protection est obligatoire pour manipuler des batteries électriques d’un chariot.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-47",
+              "enonce": "Je suis cariste. En fin de poste, je stationne mon chariot près de la sortie pour pouvoir débaucher rapidement.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-48",
+              "enonce": "Je suis cariste. En fin de poste, je dois changer ma bouteille de gaz sur mon chariot si elle est à moitié remplie.",
+              "reponse": false
+            },
+            {
+              "id": "R489-EXPL-49",
+              "enonce": "En fin de poste, je m’aperçois que mon chariot a un problème mécanique. J’avertis en premier lieu mon responsable.",
+              "reponse": true
+            },
+            {
+              "id": "R489-EXPL-50",
+              "enonce": "J’ai endommagé mon chariot et je ne le signale pas, de peur de me faire réprimander.",
+              "reponse": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "R482A",
+      "libelle": "Engins de chantier",
+      "seuil_reussite_global_pct": 70,
+      "seuil_reussite_par_theme": "moyenne",
+      "themes": [
+        {
+          "code": "connaissances_generales",
+          "libelle": "Connaissances générales",
+          "bareme_officiel_sur_100": 12,
+          "questions": [
+            {
+              "id": "R482A-CONN-01",
+              "enonce": "L’employeur peut autoriser sans dérogation, la conduite d’un engin de chantier à un conducteur âgé au minimum de 16 ans",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CONN-02",
+              "enonce": "L’employeur doit vérifier les niveaux des engins chaque matin à la prise de poste",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CONN-03",
+              "enonce": "le constructeur peut retirer à tout moment l’autorisation de conduite aux conducteurs d’engins",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CONN-04",
+              "enonce": "Le CACES® n’est pas suffisant pour pouvoir conduire un engin de chantier",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-05",
+              "enonce": "En cas de manquement à une obligation de sécurité connue, le conducteur peut être tenu responsable pénalement de l'accident qu'il a causé",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-06",
+              "enonce": "Le conducteur d'engin est responsable des verifications à effectuées sur son engin lors de la prise de poste",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-07",
+              "enonce": "Le chef de chantier coordonne le travail des équipes (matériel et matériaux inclus)",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-08",
+              "enonce": "L’élingueur sélectionne les élingues à utiliser en fonction des charges à lever",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-09",
+              "enonce": "L’un des rôles du médecin du travail est de réaliser des formations sur la conduite d’engins",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CONN-10",
+              "enonce": "Le C.S.E. a pour mission de protéger la santé et la sécurité des travailleurs et d’améliorer les conditions de travail",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-11",
+              "enonce": "Avec un CACES® R482 catégorie B1, je peux conduire une pelle sur chenilles ou à pneus de masse supérieure à 6 tonnes",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CONN-12",
+              "enonce": "Le CACES® R482 catégorie C1 permet d’utiliser une trancheuse",
+              "reponse": false
+            }
+          ]
+        },
+        {
+          "code": "technologie_stabilite",
+          "libelle": "Technologie et stabilité",
+          "bareme_officiel_sur_100": 28,
+          "questions": [
+            {
+              "id": "R482A-TECH-01",
+              "enonce": "L'élément indiqué en A est une pompe hydraulique",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-02",
+              "enonce": "Dans un train de chenilles, la roue motrice est appelée \"barbotin\"",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-03",
+              "enonce": "Sur un engin de transport, la charge utile est : (PTRA – PTAC = CU)",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-04",
+              "enonce": "Le poids de l'engin est marqué sur les mentions indiquées sur la plaque constructeur",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-05",
+              "enonce": "Le distributeur hydraulique sert à filtrer l'huile hydraulique",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-06",
+              "enonce": "Le circuit hydraulique sur un engin de chantier comprend, entre autres ; une pompe, un distributeur, des vérins, …",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-07",
+              "enonce": "Le filtre à air d’un engin participe à la lubrification du moteur",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-08",
+              "enonce": "Un moteur équipé d’un turbo lui donne de la puissance",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-09",
+              "enonce": "La consommation de carburant d’un engin augmente lorsque le filtre à air est encrassé",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-10",
+              "enonce": "Une transmission mécanique est composée du : Moteur – Embrayage – Boite de vitesses – Arbre de transmission – Différentiel",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-11",
+              "enonce": "Cet équipement entouré de rose s’appelle la flèche",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-12",
+              "enonce": "Je trouve tous les renseignements nécessaires à l’utilisation des équipements interchangeables dans la notice d’utilisation du constructeur",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-13",
+              "enonce": "Le distributeur hydraulique sert à diriger les fluides vers les organes hydrauliques",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R482A-TECH-14",
+              "enonce": "Sur un circuit de refroidissement par eau , la pompe à eau est entraînée en permanence",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-15",
+              "enonce": "la ceinture de sécurité est obligatoire dans tous les engins de chantier",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-16",
+              "enonce": "Il n’est pas nécessaire d’utiliser quotidiennement le coupe-circuit",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-17",
+              "enonce": "F.O.P.S. est un assemblage de membrures ayant pour fonction de réduire les risques d’écrasement de l’opérateur en cas de retournement de l’engin",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-18",
+              "enonce": "R.O.P.S. est un assemblage de membrures disposées de façon à fournir à l’opérateur une protection suffisante contre les chutes d’objets",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-19",
+              "enonce": "Le port de la ceinture de sécurité est conseillé",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-20",
+              "enonce": "Le port de la ceinture de sécurité dans la cabine d'un engin de TP équipé d'une cabine \"ROPS\"est laissé à l'appréciation du chef d'établissement",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-21",
+              "enonce": "Le siège du poste de conduite doit être réglé en fonction de la corpulence du conducteur",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-22",
+              "enonce": "Je fais la même taille que mon équipier, je garde les mêmes réglages de siège que lui",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-23",
+              "enonce": "Ce pictogramme signale un problème de frein de parking",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-24",
+              "enonce": "Ce pictogramme signale la température de l’huile moteur",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-25",
+              "enonce": "La surcharge de mon engin de chantier peut entraîner un renversement",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-26",
+              "enonce": "Des accélérations ou ralentissements lors de travaux dans une pente, peuvent entraîner un basculement",
+              "reponse": true
+            },
+            {
+              "id": "R482A-TECH-27",
+              "enonce": "En terrain accidenté , je descends en marche avant avec ma chargeuse godet chargé",
+              "reponse": false
+            },
+            {
+              "id": "R482A-TECH-28",
+              "enonce": "En circulation, les fourches chargées d’un engin de chantier doivent se situer à environ 15 à 30 cm du sol",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "exploitation",
+          "libelle": "Exploitation",
+          "bareme_officiel_sur_100": 44,
+          "questions": [
+            {
+              "id": "R482A-EXPL-01",
+              "enonce": "Sur une piste de chantier , il est conseillé de ne jamais faire de manœuvre ou de marche arrière",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-02",
+              "enonce": "Il est conseillé de faire une marche arrière avec le concours d’un signaleur",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-03",
+              "enonce": "Le conducteur se fait obligatoirement guider lors d’une manœuvre dans une zone sans visibilité",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-04",
+              "enonce": "Le signal sonore de marche arrière d'un engin supprime entièrement le risque de heurt d'une personne",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-05",
+              "enonce": "Les engins peuvent être équipés de caméra de recul pour visualiser les angles morts lors de manœuvres",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-06",
+              "enonce": "Si la visibilité est mauvaise sur une piste, j’adapte ma vitesse aux conditions de circulation.",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-07",
+              "enonce": "lors de l’évolution d’un engin de chantier sur la voie publique, il doit être équipé d’un gyrophare fonctionnel orange",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-08",
+              "enonce": "Lors d'une manœuvre dans une zone sans visibilité, cette attitude est dangereuse et interdite",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-09",
+              "enonce": "Sur un chantier fermé à la circulation , je peux transporter un collègue avec mon engin",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-10",
+              "enonce": "Je peux transporter une personne dans le godet",
+              "reponse": false,
+              "a_verifier": true
+            },
+            {
+              "id": "R482A-EXPL-11",
+              "enonce": "Le transport de personnes avec un engin de chantier est autorisé sur une distance maximum de 50 m",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-12",
+              "enonce": "Le CACES® R 482 est suffisant pour élever du personnel avec un engin de levage",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-13",
+              "enonce": "Le conducteur peut élever du personnel dans le godet de son engin s'il est équipé de clapets anti-retours",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-14",
+              "enonce": "L’utilisation d’un godet comme plate-forme de travail est autorisée lorsqu’on n’a pas de nacelle élévatrice",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-15",
+              "enonce": "Un coup de volant brusque peut engendrer une perte de contrôle du véhicule",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-16",
+              "enonce": "Un engin de chantier ne peut pas déraper sur un sol mouillé",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-17",
+              "enonce": "Le renversement d’un engin de chantier peut être dû à une vitesse excessive dans un virage",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-18",
+              "enonce": "Il est indispensable d’augmenter la surface d’appui au sol pour caler un engin sur du terrain meuble",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-19",
+              "enonce": "La recherche d'une petite fuite hydraulique peut se faire à main nue",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-20",
+              "enonce": "Le graissage des cardans doit se faire moteur arrêté",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-21",
+              "enonce": "Par temps froid , il est inutile de faire chauffer l’huile hydraulique",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-22",
+              "enonce": "Un mauvais montage de flexibles hydrauliques est dangereux",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-23",
+              "enonce": "le passage au-dessus d’une personne lors d’une activité de levage est formellement interdit",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-24",
+              "enonce": "il n’est pas autorisé à vide, de circuler avec les équipements en hauteur",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-25",
+              "enonce": "La pression des pneumatiques doit toujours se faire à froid",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-26",
+              "enonce": "Une coupure profonde dans un pneumatique n’a pas d’incidence sur la sécurité en circulation routière",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-27",
+              "enonce": "Je travaille au bord d’un talus et place l’engin à une distance mini qui est de 2 fois la profondeur de l’ouvrage , si le terrain est meuble",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-28",
+              "enonce": "Le blindage d’une tranchée est obligatoire à partir d’1.80 m de profondeur",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-29",
+              "enonce": "Le crochet A est bien positionné",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-30",
+              "enonce": "Je vérifie systématiquement ma plaque de charge avant chaque élévation",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-31",
+              "enonce": "Il n’est pas nécessaire d’arrimer mon engin sur le porte-engin",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-32",
+              "enonce": "Avant le chargement d'engins sur le porte engin, il faut vérifier l'horizontalité du plateau",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-33",
+              "enonce": "Un amorçage d’arc électrique peut se produire à distance",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-34",
+              "enonce": "La distance minimale à laisser par rapport à un réseau électrique enterré est de 1,50 m",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-35",
+              "enonce": "La prise de certains médicaments peut m’empêcher de conduire les engins de chantier",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R482A-EXPL-36",
+              "enonce": "La consommation d’alcool a pour effet une meilleure maitrise de l’engin",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-37",
+              "enonce": "Je peux écouter de la musique avec des écouteurs en conduisant mon engin",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-38",
+              "enonce": "Je ne réponds pas au téléphone lors d’une manœuvre lente avec mon engin",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-39",
+              "enonce": "Lors de l’utilisation d’un engin de chantier, un incendie peut se déclarer suite à une fuite de carburant",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-40",
+              "enonce": "Le pictogramme B signifie un risque d’explosion ou d’incendie",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-41",
+              "enonce": "La classification des produits chimiques, dans le milieu professionnel, est représentée par des pictogrammes de danger",
+              "reponse": true
+            },
+            {
+              "id": "R482A-EXPL-42",
+              "enonce": "Ce symbole signifie facilement inflammable",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-43",
+              "enonce": "le port des protections auditives est obligatoire à partir de 50 décibels",
+              "reponse": false
+            },
+            {
+              "id": "R482A-EXPL-44",
+              "enonce": "Ce pictogramme indique le niveau sonore maximum mesuré dans la cabine d'un engin",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "circulation",
+          "libelle": "Circulation",
+          "bareme_officiel_sur_100": 12,
+          "questions": [
+            {
+              "id": "R482A-CIRC-01",
+              "enonce": "Un panneau rond et bleu sur un chantier indique un danger",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CIRC-02",
+              "enonce": "Ce panneau signifie une chaussée glissante",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-03",
+              "enonce": "Ce geste signifie fin de commandement",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-04",
+              "enonce": "Ce geste de commandement signifie : Faire demi-tour à l’engin",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CIRC-05",
+              "enonce": "En circulation dans une descente à fort pourcentage, avec un tombereau en charge, il est préférable d'utiliser en priorité la pédale de frein.",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CIRC-06",
+              "enonce": "La distance d'arrêt d'un engin en charge est plus importante que celle d'un engin à vide",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-07",
+              "enonce": "Sans dispositions particulières, le code de la route limite un engin de TP (sauf dérogation) à une largeur de 2.55 m",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-08",
+              "enonce": "La distance de freinage d’un engin de chantier peut dépendre de l’état du sol",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-09",
+              "enonce": "En circulation et en production, lors du dépassement d'un autre engin, il n’est pas nécessaire de signaler sa manœuvre",
+              "reponse": false
+            },
+            {
+              "id": "R482A-CIRC-10",
+              "enonce": "Les règles de dépassement doivent être indiquées dans le plan de circulation du chantier",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-11",
+              "enonce": "Dans cette situation le véhicule (A) peut doubler si la voie de gauche est libre",
+              "reponse": true
+            },
+            {
+              "id": "R482A-CIRC-12",
+              "enonce": "Vous circulez sur la voie publique avec un engin de chantier, vous n'êtes pas prioritaire sur les autres véhicules",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "fin_poste_maintenance",
+          "libelle": "Fin de poste - maintenance",
+          "bareme_officiel_sur_100": 4,
+          "questions": [
+            {
+              "id": "R482A-FIN_-01",
+              "enonce": "Ce n’est pas au conducteur de démonter un filtre à huile hydraulique",
+              "reponse": true
+            },
+            {
+              "id": "R482A-FIN_-02",
+              "enonce": "La périodicité de nettoyage du filtre à air peut être variable en fonction des conditions de travail",
+              "reponse": true
+            },
+            {
+              "id": "R482A-FIN_-03",
+              "enonce": "En cas de panne, je signale l’engin par tous les moyens à ma disposition",
+              "reponse": true
+            },
+            {
+              "id": "R482A-FIN_-04",
+              "enonce": "En cas de défaillance ou de panne , je préviens immédiatement mon supérieur",
+              "reponse": true,
+              "a_verifier": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "R486A",
+      "libelle": "Plates-formes elevatrices mobiles de personnel (PEMP)",
+      "seuil_reussite_global_pct": 70,
+      "seuil_reussite_par_theme": "moyenne",
+      "themes": [
+        {
+          "code": "connaissances_generales",
+          "libelle": "Connaissances générales",
+          "bareme_officiel_sur_100": 14,
+          "questions": [
+            {
+              "id": "R486A-CONN-01",
+              "enonce": "Le constructeur doit obligatoirement fournir la notice d’utilisation pour chaque PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-02",
+              "enonce": "La PEMP doit être équipée d’un poste de secours.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-03",
+              "enonce": "L’employeur doit délivrer les autorisations de conduite à ses salariés.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-04",
+              "enonce": "Le responsable de chantier doit s’assurer que tous les intervenants ont pris connaissance du plan de prévention et de sécurité (PPSPS).",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-05",
+              "enonce": "L’opérateur vérifie sa PEMP avant chaque prise de poste.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-06",
+              "enonce": "Une autorisation verbale de l’employeur est suffisante pour conduire une PEMP occasionnellement.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-CONN-07",
+              "enonce": "L’opérateur est pénalement responsable des blessures involontaires causées à autrui.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-08",
+              "enonce": "Le surveillant au sol est une personne formée et habilitée.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-09",
+              "enonce": "C’est le surveillant qui gère le trafic et le balisage autour de la PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-10",
+              "enonce": "C’est la CNAM qui élabore les recommandations CACES®.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-11",
+              "enonce": "L’inspecteur du travail contrôle l’application de la législation du travail dans l’entreprise.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-12",
+              "enonce": "Dans la recommandation R 486a, il existe 3 catégories de CACES®.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-13",
+              "enonce": "La catégorie C concerne les PEMP « hors production ».",
+              "reponse": true
+            },
+            {
+              "id": "R486A-CONN-14",
+              "enonce": "Cette PEMP de type 2B ne rentre pas dans la nouvelle catégorie B de la R 486a.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "technologie_stabilite",
+          "libelle": "Technologie et stabilité",
+          "bareme_officiel_sur_100": 26,
+          "questions": [
+            {
+              "id": "R486A-TECH-01",
+              "enonce": "Les PEMP qui ne peuvent pas être déplacées en élévation sont des nacelles de type 1.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-02",
+              "enonce": "Les PEMP qui peuvent être commandées, en translation, depuis le poste de travail bas sont des nacelles de type 3.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-03",
+              "enonce": "Pour stabiliser ma PEMP, je dois connaitre les indications du constructeur, en tenant compte du dévers admissible et de la force exercée sur le sol par les stabilisateurs.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-04",
+              "enonce": "Le contacteur homme présent, lorsqu’il est relâché, arrête toutes les manœuvres de la PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-05",
+              "enonce": "L’arrêt d’urgence peut être court-circuité par l’opérateur.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-06",
+              "enonce": "Le poste de secours n’est pas obligatoire sur des PEMP de type 3A et 3B.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-07",
+              "enonce": "En cas de malaise du conducteur, l’opérateur au sol utilise en priorité le poste de dépannage.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-08",
+              "enonce": "Le système hydraulique dispose d’un limiteur de pression.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-09",
+              "enonce": "Le système hydraulique dispose d’un limiteur de débit.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R486A-TECH-10",
+              "enonce": "Le poste principal se trouve dans le panier de la nacelle.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-11",
+              "enonce": "Des PEMP de type 1B sont équipées d’un asservissement de stabilisation – élévation.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-12",
+              "enonce": "Les PEMP de type 3A et 3B peuvent êtres thermiques ou électriques.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-13",
+              "enonce": "Les pneumatiques sur les PEMP de type 3 doivent être increvables.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-14",
+              "enonce": "Sur le diagramme spatial de cette PEMP, la hauteur de travail est différente de la hauteur de plancher.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-15",
+              "enonce": "La vitesse de vent admissible, suivant la norme EN 280 (sauf indication contraire du constructeur) est de 18,5 m/s.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-16",
+              "enonce": "Le poids à prendre en compte lors de l’utilisation d’une PEMP, est seulement celui de la machine et de l’outillage embarqué.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-17",
+              "enonce": "Le centre de gravité de l’ensemble doit toujours rester à l’intérieur des points d’appui au sol (image 1 et 2 en partant de la gauche).",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-18",
+              "enonce": "Le moment de stabilité doit être toujours supérieur au moment de renversement.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-19",
+              "enonce": "Sur terrain instable, je dois me positionner et stabiliser ma PEMP (d), à au moins deux fois la profondeur d’un fossé (H).",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-20",
+              "enonce": "Je peux stabiliser ma PEMP sur une plaque d’égout pour une intervention rapide.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-21",
+              "enonce": "Je peux utiliser cette PEMP, avec les caractéristiques suivantes, dans un entrepôt non ventilé.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-22",
+              "enonce": "Je peux utiliser cette PEMP, avec les caractéristiques suivantes, sur une pente supérieure à 5°.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-23",
+              "enonce": "D’après ce diagramme spatial, je peux utiliser cette PEMP pour un travail à une hauteur de 18,3m avec un déport de 12,2m.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-24",
+              "enonce": "Je peux utiliser cette PEMP sans stabilisateurs.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-TECH-25",
+              "enonce": "Si besoin, je peux circuler librement sur la route avec cette PEMP de type 3B.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-TECH-26",
+              "enonce": "Avant l’utilisation de ma PEMP en production, je reconnais mon parcours à pied pour étudier le terrain.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "exploitation",
+          "libelle": "Exploitation",
+          "bareme_officiel_sur_100": 54,
+          "questions": [
+            {
+              "id": "R486A-EXPL-01",
+              "enonce": "Une utilisation brusque de ma nacelle peut provoquer un renversement de celle-ci.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-02",
+              "enonce": "Avec ma PEMP, je peux circuler sur une tranchée n’ayant pas été compactée.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-03",
+              "enonce": "La surcharge du panier peut provoquer un renversement de la PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-04",
+              "enonce": "Dans une situation de travail, les chutes de hauteur représentent une des principales causes de mortalité en France.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-05",
+              "enonce": "En élévation, une inclinaison excessive du panier de la PEMP peut provoquer la chute des opérateurs.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-06",
+              "enonce": "En déplaçant ma PEMP de type 3B, le heurt d’un obstacle (aérien ou au sol) peut provoquer la chute de l’opérateur et/ou un renversement de la nacelle.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-07",
+              "enonce": "C’est le surveillant de manœuvre qui gère le trafic des personnes dans l’environnement de travail afin d’éviter le heurt de piétons et d’engins.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-08",
+              "enonce": "Avant son travail, l’opérateur prend en compte les possibles obstacles afin d’éviter le coincement des membres du personnel à bord.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R486A-EXPL-09",
+              "enonce": "La distance de travail obligatoire à respecter entre le panier et un obstacle est de 1,5m.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-10",
+              "enonce": "Je peux élinguer une charge sous le panier de ma nacelle.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-11",
+              "enonce": "Je peux utiliser un rehausseur (escabeau) dans le panier de la PEMP si je porte un harnais.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-12",
+              "enonce": "Je peux monter sur le garde-corps du panier de ma PEMP pour accéder à une hauteur de travail.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-13",
+              "enonce": "Les PEMP, doivent disposer de protections collectives empêchant les chutes de hauteur.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-14",
+              "enonce": "Dans ma nacelle, si besoin, je sécurise mon outillage pour assurer mon intervention.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-15",
+              "enonce": "Du panier de ma PEMP, pour donner du matériel à mon collègue surveillant au sol, je le lui jette du haut du panier.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-16",
+              "enonce": "L'organisation du chantier ne doit pas tenir compte du risque de heurt lié à la présence d'autres engins.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-17",
+              "enonce": "Lors du balisage, je prends en compte les parties de ma PEMP pouvant dépasser pour le réaliser.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-18",
+              "enonce": "Un défaut de balisage de la zone de travail augmente le risque de heurt avec d'autres engins.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-19",
+              "enonce": "La distance de sécurité à proximité de lignes électriques de plus de 50 000 V est de 3m.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-20",
+              "enonce": "La distance de sécurité à proximité de lignes électriques de moins de 50 000 V est de 3m.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-21",
+              "enonce": "Je circule à proximité d’une tranchée sur un terrain accidenté avec une PEMP catégorie 3B. Elle doit être équipée de pneumatiques type bandage.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-22",
+              "enonce": "Lors de travaux nocturnes avec ma nacelle, je m’assure que ma zone d’évolution dispose d’un éclairage suffisant.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-23",
+              "enonce": "En présence d’un vent supérieur à 45 km/h sur le chantier, la visibilité étant insuffisante, je me déplace en élévation avec ma PEMP.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-24",
+              "enonce": "Une fumée importante me cache la vue. J’arrête momentanément les manœuvres, en attendant qu’elle s’estompe.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-25",
+              "enonce": "Je dois utiliser un appareil de projection. Je vérifie de ne pas dépasser la force exerçable sur le panier.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-26",
+              "enonce": "Je vais avoir besoin d’outils électroportatifs. Je passe par la ligne électrique de la PEMP car elle est équipée d’un disjoncteur différentiel.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-27",
+              "enonce": "Je dois vaporiser une peinture inflammable. Ce n’est pas la peine de prévoir un extincteur dans mon panier.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-28",
+              "enonce": "Suite à une chute de neige sur mon chantier, l’épaisseur de poudreuse peut me cacher le relief du terrain.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-29",
+              "enonce": "Sur mon chantier, il fait -10°C avec du brouillard givrant. Cela ne change en rien l’utilisation de ma PEMP.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-30",
+              "enonce": "Les informations annoncent de fortes rafales de vent sur mon secteur géographique. Je me renseigne auprès du service météo avant de débuter ma journée de travail.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-31",
+              "enonce": "La PEMP a touché une ligne électrique par manque de précision. Elle est restée en contact avec celle-ci. Je fais prendre la main sur le poste de secours par le surveillant en poste bas pour la dégager.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-32",
+              "enonce": "En utilisant le poste de dépannage suite à la rupture d’un flexible hydraulique, il y a un risque au contact de ce liquide hydraulique.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-33",
+              "enonce": "Avant de déployer ma PEMP sur ma zone d’évolution, je m’assure que le grutier du chantier m’ait vu et je lui signale mon intervention.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R486A-EXPL-34",
+              "enonce": "J’interviens avec une nacelle pour la maintenance d’un pont roulant. Je n’ai pas besoin de le consigner avant d’intervenir.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-35",
+              "enonce": "Les gaz d’échappement d’une PEMP thermique sont toxiques pour l’Homme.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-36",
+              "enonce": "Pour des travaux en intérieur, il est préférable d’utiliser une PEMP électrique.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-37",
+              "enonce": "L’huile hydraulique dans le circuit hydraulique, en service, est sous forte pression.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-38",
+              "enonce": "Sur une PEMP électrique, les batteries contiennent de l’acide sulfurique.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-39",
+              "enonce": "J’ai fait le plein de carburant sur ma nacelle thermique. Je dois nettoyer le surplus de carburant renversé sur le sol.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-40",
+              "enonce": "Le gasoil est sans danger pour la peau. Je n’ai pas besoin de mettre des gants pour faire le plein.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-41",
+              "enonce": "La prise de médicaments niveau 3 est interdite pour la conduite des PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-42",
+              "enonce": "Je peux manœuvrer ma PEMP en répondant au téléphone.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-43",
+              "enonce": "Je peux, occasionnellement, dépasser la limite de chargement prévue par le constructeur.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-44",
+              "enonce": "On peut monter à trois personnes dans une PEMP homologuée pour 2, pourvu qu’on ne dépasse pas la capacité de chargement autorisée par le constructeur.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-45",
+              "enonce": "Le dévers admissible indiqué par le constructeur est identique à la pente gravissable.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-46",
+              "enonce": "C’est la notice constructeur qui détermine le port ou non du harnais.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-47",
+              "enonce": "Je peux utiliser un dispositif « stop chute » sur la longe de mon harnais, dans la PEMP.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-48",
+              "enonce": "Le balisage doit englober toute la zone d’évolution balayée par ma PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-49",
+              "enonce": "Le balisage doit suivre dans le temps et dans l’espace, l’avancée des travaux.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-50",
+              "enonce": "Le balisage sert à empêcher toute circulation (piétons, engins) dans la zone d’évolution de la PEMP.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-51",
+              "enonce": "Ce panneau de signalisation est une interdiction.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-52",
+              "enonce": "Ce panneau de signalisation est une interdiction.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-EXPL-53",
+              "enonce": "Ces pictogrammes signifient produit inflammable",
+              "reponse": false
+            },
+            {
+              "id": "R486A-EXPL-54",
+              "enonce": "Ces pictogrammes signifient produit corrosif.",
+              "reponse": true
+            }
+          ]
+        },
+        {
+          "code": "entretien",
+          "libelle": "Entretien",
+          "bareme_officiel_sur_100": 6,
+          "questions": [
+            {
+              "id": "R486A-ENTR-01",
+              "enonce": "Je vérifie la présence éventuelle de fuites, sur mes conduits hydrauliques (flexible, rigide).",
+              "reponse": true
+            },
+            {
+              "id": "R486A-ENTR-02",
+              "enonce": "Le niveau d’huile hydraulique n’a pas besoin d’être vérifié.",
+              "reponse": false
+            },
+            {
+              "id": "R486A-ENTR-03",
+              "enonce": "L’état et la fixation des roues doivent être vérifiés.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-ENTR-04",
+              "enonce": "Un pied de stabilisateur déformé est une anomalie pouvant être détectée par le conducteur.",
+              "reponse": true,
+              "a_verifier": true
+            },
+            {
+              "id": "R486A-ENTR-05",
+              "enonce": "Les axes, de la structure extensible, doivent être graissés régulièrement.",
+              "reponse": true
+            },
+            {
+              "id": "R486A-ENTR-06",
+              "enonce": "Une fissure sur un des éléments de la structure n’est pas dangereuse.",
+              "reponse": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
