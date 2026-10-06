@@ -258,8 +258,9 @@ async function chargerProfil() {
 
 /** Liste des comptes autorisés (formateurs/testeurs/admin), pour les listes déroulantes. */
 async function chargerFormateurs() {
-  const { data } = await sb.from('formateurs')
-    .select('id, nom, prenom, email, role, actif').order('nom');
+  let { data, error } = await sb.from('formateurs')
+    .select('id, nom, prenom, email, role, actif, cumul_formateur_testeur').order('nom');
+  if (error) ({ data } = await sb.from('formateurs').select('id, nom, prenom, email, role, actif').order('nom'));
   S.formateurs = (data || []).filter(f => f.actif !== false);
 }
 const nomFormateur = id => {

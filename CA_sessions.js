@@ -24,6 +24,11 @@ function droitsSession(s) {
   };
 }
 
+/** Une même personne peut-elle être formateur ET testeur ? (autorisation de conduite, ou dérogation individuelle) */
+const peutCumuler = id => !!(S.formateurs || []).find(f => f.id === id)?.cumul_formateur_testeur;
+const cumulAutorise = (typeSession, formateurId) => typeSession === 'autorisation' || peutCumuler(formateurId);
+const LIBELLE_TYPE_SESSION = { caces: 'CACES', autorisation: 'Autorisation de conduite' };
+
 function genererCodeAcces(longueur = 6) {
   // Sans caractères ambigus (0/O, 1/I) : le code est dicté à voix haute en salle
   const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -88,14 +93,18 @@ function nouvelleSession() {
   ouvrirModale('Nouvelle session', `
     <form id="form-session" class="formulaire">
       <div class="grille-2">
-        <label>N° de session Galaxy <b>(obligatoire)</b>
-          <input name="galaxy" required placeholder="Ex : 12345"></label>
+        <label>Type de session
+          <select name="type_session" id="type-session">
+            <option value="caces">CACES (test + carton)</option>
+            <option value="autorisation">Autorisation de conduite</option></select></label>
+        <label>N° de session Galaxy <b id="galaxy-oblig">(obligatoire)</b>
+          <input name="galaxy" id="galaxy-champ" required placeholder="Ex : 12345"></label>
         <label>Intitulé <input name="nom" required value="CACES — ${new Date().getFullYear()}"></label>
         <label>Entreprise (client) <input name="entreprise"></label>
         <label>Date de début <input type="date" name="date_debut" value="${new Date().toISOString().slice(0, 10)}"></label>
         <label>Formateur de la session
           <select name="formateur_id">${optionsPersonnes(S.profil.id)}</select></label>
-        <label>Testeur de la session <span class="aide">(différent du formateur)</span>
+        <label>Testeur de la session <span class="aide" id="aide-testeur">(différent du formateur)</span>
           <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null)}</select></label>
         <label>Centre de déroulement du test
           <select name="centre_examen_id"><option value="">—</option>
@@ -110,6 +119,13 @@ function nouvelleSession() {
       </div>
     </form>`);
 
+  $('#type-session').addEventListener('change', e => {
+    const aut = e.target.value === 'autorisation';
+    $('#galaxy-champ').required = !aut;
+    $('#galaxy-oblig').textContent = aut ? '(facultatif)' : '(obligatoire)';
+    $('#aide-testeur').textContent = aut ? '(peut être le formateur)' : '(différent du formateur)';
+    $('#form-session [name=nom]').value = (aut ? 'Autorisation de conduite — ' : 'CACES — ') + new Date().getFullYear();
+  });
   $('#form-session').addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target;
@@ -118,13 +134,13 @@ function nouvelleSession() {
       return { referentiel_code, categorie_code };
     });
     if (!categories.length) return toast('Coche au moins une catégorie visée', 'erreur');
-    if (f.testeur_id.value && f.testeur_id.value === f.formateur_id.value) {
+    if (f.testeur_id.value && f.testeur_id.value === f.formateur_id.value && !cumulAutorise(f.type_session.value, f.formateur_id.value)) {
       return toast('Le testeur doit être une personne différente du formateur.', 'erreur', 6000);
     }
     try {
       const code = genererCodeAcces();
       const { data: s, error } = await sb.from('sessions_formation').insert({
-        nom: f.nom.value.trim(), numero_session_galaxy: f.galaxy.value.trim(),
+        nom: f.nom.value.trim(), type_session: f.type_session.value, numero_session_galaxy: f.galaxy.value.trim() || null,
         entreprise: f.entreprise.value.trim() || null, date_debut: f.date_debut.value || null,
         formateur_id: f.formateur_id.value, testeur_id: f.testeur_id.value || null,
         centre_examen_id: f.centre_examen_id.value ? Number(f.centre_examen_id.value) : null,
@@ -178,7 +194,7 @@ async function modifierLieuSession() {
 }
 
 async function changerFormateurSession(id) {
-  if (id && id === S.session.testeur_id) {
+  if (id && id === S.session.testeur_id && !cumulAutorise(S.session.type_session, id)) {
     toast('Le formateur ne peut pas être aussi le testeur de la session.', 'erreur', 6000);
     return rendreDetailSession($('#contenu'));
   }
@@ -188,7 +204,7 @@ async function changerFormateurSession(id) {
 }
 
 async function changerTesteurSession(id) {
-  if (id && id === S.session.formateur_id) {
+  if (id && id === S.session.formateur_id && !cumulAutorise(S.session.type_session, id)) {
     toast('Le testeur doit être une personne différente du formateur.', 'erreur', 6000);
     return rendreDetailSession($('#contenu'));
   }
@@ -248,14 +264,14 @@ async function rendreDetailSession(zone) {
   s._categories = cats || [];
 
   const engins = typeof resumeEnginsSession === 'function' ? await resumeEnginsSession(s.id) : { nb: 0, rouges: 0 };
-  const bandeauUt = typeof bandeauChargeTesteur === 'function' ? await bandeauChargeTesteur(s) : '';
+  const bandeauUt = (typeof bandeauChargeTesteur === 'function' && s.type_session !== 'autorisation') ? await bandeauChargeTesteur(s) : '';
   const lien = location.origin + location.pathname + '#stagiaire?code=' + encodeURIComponent(s.code_acces);
   const cloturee = s.statut === 'cloturee';
 
   zone.innerHTML = `
     <button class="lien" onclick="retour('sessions')">← Toutes les sessions</button>
     <div class="barre-actions">
-      <h2>${esc(s.nom)}</h2>
+      <h2>${esc(s.nom)} <span class="prat-badge">${esc(LIBELLE_TYPE_SESSION[s.type_session] || 'CACES')}</span></h2>
       <div>
         ${!cloturee && d.ecriture ? `<button class="principal" onclick="basculerOuverture()">
           ${s.statut === 'ouverte' ? '⏸ Fermer l\'accès stagiaires' : '▶ Ouvrir l\'accès stagiaires'}</button>` : ''}
