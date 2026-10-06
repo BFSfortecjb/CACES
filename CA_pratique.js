@@ -330,7 +330,16 @@ async function afficherPratique(st, cat) {
   }
 
   /* ---------- événements ---------- */
-  $$('.prat-engin').forEach(s => s.addEventListener('change', majAdeq));
+  // Le type d'engin (MB/CH/CP…) est déduit de la fiche de l'engin choisi ; le testeur peut le corriger
+  $$('.prat-engin').forEach(s => s.addEventListener('change', () => {
+    const g = variantes[Number(s.dataset.i)], t = (enginParId(s.value) || {}).type_engin;
+    if (g && t && typesDuGroupe(g).length > 1) {
+      const types = typesDuGroupe(g), v = types.find(x => x === t) || types.find(x => x.toLowerCase() === String(t).toLowerCase());
+      const sel = document.querySelector(`.prat-type[data-g="${g}"]`);
+      if (v && sel) { sel.value = v; typeChoisi[g] = v; }
+    }
+    majAdeq();
+  }));
   $$('.prat-type').forEach(s => s.addEventListener('change', () => { typeChoisi[s.dataset.g] = s.value; majAdeq(); }));
   const cEssai = $('#prat-essai'); if (cEssai) cEssai.addEventListener('change', majAdeq);
   const bElim = $('#prat-btn-elim'); if (bElim) bElim.addEventListener('click', () => { const e = $('#prat-elim'); e.hidden = !e.hidden; if (!e.hidden) e.scrollIntoView({ behavior: 'smooth', block: 'center' }); });

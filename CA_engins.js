@@ -65,6 +65,13 @@ async function rendreParcEngins(zone) {
   afficher();
 }
 
+// Types d'engin connus des grilles pratiques (variantes « GROUPE/TYPE », ex. N°2/MB) + valeur déjà saisie
+function typesEnginOptions(courant) {
+  const types = [...new Set((S.referentiel.criteres || []).map(c => c.variante).filter(v => v && v.includes('/')).map(v => v.split('/')[1]))].sort();
+  if (courant && !types.includes(courant)) types.push(courant);
+  return '<option value="">— sans objet —</option>' + types.map(t => `<option value="${esc(t)}" ${t === courant ? 'selected' : ''}>${esc(t)}</option>`).join('');
+}
+
 /* ====================== Fiche d'un engin ============================== */
 // contexte : { session } si la fiche est ouverte depuis une session (les photos vont dans son dossier Drive)
 async function ouvrirFicheEngin(id, contexte = {}) {
@@ -81,7 +88,8 @@ async function ouvrirFicheEngin(id, contexte = {}) {
     <form id="form-engin" class="formulaire">
       <div class="grille-2">
         <label>Désignation <input name="designation" required value="${esc(e.designation)}" placeholder="Ex : Pelle hydraulique 21 t"></label>
-        <label>Type <input name="type_engin" value="${esc(e.type_engin || '')}" placeholder="Ex : PH, chargeuse, chariot…"></label>
+        <label>Type d'engin <select name="type_engin">${typesEnginOptions(e.type_engin)}</select>
+          <span class="aide">Sert à choisir automatiquement la bonne grille pratique (ex. R482A cat. A : MB, CH ou CP).</span></label>
         <label>Marque <input name="marque" value="${esc(e.marque || '')}"></label>
         <label>Modèle <input name="modele" value="${esc(e.modele || '')}"></label>
         <label>N° de série <input name="numero_serie" value="${esc(e.numero_serie || '')}"></label>
