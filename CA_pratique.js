@@ -122,6 +122,8 @@ async function afficherPratique(st, cat) {
       </div>
       ${(liens || []).length ? '' : '<p class="aide">Aucun engin déclaré dans la session (bouton « Renseigner les engins »).</p>'}
       <div id="prat-adeq"></div>
+      ${S.profil?.role === 'admin' ? `<label class="case prat-essai"><input type="checkbox" id="prat-essai">
+        Mode essai (administrateur) : passer l'engin et l'examen d'adéquation pour voir l'épreuve. Le résultat sera marqué « essai ».</label>` : ''}
     </div>
     <div id="prat-corps" hidden>
       <div class="prat-chrono" id="prat-chrono"></div>
@@ -160,10 +162,11 @@ async function afficherPratique(st, cat) {
   function majAdeq() {
     const ids = $$('.prat-engin').map(s => s.value);
     const tous = ids.length && ids.every(Boolean);
-    const ok = tous && ids.every(id => adeq[id]?.conforme);
+    const essai = !!$('#prat-essai')?.checked;
+    const ok = essai || (tous && ids.every(id => adeq[id]?.conforme));
     const zoneA = $('#prat-adeq');
     $('#prat-corps').hidden = !ok; $('#prat-barre').hidden = !ok;
-    zoneA.innerHTML = !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé pour démarrer.</div>'
+    zoneA.innerHTML = essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
             — ${esc([e.designation, e.marque, e.modele].filter(Boolean).join(' '))}
@@ -285,6 +288,7 @@ async function afficherPratique(st, cat) {
 
   /* ---------- événements ---------- */
   $$('.prat-engin').forEach(s => s.addEventListener('change', majAdeq));
+  const cEssai = $('#prat-essai'); if (cEssai) cEssai.addEventListener('change', majAdeq);
   const bElim = $('#prat-btn-elim'); if (bElim) bElim.addEventListener('click', () => { const e = $('#prat-elim'); e.hidden = !e.hidden; if (!e.hidden) e.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   $$('[data-elim]').forEach(i => i.addEventListener('change', () => {
     const id = Number(i.dataset.elim), sel = $(`[data-elim-pt="${id}"]`);
@@ -311,6 +315,7 @@ async function afficherPratique(st, cat) {
       const { data: ep, error: e1 } = await sb.from('epreuves_pratique').insert({
         stagiaire_id: st.id, session_id: S.session.id, referentiel_code: cat.referentiel_code, categorie_code: cat.categorie_code,
         formateur_id: S.session.formateur_id, testeur_id: S.session.testeur_id,
+        mode_essai: !!$('#prat-essai')?.checked,
         engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: opts.length ? opts : null,
         ut_options: opts.reduce((s, k) => s + OPTIONS_PRATIQUE[k].ut, 0),
         duree_prise_poste_s: Math.round(chrono.t1.ms / 1000), duree_production_s: Math.round(chrono.t2.ms / 1000),
