@@ -304,6 +304,10 @@ const libelleTheme = (ref, code) =>
  */
 async function router() {
   const cible = document.getElementById('ecran');
+  if (location.hash.startsWith('#verification')) {
+    S.vision = 'verification';
+    return ecranVerificationPublique(cible);
+  }
   if (location.hash.startsWith('#stagiaire')) {
     S.vision = 'stagiaire';
     return ecranStagiaire(cible);
