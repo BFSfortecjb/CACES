@@ -107,9 +107,9 @@ function nouvelleSession() {
           <select name="formateur_id">${optionsPersonnes(S.profil.id)}</select></label>
         <label>Testeur de la session <span class="aide" id="aide-testeur">(différent du formateur)</span>
           <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null)}</select></label>
-        <label>Centre de déroulement du test
+        <label>Agence / centre de déroulement du test
           <select name="centre_examen_id"><option value="">—</option>
-            ${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select></label>
+            ${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
         <label>Lieu <input name="lieu" placeholder="Ex : Sèvremont"></label>
         <label class="case"><input type="checkbox" name="en_cdt"> Test en conditions de travail (CDT)</label>
       </div>

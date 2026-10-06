@@ -76,7 +76,14 @@ async function genererDocumentPdf(stagiaireId, avecCarton) {
     const logo = await imageEnDataUrl('assets/logo_bfs.png');
     const premierCert = Object.values(certs)[0];
     const qr = (avecCarton && premierCert && typeof QRCode !== 'undefined') ? await qrDataUrl(urlVerification(premierCert.numero)) : null;
-    const signature = avecCarton ? await imageFacultative('assets/signature_cachet.png') : null;
+    let signature = null, signataire = SIGNATAIRE_CARTON, agence = '';
+    if (avecCarton) {
+      const centres = S.referentiel?.centres || [];
+      const c = centres.find(x => x.id === S.session?.centre_examen_id) || centres.find(x => x.signataire) || {};
+      if (c.signataire) signataire = c.signataire;
+      agence = c.agence || '';
+      if (c.signature_cachet_path) { const u = await urlPhotoStagiaire(c.signature_cachet_path); if (u) signature = await imageEnDataUrl(u); }
+    }
     let photo = null;
     if (st.photo_path) { const u = await urlPhotoStagiaire(st.photo_path); if (u) photo = await imageEnDataUrl(u); }
 
@@ -109,9 +116,9 @@ async function genererDocumentPdf(stagiaireId, avecCarton) {
         doc.setFontSize(7); doc.text('Date de naissance du titulaire', 29, 67, { align: 'center' });
         doc.setFontSize(9); doc.text(st.date_naissance ? dateFr(st.date_naissance) : '', 29, 72, { align: 'center' });
         doc.setFontSize(7); doc.text('Signataire (en toutes lettres)', 29, 79, { align: 'center' });
-        doc.setFontSize(9); doc.text(SIGNATAIRE_CARTON, 29, 84, { align: 'center' });
-        doc.setFontSize(7); doc.text('Délivré par l\'agence', 29, 91, { align: 'center' });
-        if (signature) doc.addImage(signature, 'PNG', 12, 92, 34, 11);
+        doc.setFontSize(9); doc.text(signataire, 29, 84, { align: 'center' });
+        doc.setFontSize(7); doc.text('Délivré par l\'agence' + (agence ? ' ' + agence : ''), 29, 91, { align: 'center', maxWidth: 40 });
+        if (signature) doc.addImage(signature, 'JPEG', 12, 92, 34, 11);
 
         // tableau
         const X0 = 50, W = 148, cols = [10, 36, 44, 30, 28];           // CAT, Type, N°+options, testeur, dates
