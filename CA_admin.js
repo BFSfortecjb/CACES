@@ -64,7 +64,15 @@ async function rendreGrilles(zone) {
   const cats = S.referentiel.categories.filter(c => c.referentiel_code === g.ref);
   if (!cats.find(c => c.code === g.cat)) g.cat = cats[0]?.code;
   const crit = S.referentiel.criteres.filter(c => c.referentiel_code === g.ref && c.categorie_code === g.cat);
-  const total = crit.reduce((a, c) => a + (c.bareme_points || 0), 0);
+  // Total par variante (engin / type d'engin) ; les options sont comptées à part
+  const sommes = {}; let totalOpt = 0;
+  crit.forEach(c => {
+    if (/^opt_/.test(c.theme_code || '')) { totalOpt += c.bareme_points || 0; return; }
+    const k = c.variante || 'Commun'; sommes[k] = (sommes[k] || 0) + (c.bareme_points || 0);
+  });
+  const lignesTot = Object.entries(sommes);
+  const totalOk = lignesTot.length > 0 && lignesTot.every(([, v]) => v === 100);
+  const detailTot = lignesTot.map(([k, v]) => `${esc(k)} : ${v}`).join(' · ') + (totalOpt ? ` · options : ${totalOpt}` : '');
   const { data: elim } = await sb.from('operations_eliminatoires').select('*').eq('referentiel_code', g.ref).order('ordre');
   S._elim = elim || [];
   const themes = [...new Set(crit.map(c => c.theme_code))];
@@ -74,7 +82,7 @@ async function rendreGrilles(zone) {
       <label>Référentiel <select onchange="AD.grilles.ref=this.value;AD.grilles.cat=null;rendreGrilles(zoneAdmin())">${optRefs(g.ref)}</select></label>
       <label>Catégorie <select onchange="AD.grilles.cat=this.value;rendreGrilles(zoneAdmin())">${cats.map(c =>
         `<option value="${esc(c.code)}" ${c.code === g.cat ? 'selected' : ''}>${esc(c.code)} — ${esc(c.libelle)}</option>`).join('')}</select></label></div></div>
-    <p class="aide">${crit.length} critère(s) — total des points : <b>${total}</b> ${total === 100 ? '✔' : '⚠ (attendu : 100)'}.
+    <p class="aide">${crit.length} critère(s) — total des points par variante : <b>${detailTot}</b> ${totalOk ? '✔' : '⚠ (attendu : 100 par variante)'}.
       ${crit.some(c => !c.point_numero) ? '⚠ Des critères n\'ont pas de « point d\'évaluation » (n°) : la règle « > 0 par point » ne peut pas être appliquée.' : ''}</p>
     ${themes.map(t => `<h4 class="titre-theme">${esc(crit.find(c => c.theme_code === t).theme_libelle || t)}</h4>
       <table class="tableau"><thead><tr><th>Ordre</th><th>Critère</th><th>Pts</th><th>Point n°</th><th>Éliminatoire</th><th>En continu</th><th>Variante</th><th></th></tr></thead><tbody>
