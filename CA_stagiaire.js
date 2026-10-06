@@ -1,6 +1,6 @@
 /* =====================================================================
    CA_stagiaire.js — portail stagiaire (#stagiaire), sans compte.
-   Accès : code de SESSION (+ choix du nom + date de naissance) ou code
+   Accès : code de SESSION (+ choix du nom) ou code
    INDIVIDUEL (8 car.). Tout passe par les fonctions SQL anon caces_*.
    ===================================================================== */
 const PS = { code: '', codeSession: '' };   // état du portail
@@ -40,7 +40,7 @@ async function validerCodeStagiaire(cible, code) {
   pageStagiaire(cible, '<p>Vérification…</p>');
   try {
     const infos = await rpc('caces_stagiaire_infos', { p_code: code });
-    if (infos && infos.length) { PS.code = code; return ecranCategoriesStagiaire(cible, infos); }
+    if (infos && infos.length) { PS.code = code; return apresIdentification(cible); }
     const cands = await rpc('caces_candidats_session', { p_code_session: code });
     if (cands && cands.length) { PS.codeSession = code; return ecranNomsStagiaire(cible, cands); }
     ecranSaisieCodeStagiaire(cible, 'Code introuvable ou session non ouverte. Demande à ton formateur.');
@@ -52,26 +52,41 @@ function ecranNomsStagiaire(cible, cands) {
     <p>Session : <b>${esc(cands[0].session_nom)}</b><br>Touche ton nom :</p>
     <div class="grille-noms">${cands.map(c =>
       `<button class="nom" data-id="${esc(c.stagiaire_id)}">${esc(c.prenom)} ${esc(c.nom)}</button>`).join('')}</div>`);
-  $$('.nom', cible).forEach(b => b.addEventListener('click', () => {
-    const c = cands.find(x => x.stagiaire_id === b.dataset.id);
-    pageStagiaire(cible, `
-      <form class="carte" id="form-naiss">
-        <p><b>${esc(c.prenom)} ${esc(c.nom)}</b></p>
-        <label>Ta date de naissance <input type="date" name="n" required></label>
-        <button class="principal" type="submit">Continuer</button>
-        <button type="button" class="lien" id="retour-noms">← Ce n'est pas moi</button>
-      </form>`);
-    $('#retour-noms', cible).onclick = () => ecranNomsStagiaire(cible, cands);
-    $('#form-naiss', cible).addEventListener('submit', async ev => {
-      ev.preventDefault();
-      try {
-        const code = await rpc('caces_identifier_stagiaire',
-          { p_code_session: PS.codeSession, p_stagiaire_id: c.stagiaire_id, p_naissance: ev.target.n.value });
-        PS.code = code;
-        ecranCategoriesStagiaire(cible, await rpc('caces_stagiaire_infos', { p_code: code }));
-      } catch (e) { toast(e.message); }
-    });
+  $$('.nom', cible).forEach(b => b.addEventListener('click', async () => {
+    try {
+      const code = await rpc('caces_identifier_stagiaire',
+        { p_code_session: PS.codeSession, p_stagiaire_id: b.dataset.id });
+      PS.code = code;
+      await apresIdentification(cible);
+    } catch (e) { toast(e.message); }
   }));
+}
+
+// Comme Habelec : si la date de naissance manque, le stagiaire la renseigne lui-même.
+async function apresIdentification(cible) {
+  const p = ((await rpc('caces_stagiaire_profil', { p_code: PS.code })) || [])[0] || {};
+  if (!p.date_naissance) return ecranCompleterStagiaire(cible, p);
+  ecranCategoriesStagiaire(cible, await rpc('caces_stagiaire_infos', { p_code: PS.code }));
+}
+
+function ecranCompleterStagiaire(cible, p) {
+  pageStagiaire(cible, `
+    <form class="carte" id="form-compl">
+      <p><b>Avant de commencer, complète ta fiche :</b></p>
+      <label>Date de naissance <input type="date" name="n" required max="${dateNaissanceMax()}"></label>
+      <label>Entreprise <input name="e" value="${esc(p.entreprise || '')}"></label>
+      <button class="principal" type="submit">Continuer</button>
+    </form>`);
+  $('#form-compl', cible).addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const f = ev.target;
+    if (!dateNaissanceValide(f.n.value))
+      return toast('Cette date donne moins de 16 ans : vérifie ta date de naissance.');
+    try {
+      await rpc('caces_completer_stagiaire', { p_code: PS.code, p_naissance: f.n.value, p_entreprise: f.e.value });
+      ecranCategoriesStagiaire(cible, await rpc('caces_stagiaire_infos', { p_code: PS.code }));
+    } catch (e) { toast(e.message); }
+  });
 }
 
 function ecranCategoriesStagiaire(cible, lignes) {
