@@ -29,7 +29,13 @@ async function urlPhotoStagiaire(path) {
   if (!path) return null;
   const { data, error } = await sb.storage.from('caces-photos-stagiaires').download(path);
   if (error || !data) {
-    toast('Photo introuvable : ' + ((error && (error.message || error.error)) || 'fichier vide') + ' (' + path + ')', 'erreur', 8000);
+    // La bibliothèque masque le détail (« {} ») : on lit la vraie réponse du serveur.
+    let detail = (error && error.message) || 'fichier vide';
+    try {
+      const rep = error && error.originalError;
+      if (rep && typeof rep.text === 'function') detail = 'HTTP ' + rep.status + ' ' + (await rep.clone().text());
+    } catch (e) { /* ignoré */ }
+    toast('Photo introuvable : ' + detail, 'erreur', 12000);
     return null;
   }
   return URL.createObjectURL(data);
