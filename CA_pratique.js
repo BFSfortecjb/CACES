@@ -16,8 +16,8 @@
    ===================================================================== */
 
 const OPTIONS_PRATIQUE = {
-  porte_engins: { libelle: 'Porte-engins', ut: 0.5, themes: ['chargement_porte_engins'] },
-  telecommande: { libelle: 'Télécommande', ut: 0.5, themes: [] },
+  porte_engins: { libelle: 'Porte-engins', ut: 0.5, themes: ['opt_porte_engins'] },
+  telecommande: { libelle: 'Télécommande', ut: 0.5, themes: ['opt_telecommande'] },
 };
 const LIBELLES_THEMES_PRATIQUE = {
   prise_poste: 'Prise de poste et mise en service', adequation: 'Adéquation', conduite: 'Conduite',
@@ -28,7 +28,21 @@ const libTheme = c => c.theme_libelle || LIBELLES_THEMES_PRATIQUE[c.theme_code] 
 function optionsPossibles(referentiel) { return referentiel === 'R482A' || referentiel === 'R482' ? ['porte_engins', 'telecommande'] : []; }
 
 /** Calcule le résultat selon les règles officielles. points[id] = nombre ou undefined (non noté). */
-function calculerPratique(criteres, points, opt = {}) {
+function calculerPratique(tous, points, opt = {}) {
+  // Options (grilles de 50 points, réussies à part : ≥ 70 %, chaque thème ≥ 50 %, chaque point > 0) : calculées séparément,
+  // elles n'entrent pas dans la note de la catégorie et un échec n'invalide pas le CACES (l'option n'est simplement pas accordée).
+  const estOpt = c => String(c.theme_code).startsWith('opt_');
+  const criteres = tous.filter(c => !estOpt(c));
+  const optionsRes = {};
+  Object.keys(OPTIONS_PRATIQUE).forEach(k => {
+    const cs = tous.filter(c => estOpt(c) && OPTIONS_PRATIQUE[k].themes.includes(c.theme_code));
+    if (!cs.length) return;
+    const val = c => Math.max(0, Math.min(c.bareme_points, Number(points[c.id]) || 0));
+    const o = cs.reduce((a, c) => a + val(c), 0), b = cs.reduce((a, c) => a + c.bareme_points, 0), pts = {};
+    cs.forEach(c => { const x = (pts[c.point_numero] = pts[c.point_numero] || { o: 0, b: 0 }); x.o += val(c); x.b += c.bareme_points; });
+    optionsRes[k] = { obtenu: o, bareme: b, nonNotes: cs.filter(c => points[c.id] === undefined).length,
+      reussi: b > 0 && o * 100 >= 70 * b && Object.values(pts).every(x => x.o > 0) };
+  });
   const val = c => opt.zeroPoints && opt.zeroPoints.has(c.point_numero) ? 0 : Math.max(0, Math.min(c.bareme_points, Number(points[c.id]) || 0));
   let obtenu = 0, bareme = 0;
   const themes = {}, pts = {};
@@ -43,12 +57,24 @@ function calculerPratique(criteres, points, opt = {}) {
     else { const p = (pts[c.point_numero] = pts[c.point_numero] || { o: 0, b: 0 }); p.o += v; p.b += c.bareme_points; }
     if (c.eliminatoire && points[c.id] !== undefined && v <= 0) elimNul = true;
   });
-  const score = bareme ? Math.round(1000 * obtenu / bareme) / 10 : 0;
+  let score = bareme ? Math.round(1000 * obtenu / bareme) / 10 : 0;
+  // Catégorie à plusieurs engins évalués chacun sur 100 (ex. R489 cat. 7, chariots N°1 et N°2) :
+  // chaque engin doit atteindre 70 ; la note affichée est la plus basse des deux.
+  const parVariante = {};
+  criteres.forEach(c => { if (c.variante) { const x = (parVariante[c.variante] = parVariante[c.variante] || { o: 0, b: 0 }); x.o += val(c); x.b += c.bareme_points; } });
+  const complets = Object.keys(parVariante).filter(k => parVariante[k].b === 100);
+  const chacun = complets.length >= 2 && complets.length === Object.keys(parVariante).length;
+  let varianteEchec = false;
+  if (chacun) {
+    const notes = complets.map(k => parVariante[k].o);
+    score = Math.min(...notes); varianteEchec = notes.some(n => n < 70);
+  }
   const themesEchec = Object.keys(themes).filter(k => themes[k].b && 2 * themes[k].o < themes[k].b);
   const pointsZero = Object.keys(pts).filter(k => pts[k].o <= 0).map(Number);
-  return { score, obtenu, bareme, themes, pts, themesEchec, pointsZero, elimNul, nonNotes, pointsSansNumero,
+  nonNotes += Object.values(optionsRes).reduce((a, x) => a + x.nonNotes, 0);
+  return { score, obtenu, bareme, themes, pts, themesEchec, pointsZero, elimNul, nonNotes, pointsSansNumero, optionsRes,
     forceEchec: !!opt.forceEchec,
-    reussi: score >= 70 && !themesEchec.length && !pointsZero.length && !elimNul && !opt.forceEchec };
+    reussi: score >= 70 && !varianteEchec && !themesEchec.length && !pointsZero.length && !elimNul && !opt.forceEchec };
 }
 
 async function ouvrirPratique(stagiaireId) {
@@ -91,8 +117,13 @@ async function afficherPratique(st, cat) {
   if (error) return erreurSupabase('Lecture de la grille', error);
   if (!criteres.length) { zone.innerHTML = '<p class="erreur-discrete">Aucune grille de critères pour cette catégorie : à compléter par l\'administrateur.</p>'; return; }
 
-  const variantes = [...new Set(criteres.map(c => c.variante).filter(Boolean))];
-  const dispo = optionsPossibles(cat.referentiel_code);
+  // Variantes : « GROUPE » (engin évalué à part, ex. 1A / 3A) ou « GROUPE/TYPE » (le testeur choisit le type
+  // d'engin du groupe, ex. N2/MB, N2/CH, N2/CP ou CA/CP : seuls les critères du type choisi sont évalués).
+  const groupes = [...new Set(criteres.map(c => c.variante).filter(Boolean).map(v => v.split('/')[0]))];
+  const typesDuGroupe = g => [...new Set(criteres.map(c => c.variante).filter(v => v && v.startsWith(g + '/')).map(v => v.split('/')[1]))];
+  const typeChoisi = {};           // groupe -> type d'engin choisi
+  const variantes = groupes;
+  const dispo = Object.keys(OPTIONS_PRATIQUE).filter(k => criteres.some(c => OPTIONS_PRATIQUE[k].themes.includes(c.theme_code)));   // options = grilles « opt_* » de la catégorie
   const adeq = Object.fromEntries((adeqs || []).map(a => [a.engin_id, a]));
   const elim = [];                 // opérations éliminatoires relevées : [{id, libelle, point}]
   const points = {};               // id critère -> note (absent = non noté)
@@ -101,7 +132,10 @@ async function afficherPratique(st, cat) {
   const chrono = Object.fromEntries(PHASES.map(([k]) => [k, { ms: 0, depuis: null, valide: false }]));
   const ms = k => chrono[k].ms + (chrono[k].depuis ? Date.now() - chrono[k].depuis : 0);
 
-  const actifs = () => criteres.filter(c =>
+  const actifs = () => criteres.filter(c => {
+    if (c.variante && c.variante.includes('/')) { const [g, t] = c.variante.split('/'); if (typesDuGroupe(g).length > 1 && (typeChoisi[g] || typesDuGroupe(g)[0]) !== t) return false; }
+    return true;
+  }).filter(c =>
     !Object.entries(OPTIONS_PRATIQUE).some(([k, o]) => o.themes.includes(c.theme_code) && !choisies.has(k)));
   const optCalc = () => ({ zeroPoints: new Set(elim.map(e => Number(e.point)).filter(Boolean)), forceEchec: elim.length > 0 });
   const teinte = (n, b, plein) => `background:hsl(${b ? Math.round(120 * n / b) : 0} ${plein ? 70 : 60}% ${plein ? 42 : 88}%);${plein ? 'color:#fff;' : ''}`;
@@ -116,7 +150,9 @@ async function afficherPratique(st, cat) {
     <div id="prat-prepa" hidden>
       <div class="grille-2">
         ${(variantes.length ? variantes : ['']).map((v, i) => `<label>Engin utilisé${v ? ' — ' + esc(v) : ''}
-          <select class="prat-engin" data-i="${i}">${optEngin}</select></label>`).join('')}
+          <select class="prat-engin" data-i="${i}">${optEngin}</select></label>
+          ${v && typesDuGroupe(v).length > 1 ? `<label>Type d'engin${' — ' + esc(v)}
+            <select class="prat-type" data-g="${esc(v)}"><option value="">— choisir —</option>${typesDuGroupe(v).map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></label>` : ''}`).join('')}
         ${dispo.length ? `<fieldset><legend>Options passées (+0,5 UT chacune)</legend>${dispo.map(k =>
           `<label class="case"><input type="checkbox" data-opt="${k}"> ${esc(OPTIONS_PRATIQUE[k].libelle)}</label>`).join('')}</fieldset>` : ''}
       </div>
@@ -161,12 +197,13 @@ async function afficherPratique(st, cat) {
   /* ---------- 2. engin + examen d'adéquation ---------- */
   function majAdeq() {
     const ids = $$('.prat-engin').map(s => s.value);
-    const tous = ids.length && ids.every(Boolean);
+    const typesOk = groupes.every(g => typesDuGroupe(g).length <= 1 || typeChoisi[g]);
+    const tous = ids.length && ids.every(Boolean) && typesOk;
     const essai = !!$('#prat-essai')?.checked;
     const ok = essai || (tous && ids.every(id => adeq[id]?.conforme));
     const zoneA = $('#prat-adeq');
     $('#prat-corps').hidden = !ok; $('#prat-barre').hidden = !ok;
-    zoneA.innerHTML = essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé pour démarrer.</div>'
+    zoneA.innerHTML = essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
             — ${esc([e.designation, e.marque, e.modele].filter(Boolean).join(' '))}
@@ -252,6 +289,7 @@ async function afficherPratique(st, cat) {
     if (r.nonNotes) d.push(`${r.nonNotes} critère(s) non noté(s)`);
     if (r.pointsZero.length) d.push('point(s) à 0 : ' + r.pointsZero.join(', '));
     if (r.themesEchec.length) d.push('thème(s) sous la moyenne : ' + r.themesEchec.map(k => r.themes[k].lib).join(', '));
+    Object.entries(r.optionsRes || {}).forEach(([k, x]) => d.push(`option ${OPTIONS_PRATIQUE[k].libelle} : ${x.obtenu}/${x.bareme} ${x.reussi ? 'acquise' : 'non acquise'}`));
     if (elim.length) d.push('opération éliminatoire relevée');
     if (r.score < 70) d.push('note globale sous 70');
     $('#prat-detail').textContent = d.join(' · ');
@@ -288,6 +326,7 @@ async function afficherPratique(st, cat) {
 
   /* ---------- événements ---------- */
   $$('.prat-engin').forEach(s => s.addEventListener('change', majAdeq));
+  $$('.prat-type').forEach(s => s.addEventListener('change', () => { typeChoisi[s.dataset.g] = s.value; majAdeq(); }));
   const cEssai = $('#prat-essai'); if (cEssai) cEssai.addEventListener('change', majAdeq);
   const bElim = $('#prat-btn-elim'); if (bElim) bElim.addEventListener('click', () => { const e = $('#prat-elim'); e.hidden = !e.hidden; if (!e.hidden) e.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   $$('[data-elim]').forEach(i => i.addEventListener('change', () => {
@@ -316,7 +355,7 @@ async function afficherPratique(st, cat) {
         stagiaire_id: st.id, session_id: S.session.id, referentiel_code: cat.referentiel_code, categorie_code: cat.categorie_code,
         formateur_id: S.session.formateur_id, testeur_id: S.session.testeur_id,
         mode_essai: !!$('#prat-essai')?.checked,
-        engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: opts.length ? opts : null,
+        engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: opts.filter(k => r.optionsRes[k]?.reussi).length ? opts.filter(k => r.optionsRes[k]?.reussi) : null,
         ut_options: opts.reduce((s, k) => s + OPTIONS_PRATIQUE[k].ut, 0),
         duree_prise_poste_s: Math.round(chrono.t1.ms / 1000), duree_production_s: Math.round(chrono.t2.ms / 1000),
         duree_fin_poste_s: Math.round(chrono.t3.ms / 1000), eliminatoires: elim.length ? elim : null,
