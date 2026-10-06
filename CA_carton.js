@@ -16,7 +16,6 @@ async function imageEnDataUrl(url) {
   const r = await fetch(url); if (!r.ok) throw new Error('Image introuvable : ' + url);
   return blobVersDataUrl(await r.blob());
 }
-const dateFr = iso => iso ? new Date(iso + (iso.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('fr-FR') : '';
 
 /** Catégories validées (théorie ET pratique) d'un stagiaire. */
 async function categoriesValidees(stagiaireId) {
