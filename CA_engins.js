@@ -383,3 +383,38 @@ async function ouvrirEnginsSession() {
     ouvrirFicheEngin(engin.id, { session: s });
   });
 }
+
+
+/* ====================== Alerte VGP (page Sessions) ====================== */
+/** Tableau des prochaines VGP des engins du centre (propriété), du plus urgent au moins urgent. */
+async function rendreAlerteVgp(zone) {
+  if (!zone || !['formateur', 'admin'].includes(S.profil?.role)) return;
+  const { data: engins, error } = await sb.from('engins').select('id, designation, marque, modele, numero_serie, soumis_vgp')
+    .eq('provenance', 'propriete').eq('actif', true);
+  if (error || !(engins || []).length) { zone.innerHTML = ''; return; }
+  const soumis = engins.filter(e => e.soumis_vgp !== false);
+  if (!soumis.length) { zone.innerHTML = ''; return; }
+  const { data: docs } = await sb.from('engin_documents').select('engin_id, date_document, date_echeance, observations_ouvertes, created_at')
+    .eq('type_code', 'vgp').in('engin_id', soumis.map(e => e.id));
+  const aujourdhui = new Date(); aujourdhui.setHours(12, 0, 0, 0);
+  const lignes = soumis.map(e => {
+    const l = (docs || []).filter(d => d.engin_id === e.id)
+      .sort((a, b) => String(b.date_document || b.created_at).localeCompare(String(a.date_document || a.created_at)))[0];
+    const ech = l?.date_echeance || null;
+    const jours = ech ? Math.round((new Date(ech + 'T12:00:00') - aujourdhui) / 86400000) : null;
+    const etat = !l ? 'manquante' : !ech ? 'a_saisir' : l.observations_ouvertes ? 'observations' : jours < 0 ? 'expiree' : jours <= 30 ? 'urgent' : jours <= 90 ? 'proche' : 'ok';
+    return { e, ech, jours, etat };
+  }).sort((a, b) => (a.jours ?? -99999) - (b.jours ?? -99999));
+  const LIB = { manquante: ['ko', 'VGP manquante'], a_saisir: ['avertissement', 'Échéance à saisir'], observations: ['ko', 'Observations non levées'],
+    expiree: ['ko', 'Expirée'], urgent: ['ko', 'Moins de 30 jours'], proche: ['avertissement', 'Moins de 90 jours'], ok: ['ok', 'À jour'] };
+  const aTraiter = lignes.filter(x => x.etat !== 'ok').length;
+  zone.innerHTML = `
+    <h3 style="margin-top:28px">VGP des engins du centre${aTraiter ? ` <span class="etat ko">${aTraiter} à traiter</span>` : ' <span class="etat ok">toutes à jour</span>'}</h3>
+    <table class="tableau"><thead><tr><th>Engin</th><th>N° de série</th><th>Prochaine VGP</th><th>Dans</th><th>État</th></tr></thead><tbody>
+    ${lignes.map(x => `<tr><td>${esc(libelleEngin(x.e).replace(/ n°.*$/, ''))}</td><td>${esc(x.e.numero_serie || '')}</td>
+      <td>${x.ech ? esc(dateFr(x.ech)) : '—'}</td>
+      <td>${x.jours === null ? '—' : x.jours < 0 ? `dépassée de ${-x.jours} j` : x.jours + ' j'}</td>
+      <td><span class="etat ${LIB[x.etat][0]}">${LIB[x.etat][1]}</span></td></tr>`).join('')}
+    </tbody></table>
+    <p class="aide">Engins « propriété du centre » soumis aux VGP. L'échéance est celle lue sur le dernier rapport enregistré dans la fiche de l'engin.</p>`;
+}

@@ -69,7 +69,9 @@ async function rendreSessions(zone) {
                 onclick="supprimerSession('${s.id}')">🗑</button>` : ''}</td>
         </tr>`).join('') || '<tr><td colspan="11" class="vide">Aucune session pour le moment.</td></tr>'}
       </tbody>
-    </table>`;
+    </table>
+    <div id="alerte-vgp"></div>`;
+  if (typeof rendreAlerteVgp === 'function') rendreAlerteVgp($('#alerte-vgp'));
 }
 
 /* ====================== Création d'une session ====================== */
