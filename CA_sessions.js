@@ -365,8 +365,6 @@ async function rendreDetailSession(zone) {
         <div id="qr-passation"></div>
         <p id="qr-erreur" class="erreur-discrete" hidden></p>
       </details>
-      <div><b>Catégories visées</b><div>${(cats || []).map(c =>
-        `<span class="puce">${esc(c.referentiel_code)} ${esc(c.categorie_code)}</span>`).join(' ')}</div></div>
     </div>
 
     ${bandeauUt}
