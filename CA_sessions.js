@@ -315,12 +315,11 @@ async function rendreDetailSession(zone) {
         <button class="lien" onclick="navigator.clipboard.writeText('${esc(lien)}');toast('Lien copié')">Copier le lien</button></div>
       <div><b>N° de session Galaxy</b><div>${esc(s.numero_session_galaxy) || '<i>non renseigné</i>'}</div>
         ${d.ecriture ? '<button class="lien" onclick="modifierNumeroGalaxy()">Modifier</button>' : ''}</div>
-      <div><b>Lieu</b><div>${esc(s.lieu) || '<i>non renseigné</i>'}</div>
+      <div><b>Lieu</b><div>${esc(s.lieu) || '<i>non renseigné</i>'}
         ${d.ecriture ? '<button class="lien" onclick="modifierLieuSession()">Modifier</button>' : ''}</div>
-      <div><b>Type de lieu</b><div>
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerTypeLieuSession(this.value)">
           <option value="centre" ${s.lieu_type !== 'client' ? 'selected' : ''}>${LIEU_TYPE.centre}</option>
-          <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>${LIEU_TYPE.client}</option></select></div>
+          <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>${LIEU_TYPE.client}</option></select>
         ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Visite préalable</button>' : ''}</div>
       <div><b>Agence (cachet, secrétariat)</b><div>
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
