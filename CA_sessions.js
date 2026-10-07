@@ -219,6 +219,31 @@ async function modifierLieuSession() {
   rendreDetailSession($('#contenu'));
 }
 
+async function modifierCategoriesSession() {
+  const sess = S.session;
+  ouvrirModale('Catégories de la session', `
+    <form id="form-cats" class="formulaire">
+      <fieldset><legend>Catégories de CACES visées</legend>${cases_categories(sess._categories || [])}</fieldset>
+      <p class="aide">Les catégories déjà attribuées aux stagiaires et leurs résultats ne sont pas modifiés : à régler stagiaire par stagiaire. Le formateur et le testeur doivent être habilités pour les catégories choisies.</p>
+      <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button><button type="submit" class="principal">Enregistrer</button></div>
+    </form>`);
+  $('#form-cats').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const choix = $$('#form-cats input[name=categorie]').filter(i => i.checked).map(i => { const [r, c] = i.value.split('|'); return { referentiel_code: r, categorie_code: c }; });
+    if (!choix.length) return toast('Choisis au moins une catégorie', 'erreur');
+    try {
+      const cle = c => c.referentiel_code + '|' + c.categorie_code, nouv = new Set(choix.map(cle)), anc = new Set((sess._categories || []).map(cle));
+      for (const c of sess._categories || []) if (!nouv.has(cle(c))) {
+        const { error } = await sb.from('session_categories').delete().eq('session_id', sess.id).eq('referentiel_code', c.referentiel_code).eq('categorie_code', c.categorie_code);
+        if (error) throw error;
+      }
+      const ajout = choix.filter(c => !anc.has(cle(c))).map(c => ({ session_id: sess.id, ...c }));
+      if (ajout.length) { const { error } = await sb.from('session_categories').insert(ajout); if (error) throw error; }
+      fermerModale(); toast('Catégories mises à jour'); rendreDetailSession($('#contenu'));
+    } catch (e) { erreurSupabase('Modification des catégories', e); }
+  });
+}
+
 async function changerAgenceSession(id) {
   await modifierChampSession('centre_examen_id', id ? Number(id) : null, 'agence');
   toast('Agence de la session mise à jour');
@@ -327,6 +352,8 @@ async function rendreDetailSession(zone) {
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
           <option value="">— à choisir —</option>
           ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div></div>` : ''}
+      <div><b>Catégories visées</b><div>${s._categories.map(c => `<span class="puce">${esc(c.referentiel_code)} ${esc(c.categorie_code)}</span>`).join(' ') || '<i>aucune</i>'}</div>
+        ${d.ecriture && !cloturee ? '<button class="lien" onclick="modifierCategoriesSession()">Modifier</button>' : ''}</div>
       <div><b>Formateur (FISE, horomètre)</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
           ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div></div>
