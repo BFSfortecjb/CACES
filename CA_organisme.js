@@ -47,11 +47,12 @@ async function rendreParametresCarton() {
   if (error) { z.innerHTML = ''; return erreurSupabase('Lecture des agences', error); }
   S._agences = data || [];
   z.innerHTML = `<table class="tableau"><thead><tr><th>Centre</th><th>Agence (raison sociale)</th><th>Signataire</th><th>Secrétariat</th><th>Cachet</th><th></th></tr></thead><tbody>
-    ${S._agences.map(c => `<tr class="${c.actif ? '' : 'termine'}"><td>${esc(c.nom)}</td><td>${esc(c.agence || '')}</td>
+    ${S._agences.filter(c => c.actif).map(c => `<tr><td>${esc(c.nom)}</td><td>${esc(c.agence || '')}</td>
       <td>${esc(c.signataire || '')}</td><td>${esc(c.email_secretariat || '')}</td>
       <td>${c.signature_cachet_path ? '✔' : '—'}</td>
       <td><button class="lien" onclick="modifierAgence(${c.id})">Modifier</button></td></tr>`).join('')}</tbody></table>
-    <button onclick="modifierAgence(null)">+ Ajouter une agence</button>`;
+    <button onclick="modifierAgence(null)">+ Ajouter une agence</button>
+    <p class="aide">Seules les agences actives sont listées (les anciens centres vides ne sont plus affichés).</p>`;
 }
 
 async function modifierAgence(id) {
@@ -68,7 +69,18 @@ async function modifierAgence(id) {
     <div><b>Signature + cachet de l'agence</b>
       <div class="photo-cadre" style="max-width:260px">${url ? `<img src="${esc(url)}" style="max-width:100%" alt="cachet">` : '<i>Aucun</i>'}</div>
       <label class="bouton-fichier">🖋 Choisir l'image (PNG/JPEG)<input type="file" accept="image/*" hidden name="fichier"></label></div>
-    <button class="principal" type="submit">Enregistrer</button></form>`);
+    <div class="pied-modale">${id ? '<button type="button" id="btn-suppr-agence" class="danger">🗑 Supprimer l\'agence</button>' : ''}
+      <button class="principal" type="submit">Enregistrer</button></div></form>`);
+  $('#btn-suppr-agence')?.addEventListener('click', async () => {
+    const { count, error: e0 } = await sb.from('sessions_formation').select('id', { count: 'exact', head: true }).eq('centre_examen_id', id);
+    if (e0) return erreurSupabase('Vérification de l\'agence', e0);
+    if (count) return toast(`Impossible : ${count} session(s) utilisent cette agence. Décochez « Agence active » pour la masquer.`, 'erreur', 7000);
+    if (!confirmer(`Supprimer définitivement l'agence « ${c.nom} » (${c.agence || 'sans raison sociale'}) ?`)) return;
+    const { error } = await sb.from('centres_examen').delete().eq('id', id);
+    if (error) return erreurSupabase('Suppression de l\'agence', error);
+    if (c.signature_cachet_path) await sb.storage.from('caces-photos-stagiaires').remove([c.signature_cachet_path]);
+    await chargerReferentiel(); toast('Agence supprimée'); fermerModale(); rendreParametresCarton();
+  });
   $('#form-agence').addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target;
