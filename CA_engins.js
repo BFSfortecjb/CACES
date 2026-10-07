@@ -65,11 +65,17 @@ async function rendreParcEngins(zone) {
   afficher();
 }
 
-// Types d'engin connus des grilles pratiques (variantes « GROUPE/TYPE », ex. N°2/MB) + valeur déjà saisie
+// Types d'engin des grilles pratiques R482A (en clair). Clé = catégorie:code de la grille.
+const TYPES_ENGIN_GRILLE = {
+  'A:MB': 'Motobasculeur compact', 'A:CH': 'Chargeuse compacte', 'A:CP': 'Compacteur compact',
+  'B2:CA': 'Engin de forage à conducteur accompagnant (télécommande)', 'B2:CP': 'Engin de forage à conducteur porté',
+  'C1:Ch': 'Chargeuse', 'C1:CP': 'Chargeuse-pelleteuse',
+};
+function libelleTypeEngin(cat, code) { return TYPES_ENGIN_GRILLE[cat + ':' + code] || code; }
 function typesEnginOptions(courant) {
-  const types = [...new Set((S.referentiel.criteres || []).map(c => c.variante).filter(v => v && v.includes('/')).map(v => v.split('/')[1]))].sort();
-  if (courant && !types.includes(courant)) types.push(courant);
-  return '<option value="">— sans objet —</option>' + types.map(t => `<option value="${esc(t)}" ${t === courant ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  const opts = Object.entries(TYPES_ENGIN_GRILLE).map(([k, l]) => `<option value="${esc(k)}" ${k === courant ? 'selected' : ''}>R482A cat. ${esc(k.split(':')[0])} — ${esc(l)}</option>`);
+  if (courant && !TYPES_ENGIN_GRILLE[courant]) opts.push(`<option value="${esc(courant)}" selected>${esc(courant)}</option>`);
+  return '<option value="">— sans objet —</option>' + opts.join('');
 }
 
 /* ====================== Fiche d'un engin ============================== */
@@ -89,7 +95,7 @@ async function ouvrirFicheEngin(id, contexte = {}) {
       <div class="grille-2">
         <label>Désignation <input name="designation" required value="${esc(e.designation)}" placeholder="Ex : Pelle hydraulique 21 t"></label>
         <label>Type d'engin <select name="type_engin">${typesEnginOptions(e.type_engin)}</select>
-          <span class="aide">Sert à choisir automatiquement la bonne grille pratique (ex. R482A cat. A : MB, CH ou CP).</span></label>
+          <span class="aide">Sert à choisir automatiquement la bonne grille pratique (ex. motobasculeur, chargeuse ou compacteur pour la cat. A).</span></label>
         <label>Marque <input name="marque" value="${esc(e.marque || '')}"></label>
         <label>Modèle <input name="modele" value="${esc(e.modele || '')}"></label>
         <label>N° de série <input name="numero_serie" value="${esc(e.numero_serie || '')}"></label>
@@ -154,25 +160,31 @@ async function afficherDocumentsEngin(id, e, contexte, peutEcrire) {
   if (st.error) return erreurSupabase('Statut des documents', st.error);
   const liens = d => (d?.fichiers || []).map((f, i) => `<a href="${esc(f.lien)}" target="_blank" rel="noopener">📎 ${i + 1}</a>`).join(' ');
   const dernier = Object.fromEntries((docs.data || []).map(d => [d.id, d]));
+  const cocher = code => !!(window.TYPES_DOC_ENGIN_FULL || []).find(t => t.code === code)?.a_cocher;
 
   zone.innerHTML = `
     <h4 class="titre-theme">Documents (état au ${esc(dateFr(contexte.session?.date_debut || new Date().toISOString()))})</h4>
     <table class="tableau"><thead><tr><th>Document</th><th>État</th><th>Date</th><th>Échéance</th><th>Photos</th><th></th></tr></thead><tbody>
     ${(st.data || []).map(x => `<tr>
       <td>${esc(x.libelle)}${x.obligatoire ? ' <b title="À présenter le jour du test">*</b>' : ''}</td>
-      <td><span class="etat ${CLASSE_STATUT_DOC[x.statut]}">${esc(LIBELLE_STATUT_DOC[x.statut])}</span></td>
-      <td>${esc(dateFr(x.date_document))}</td><td>${esc(dateFr(x.date_echeance))}</td>
-      <td>${liens(dernier[x.document_id])}</td>
-      <td>${peutEcrire ? `<button class="icone" title="Ajouter / renouveler ce document" data-ajout="${esc(x.type_code)}">＋</button>` : ''}</td></tr>`).join('')}
+      <td><span class="etat ${cocher(x.type_code) ? (x.statut === 'manquant' ? 'neutre' : 'ok') : (x.statut === 'manquant' && !x.obligatoire ? 'neutre' : CLASSE_STATUT_DOC[x.statut])}">${esc(cocher(x.type_code) ? (x.statut === 'manquant' ? 'Non vérifié' : 'Vérifié') : (x.statut === 'manquant' && !x.obligatoire ? 'Non fourni' : LIBELLE_STATUT_DOC[x.statut]))}</span></td>
+      <td>${cocher(x.type_code) ? '' : esc(dateFr(x.date_document))}</td><td>${cocher(x.type_code) ? '' : esc(dateFr(x.date_echeance))}</td>
+      <td>${dernier[x.document_id]?.present_physiquement ? '<span class="etat ok">Présent physiquement</span> ' : ''}${liens(dernier[x.document_id])}</td>
+      <td>${peutEcrire ? (cocher(x.type_code)
+        ? `<label class="case" title="Vu dans la VGP, le carnet de maintenance ou les papiers de location"><input type="checkbox" data-coche="${esc(x.type_code)}" ${x.statut !== 'manquant' ? 'checked' : ''}> Vérifié</label>`
+        : `<button class="icone" title="Ajouter / renouveler ce document" data-ajout="${esc(x.type_code)}">＋</button>`) : ''}</td></tr>`).join('')}
     </tbody></table>
-    <p class="aide">* à présenter le jour du test (notice, déclaration CE ou certificat de conformité, VGP valide vierge ou observations levées, examen d'adéquation).</p>
+    <p class="aide">* à présenter le jour du test (notice, déclaration CE ou certificat de conformité, VGP valide vierge ou observations levées). L'examen d'adéquation se fait à l'écran, au début de chaque évaluation pratique..</p>
 
     <h4 class="titre-theme">Historique des documents</h4>
     ${(docs.data || []).map(d => `<div class="ligne-fise"><span class="libelle-fise">
       <b>${esc((window.TYPES_DOC_ENGIN || {})[d.type_code] || d.type_code)}</b> — ${esc(dateFr(d.date_document))}
       ${d.date_echeance ? '(échéance ' + esc(dateFr(d.date_echeance)) + ')' : ''}
       ${d.observations_ouvertes ? ' ⚠ observations non levées' : ''} ${esc(d.reference || '')}
-      <span class="aide">ajouté le ${esc(dateFr(d.created_at))}</span></span>${liens(d)}</div>`).join('') || '<p class="aide">Aucun document.</p>'}
+      ${d.present_physiquement ? '<b>— présent physiquement</b>' : ''}
+      <span class="aide">ajouté le ${esc(dateFr(d.created_at))}</span></span>${liens(d)}
+      ${peutEcrire ? `<span><button class="icone" title="Modifier ou remplacer ce document" data-modif="${d.id}">✏️</button>
+        <button class="icone" title="Supprimer ce document" data-suppr="${d.id}">🗑</button></span>` : ''}</div>`).join('') || '<p class="aide">Aucun document.</p>'}
 
     <h4 class="titre-theme">Avis du formateur (pour mémoire)</h4>
     ${peutEcrire ? `<form id="form-avis-engin" class="formulaire"><div class="grille-2">
@@ -184,6 +196,24 @@ async function afficherDocumentsEngin(id, e, contexte, peutEcrire) {
       || '<p class="aide">Aucun avis.</p>'}`;
 
   zone.querySelectorAll('[data-ajout]').forEach(b => b.addEventListener('click', () => formulaireDocumentEngin(id, e, b.dataset.ajout, contexte)));
+  zone.querySelectorAll('[data-coche]').forEach(c => c.addEventListener('change', async () => {
+    const t = c.dataset.coche;
+    const r = c.checked
+      ? await sb.from('engin_documents').insert({ engin_id: id, type_code: t, date_document: new Date().toISOString().slice(0, 10),
+          present_physiquement: true, fichiers: [], session_id: contexte.session?.id || null, ajoute_par: S.profil.id })
+      : await sb.from('engin_documents').delete().eq('engin_id', id).eq('type_code', t);
+    if (r.error) { c.checked = !c.checked; return erreurSupabase('Enregistrement de la vérification', r.error); }
+    afficherDocumentsEngin(id, e, contexte, peutEcrire);
+  }));
+  zone.querySelectorAll('[data-modif]').forEach(b => b.addEventListener('click', () =>
+    formulaireDocumentEngin(id, e, dernierParId(docs.data, b.dataset.modif).type_code, contexte, dernierParId(docs.data, b.dataset.modif))));
+  zone.querySelectorAll('[data-suppr]').forEach(b => b.addEventListener('click', async () => {
+    const d = dernierParId(docs.data, b.dataset.suppr);
+    if (!confirmer(`Supprimer ce document (${(window.TYPES_DOC_ENGIN || {})[d.type_code] || d.type_code}, ${dateFr(d.date_document)}) ? Les photos déjà envoyées restent sur le Drive.`)) return;
+    const { error } = await sb.from('engin_documents').delete().eq('id', d.id);
+    if (error) return erreurSupabase('Suppression du document', error);
+    toast('Document supprimé'); afficherDocumentsEngin(id, e, contexte, peutEcrire);
+  }));
   $('#form-avis-engin')?.addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target;
@@ -195,35 +225,50 @@ async function afficherDocumentsEngin(id, e, contexte, peutEcrire) {
   });
 }
 
-function formulaireDocumentEngin(engId, e, typeCode, contexte) {
+const dernierParId = (docs, id) => (docs || []).find(d => d.id === id) || {};
+
+/* doc = document existant à modifier / remplacer (sinon : nouveau document) */
+function formulaireDocumentEngin(engId, e, typeCode, contexte, doc = null) {
   const type = (window.TYPES_DOC_ENGIN_FULL || []).find(t => t.code === typeCode) || { code: typeCode, libelle: typeCode, avec_echeance: false };
-  ouvrirModale(`${type.libelle} — ${libelleEngin(e)}`, `
+  const v = doc || {};
+  ouvrirModale(`${doc ? 'Modifier — ' : ''}${type.libelle} — ${libelleEngin(e)}`, `
     <form id="form-doc-engin" class="formulaire"><div class="grille-2">
-      <label>Date du document / de la vérification <input type="date" name="date_document" value="${new Date().toISOString().slice(0, 10)}"></label>
-      ${type.avec_echeance ? '<label>Échéance (prochaine vérification, lue sur le rapport) <input type="date" name="date_echeance"></label>' : ''}
-      <label>Référence <input name="reference" placeholder="N° de rapport…"></label>
-      <label>Photos du document <input type="file" name="photos" accept="image/*" capture="environment" multiple></label></div>
-      ${typeCode === 'vgp' ? `<label class="case"><input type="checkbox" name="obs">
+      <label>Date du document / de la vérification <input type="date" name="date_document" value="${v.date_document || new Date().toISOString().slice(0, 10)}"></label>
+      ${type.avec_echeance ? `<label>Échéance (prochaine vérification, lue sur le rapport) <input type="date" name="date_echeance" value="${v.date_echeance || ''}"></label>` : ''}
+      <label>Référence <input name="reference" value="${esc(v.reference || '')}" placeholder="N° de rapport…"></label>
+      <label>${doc ? 'Nouvelles photos (remplacent les photos actuelles)' : 'Photos du document'} <input type="file" name="photos" accept="image/*" capture="environment" multiple></label></div>
+      <label class="case"><input type="checkbox" name="physique" ${v.present_physiquement ? 'checked' : ''}>
+        Document présent physiquement <span class="aide">(gros document, ex. notice d'instructions : pas de scan, il est conservé avec l'engin)</span></label>
+      ${doc && (v.fichiers || []).length ? `<p class="aide">${v.fichiers.length} photo(s) actuelle(s) conservée(s) si vous n'en ajoutez pas de nouvelles.</p>` : ''}
+      ${typeCode === 'vgp' ? `<label class="case"><input type="checkbox" name="obs" ${v.observations_ouvertes ? 'checked' : ''}>
         Le rapport comporte des observations NON levées <span class="aide">(à cocher sinon l'engin ne pourra pas servir)</span></label>` : ''}
-      <label>Notes <input name="notes"></label>
+      <label>Notes <input name="notes" value="${esc(v.notes || '')}"></label>
       <div class="pied-modale"><button type="button" onclick="ouvrirFicheEngin('${engId}', window.__ctxEngin)">Annuler</button>
-        <button type="submit" class="principal">Enregistrer le document</button></div>
+        <button type="submit" class="principal">${doc ? 'Enregistrer les modifications' : 'Enregistrer le document'}</button></div>
       <p id="msg-doc" class="aide"></p></form>`);
   window.__ctxEngin = contexte;
   $('#form-doc-engin').addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target, msg = $('#msg-doc');
     try {
-      msg.textContent = 'Envoi des photos sur le Drive…';
-      const chemin = contexte.session
-        ? ['Sessions', contexte.session.nom, 'Engins', libelleEngin(e)]
-        : ['Parc engins', libelleEngin(e)];
-      const fichiers = await envoyerPhotosSurDrive(f.photos, chemin, typeCode);
-      const { error } = await sb.from('engin_documents').insert({
-        engin_id: engId, type_code: typeCode, date_document: f.date_document.value || null,
+      const nouvelles = f.photos.files && f.photos.files.length;
+      let fichiers = v.fichiers || [];
+      if (nouvelles || !doc) {
+        if (nouvelles) msg.textContent = 'Envoi des photos sur le Drive…';
+        const chemin = contexte.session
+          ? ['Sessions', contexte.session.nom, 'Engins', libelleEngin(e)]
+          : ['Parc engins', libelleEngin(e)];
+        fichiers = nouvelles ? await envoyerPhotosSurDrive(f.photos, chemin, typeCode) : [];
+      }
+      const champs = {
+        date_document: f.date_document.value || null,
         date_echeance: f.date_echeance?.value || null, reference: f.reference.value.trim() || null,
         observations_ouvertes: !!f.obs?.checked, fichiers, notes: f.notes.value.trim() || null,
-        session_id: contexte.session?.id || null, ajoute_par: S.profil.id });
+        present_physiquement: !!f.physique.checked };
+      const { error } = doc
+        ? await sb.from('engin_documents').update(champs).eq('id', doc.id)
+        : await sb.from('engin_documents').insert({ ...champs, engin_id: engId, type_code: typeCode,
+            session_id: contexte.session?.id || null, ajoute_par: S.profil.id });
       if (error) throw error;
       toast('Document enregistré');
       ouvrirFicheEngin(engId, contexte);
