@@ -123,7 +123,15 @@ async function rendreRgpd() {
     if (e) return erreurSupabase('Enregistrement', e); toast('Paramètres enregistrés'); rendreRgpd();
   });
   $('#btn-purge', z).addEventListener('click', async () => {
-    if (!confirmer('Anonymiser maintenant les stagiaires des sessions clôturées depuis plus de ' + p.purge_delai_jours + ' jours (hors titulaires d\'un titre) ? Irréversible.')) return;
-    try { const n = await rpc('caces_purger_sessions_cloturees'); toast(n + ' stagiaire(s) anonymisé(s)'); } catch (e) { erreurSupabase('Purge', e); }
+    if (!confirmer('Purger maintenant les sessions clôturées depuis plus de ' + p.purge_delai_jours + ' jours : photos, e-mails, dates de naissance et réponses détaillées supprimés ; identité des titulaires d\'un titre conservée ? Irréversible.')) return;
+    try {
+      // Les photos sont d'abord supprimées via l'API Storage (jamais par SQL), puis la base est purgée.
+      const chemins = (await rpc('caces_purge_chemins_photos')) || [];
+      const liste = chemins.map(c => (typeof c === 'string' ? c : Object.values(c)[0])).filter(Boolean);
+      for (let i = 0; i < liste.length; i += 100) {
+        const { error: er } = await sb.storage.from('caces-photos-stagiaires').remove(liste.slice(i, i + 100));
+        if (er) throw er;
+      }
+      const n = await rpc('caces_purger_sessions_cloturees'); toast(n + ' stagiaire(s) traité(s), ' + liste.length + ' photo(s) supprimée(s)'); } catch (e) { erreurSupabase('Purge', e); }
   });
 }
