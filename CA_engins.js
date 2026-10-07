@@ -25,15 +25,25 @@ const pastilleEtat = etat => {
   return `<span class="etat ${m[0]}" title="${esc(m[1])}">${esc(m[1])}</span>`;
 };
 
+/** Centres de rattachement des engins : Map engin_id -> [centre_id] (table absente ou vide = aucun rattachement). */
+async function chargerCentresEngins() {
+  const { data } = await sb.from('engin_centres').select('engin_id, centre_id');
+  const m = new Map();
+  (data || []).forEach(x => m.set(x.engin_id, [...(m.get(x.engin_id) || []), x.centre_id]));
+  return m;
+}
+const nomsCentres = ids => (ids || []).map(i => (S.referentiel.centres || []).find(c => c.id === i)?.nom).filter(Boolean).join(', ');
+
 const libelleEngin = e => [e.designation, e.marque, e.modele, e.numero_serie ? 'n°' + e.numero_serie : '']
   .filter(Boolean).join(' ');
 
 /* ====================== Parc d'engins (onglet Organisme) ============== */
 async function rendreParcEngins(zone) {
   zone.innerHTML = '<p class="chargement">Chargement du parc…</p>';
-  const [{ data: engins, error }, { data: etats }] = await Promise.all([
+  const [{ data: engins, error }, { data: etats }, centresEngins] = await Promise.all([
     sb.from('engins').select('*').order('designation'),
     sb.from('v_engins_statut').select('*'),
+    chargerCentresEngins(),
   ]);
   if (error) return erreurSupabase('Lecture du parc d\'engins', error);
   const etat = Object.fromEntries((etats || []).map(x => [x.engin_id, x.etat]));
@@ -44,24 +54,28 @@ async function rendreParcEngins(zone) {
       <div><input type="search" id="filtre-engins" placeholder="Rechercher (désignation, marque, n° de série…)" style="min-width:260px">
         <select id="filtre-prov"><option value="">Toutes provenances</option>
           ${Object.entries(PROVENANCES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+        <select id="filtre-centre"><option value="">Tous les centres</option>
+          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
         ${peutEcrire ? '<button class="principal" onclick="ouvrirFicheEngin(null)">+ Ajouter un engin</button>' : ''}</div></div>
-    <table class="tableau"><thead><tr><th>Engin</th><th>Marque / modèle</th><th>N° de série</th><th>Provenance</th><th>Catégories</th><th>Documents</th><th></th></tr></thead>
+    <table class="tableau"><thead><tr><th>Engin</th><th>Marque / modèle</th><th>N° de série</th><th>Provenance</th><th>Centres</th><th>Catégories</th><th>Documents</th><th></th></tr></thead>
     <tbody id="liste-engins"></tbody></table>`;
 
   const afficher = () => {
-    const q = cleEntete($('#filtre-engins').value), prov = $('#filtre-prov').value;
-    const liste = (engins || []).filter(e => (!prov || e.provenance === prov)
+    const q = cleEntete($('#filtre-engins').value), prov = $('#filtre-prov').value, cen = Number($('#filtre-centre').value) || null;
+    const liste = (engins || []).filter(e => (!prov || e.provenance === prov) && (!cen || (centresEngins.get(e.id) || []).includes(cen))
       && (!q || cleEntete([e.designation, e.marque, e.modele, e.numero_serie, e.proprietaire].join(' ')).includes(q)));
     $('#liste-engins').innerHTML = liste.map(e => `<tr class="${e.actif ? '' : 'inactif'}">
       <td>${esc(e.designation)}${e.actif ? '' : ' <i>(retiré)</i>'}</td>
       <td>${esc([e.marque, e.modele].filter(Boolean).join(' '))}</td><td>${esc(e.numero_serie)}</td>
       <td>${esc(PROVENANCES[e.provenance])}${e.proprietaire ? ' — ' + esc(e.proprietaire) : ''}</td>
+      <td>${e.provenance === 'propriete' ? esc(nomsCentres(centresEngins.get(e.id))) || '<i>—</i>' : ''}</td>
       <td>${esc((e.categories || []).join(', '))}</td><td>${pastilleEtat(etat[e.id])}</td>
       <td><button class="icone" title="Fiche, documents et avis" onclick="ouvrirFicheEngin('${e.id}')">📄</button></td></tr>`).join('')
-      || '<tr><td colspan="7" class="vide">Aucun engin.</td></tr>';
+      || '<tr><td colspan="8" class="vide">Aucun engin.</td></tr>';
   };
   $('#filtre-engins').addEventListener('input', afficher);
   $('#filtre-prov').addEventListener('change', afficher);
+  $('#filtre-centre').addEventListener('change', afficher);
   afficher();
 }
 
@@ -90,6 +104,7 @@ async function ouvrirFicheEngin(id, contexte = {}) {
   }
   const peutEcrire = ['formateur', 'admin'].includes(S.profil?.role);
   const cats = S.referentiel.categories;
+  const centresActuels = new Set(id ? ((await chargerCentresEngins()).get(id) || []) : []);
   ouvrirModale(id ? libelleEngin(e) : 'Nouvel engin', `
     <form id="form-engin" class="formulaire">
       <div class="grille-2">
@@ -107,6 +122,8 @@ async function ouvrirFicheEngin(id, contexte = {}) {
       <label class="case"><input type="checkbox" name="soumis_vgp" ${e.soumis_vgp ? 'checked' : ''}>
         Soumis aux vérifications générales périodiques (VGP) <span class="aide">— décocher pour un engin non soumis
         (ex. conducteur accompagnant) : vérification annuelle de l'état de conservation à la place</span></label>
+      <fieldset id="fs-centres" ${e.provenance === 'propriete' ? '' : 'hidden'}><legend>Centres de rattachement <span class="aide">(un engin en propriété peut naviguer sur plusieurs centres)</span></legend>
+        ${(S.referentiel.centres || []).map(c => `<label class="case"><input type="checkbox" name="centre" value="${c.id}" ${centresActuels.has(c.id) ? 'checked' : ''}> ${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</label>`).join('')}</fieldset>
       <fieldset><legend>Catégories CACES pour lesquelles il sert aux tests</legend>
         ${cats.map(c => `<label class="case"><input type="checkbox" name="cat" value="${esc(c.code)}|${esc(c.referentiel_code)}"
           ${(e.categories || []).includes(c.referentiel_code + ' ' + c.code) ? 'checked' : ''}> ${esc(c.referentiel_code)} ${esc(c.code)}</label>`).join('')}
@@ -129,6 +146,7 @@ async function ouvrirFicheEngin(id, contexte = {}) {
   };
   $$('#form-engin input[name=cat]').forEach(i => i.addEventListener('change', majTypeEngin));
   majTypeEngin();
+  $('#form-engin select[name=provenance]').addEventListener('change', ev => { $('#fs-centres').hidden = ev.target.value !== 'propriete'; });
 
   $('#form-engin').addEventListener('submit', async ev => {
     ev.preventDefault();
@@ -149,6 +167,10 @@ async function ouvrirFicheEngin(id, contexte = {}) {
       const doublon = String(r.error.message).includes('engins_serie_unique');
       return erreurSupabase(doublon ? 'Cet engin (même marque et n° de série) existe déjà dans la base' : 'Enregistrement de l\'engin', r.error);
     }
+    const engId = r.data.id;
+    const centres = f.provenance.value === 'propriete' ? $$('#form-engin input[name=centre]:checked').map(i => Number(i.value)) : [];
+    const { error: ec1 } = await sb.from('engin_centres').delete().eq('engin_id', engId);
+    if (!ec1 && centres.length) await sb.from('engin_centres').insert(centres.map(centre_id => ({ engin_id: engId, centre_id })));
     toast('Engin enregistré');
     if (!id) return ouvrirFicheEngin(r.data.id, contexte);
     if ($('#liste-engins')) rendreParcEngins($('#zone-parc') || $('#liste-engins').closest('div'));
@@ -310,15 +332,19 @@ async function ouvrirEnginsSession() {
   const s = S.session;
   await chargerTypesDocEngin();
   const peutEcrire = ['formateur', 'admin'].includes(S.profil?.role);
-  const [{ data: liens }, { data: parc }, { data: etats }] = await Promise.all([
+  const [{ data: liens }, { data: parc }, { data: etats }, centresEngins] = await Promise.all([
     sb.from('session_engins').select('engin_id').eq('session_id', s.id),
     sb.from('engins').select('*').eq('actif', true).order('designation'),
     sb.from('v_engins_statut').select('*'),
+    chargerCentresEngins(),
   ]);
   const choisis = new Set((liens || []).map(l => l.engin_id));
   const etat = Object.fromEntries((etats || []).map(x => [x.engin_id, x.etat]));
   const utilises = (parc || []).filter(e => choisis.has(e.id));
   const dispo = (parc || []).filter(e => !choisis.has(e.id));
+  // Engins du centre de la session (ou sans rattachement, ou loués/prêtés) en premier ; les autres centres à part
+  const duCentre = e => e.provenance !== 'propriete' || !s.centre_examen_id || !(centresEngins.get(e.id) || []).length || (centresEngins.get(e.id) || []).includes(s.centre_examen_id);
+  const dispoCentre = dispo.filter(duCentre), dispoAutres = dispo.filter(e => !duCentre(e));
 
   ouvrirModale('Engins utilisés pour les tests de cette session', `
     <h4 class="titre-theme">Engins de la session (${utilises.length})</h4>
@@ -331,7 +357,8 @@ async function ouvrirEnginsSession() {
     ${peutEcrire ? `
     <h4 class="titre-theme">Ajouter un engin du centre</h4>
     <div><select id="choix-engin"><option value="">— choisir dans le parc —</option>
-      ${dispo.map(e => `<option value="${e.id}">${esc(libelleEngin(e))} (${esc(PROVENANCES[e.provenance])})</option>`).join('')}</select>
+      ${dispoCentre.map(e => `<option value="${e.id}">${esc(libelleEngin(e))} (${esc(PROVENANCES[e.provenance])})</option>`).join('')}
+      ${dispoAutres.length ? `<optgroup label="Engins rattachés à un autre centre">${dispoAutres.map(e => `<option value="${e.id}">${esc(libelleEngin(e))} — ${esc(nomsCentres(centresEngins.get(e.id)))}</option>`).join('')}</optgroup>` : ''}</select>
       <button id="btn-ajout-engin" class="principal">Ajouter</button></div>
     <h4 class="titre-theme">Engin loué ou prêté</h4>
     <p class="aide">Si l'engin est déjà connu (même marque et n° de série), il est retrouvé automatiquement : il suffit alors de déposer les nouveaux documents. Le contrat de location se gère ailleurs.</p>
@@ -394,6 +421,7 @@ async function rendreAlerteVgp(zone) {
   if (error || !(engins || []).length) { zone.innerHTML = ''; return; }
   const soumis = engins.filter(e => e.soumis_vgp !== false);
   if (!soumis.length) { zone.innerHTML = ''; return; }
+  const centresEngins = await chargerCentresEngins();
   const { data: docs } = await sb.from('engin_documents').select('engin_id, date_document, date_echeance, observations_ouvertes, created_at')
     .eq('type_code', 'vgp').in('engin_id', soumis.map(e => e.id));
   const aujourdhui = new Date(); aujourdhui.setHours(12, 0, 0, 0);
@@ -410,8 +438,8 @@ async function rendreAlerteVgp(zone) {
   const aTraiter = lignes.filter(x => x.etat !== 'ok').length;
   zone.innerHTML = `
     <h3 style="margin-top:28px">VGP des engins du centre${aTraiter ? ` <span class="etat ko">${aTraiter} à traiter</span>` : ' <span class="etat ok">toutes à jour</span>'}</h3>
-    <table class="tableau"><thead><tr><th>Engin</th><th>N° de série</th><th>Prochaine VGP</th><th>Dans</th><th>État</th></tr></thead><tbody>
-    ${lignes.map(x => `<tr><td>${esc(libelleEngin(x.e).replace(/ n°.*$/, ''))}</td><td>${esc(x.e.numero_serie || '')}</td>
+    <table class="tableau"><thead><tr><th>Engin</th><th>N° de série</th><th>Centre(s)</th><th>Prochaine VGP</th><th>Dans</th><th>État</th></tr></thead><tbody>
+    ${lignes.map(x => `<tr><td>${esc(libelleEngin(x.e).replace(/ n°.*$/, ''))}</td><td>${esc(x.e.numero_serie || '')}</td><td>${esc(nomsCentres(centresEngins.get(x.e.id))) || '—'}</td>
       <td>${x.ech ? esc(dateFr(x.ech)) : '—'}</td>
       <td>${x.jours === null ? '—' : x.jours < 0 ? `dépassée de ${-x.jours} j` : x.jours + ' j'}</td>
       <td><span class="etat ${LIB[x.etat][0]}">${LIB[x.etat][1]}</span></td></tr>`).join('')}
