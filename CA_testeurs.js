@@ -92,7 +92,7 @@ async function afficherCharges(quota, quotaPratique) {
   if (!zone) return;
   const jour = $('#jour-charge').value;
   zone.innerHTML = '<p class="chargement">Calcul…</p>';
-  const testeurs = (S.formateurs || []).filter(f => f.role !== 'secretariat');
+  const testeurs = (S.formateurs || []).filter(f => f.role !== 'secretariat' && f.est_testeur !== false);
   const lignes = [];
   for (const t of testeurs) {
     const [r, p] = await Promise.all([

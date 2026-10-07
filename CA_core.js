@@ -259,9 +259,17 @@ async function chargerProfil() {
 /** Liste des comptes autorisés (formateurs/testeurs/admin), pour les listes déroulantes. */
 async function chargerFormateurs() {
   let { data, error } = await sb.from('formateurs')
-    .select('id, nom, prenom, email, role, actif, cumul_formateur_testeur').order('nom');
+    .select('id, nom, prenom, email, role, actif, cumul_formateur_testeur, est_testeur').order('nom');
   if (error) ({ data } = await sb.from('formateurs').select('id, nom, prenom, email, role, actif').order('nom'));
   S.formateurs = (data || []).filter(f => f.actif !== false);
+  const { data: hab } = await sb.from('formateur_habilitations').select('formateur_id, fonction, referentiel_code, categorie_code');
+  S.habilitations = hab || [];   // vide (ou table absente) = toutes catégories
+}
+/** Habilité pour toutes les catégories données ? Aucune ligne pour (personne, fonction) = toutes les catégories. */
+function habilite(personneId, fonction, categories) {
+  const lignes = (S.habilitations || []).filter(h => h.formateur_id === personneId && h.fonction === fonction);
+  if (!lignes.length) return true;
+  return (categories || []).every(c => lignes.some(h => h.referentiel_code === c.referentiel_code && h.categorie_code === c.categorie_code));
 }
 const nomFormateur = id => {
   const f = (S.formateurs || []).find(x => x.id === id);

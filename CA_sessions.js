@@ -73,8 +73,10 @@ async function rendreSessions(zone) {
 }
 
 /* ====================== Création d'une session ====================== */
-function optionsPersonnes(selectionne, exclureId) {
-  return (S.formateurs || []).filter(f => f.id !== exclureId && f.role !== 'secretariat').map(f =>
+function optionsPersonnes(selectionne, exclureId, seulementTesteurs = false, categories = null) {
+  const fonction = seulementTesteurs ? 'testeur' : 'formateur';
+  return (S.formateurs || []).filter(f => f.id !== exclureId && f.role !== 'secretariat' && (!seulementTesteurs || f.est_testeur !== false)
+      && (f.id === selectionne || !categories || habilite(f.id, fonction, categories))).map(f =>
     `<option value="${f.id}" ${f.id === selectionne ? 'selected' : ''}>${esc(((f.nom || '') + ' ' + (f.prenom || '')).trim() || f.email)}</option>`).join('');
 }
 
@@ -106,7 +108,7 @@ function nouvelleSession() {
         <label>Formateur de la session
           <select name="formateur_id">${optionsPersonnes(S.profil.id)}</select></label>
         <label>Testeur de la session <span class="aide" id="aide-testeur">(différent du formateur)</span>
-          <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null)}</select></label>
+          <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null, null, true)}</select></label>
         <label>Agence / centre de déroulement du test
           <select name="centre_examen_id"><option value="">—</option>
             ${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
@@ -119,6 +121,16 @@ function nouvelleSession() {
         <button type="submit" class="principal">Créer la session</button>
       </div>
     </form>`);
+
+  // Formateur et testeur proposés : ceux habilités pour toutes les catégories cochées
+  const majPersonnes = () => {
+    const cats = $$('#form-session input[name=categorie]:checked').map(i => { const [referentiel_code, categorie_code] = i.value.split('|'); return { referentiel_code, categorie_code }; });
+    const ff = $('#form-session [name=formateur_id]'), tt = $('#form-session [name=testeur_id]');
+    const f0 = ff.value || S.profil.id, t0 = tt.value;
+    ff.innerHTML = optionsPersonnes(f0, null, false, cats);
+    tt.innerHTML = '<option value="">— à affecter —</option>' + optionsPersonnes(t0, null, true, cats);
+  };
+  $$('#form-session input[name=categorie]').forEach(i => i.addEventListener('change', majPersonnes));
 
   $('#type-session').addEventListener('change', e => {
     const aut = e.target.value === 'autorisation';
@@ -297,10 +309,10 @@ async function rendreDetailSession(zone) {
         ${d.ecriture ? '<button class="lien" onclick="modifierLieuSession()">Modifier</button>' : ''}</div>
       <div><b>Formateur (FISE, horomètre)</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
-          ${optionsPersonnes(s.formateur_id, null)}</select></div></div>
+          ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div></div>
       <div><b>Testeur (QCM, pratique)</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerTesteurSession(this.value)">
-          <option value="">— à affecter —</option>${optionsPersonnes(s.testeur_id, null)}</select></div></div>
+          <option value="">— à affecter —</option>${optionsPersonnes(s.testeur_id, null, true, s._categories)}</select></div></div>
       <details class="qr-repliable">
         <summary><b>QR code examen</b></summary>
         <div id="qr-passation"></div>
