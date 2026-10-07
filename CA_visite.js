@@ -102,7 +102,7 @@ async function ouvrirVisitePrealable() {
     sb.from('visites_prealables').select('*').eq('session_id', s.id).maybeSingle(),
     sb.from('session_categories').select('referentiel_code, categorie_code').eq('session_id', s.id),
   ]);
-  const visite = v || { points: {}, surfaces: {}, fichiers: [], date_visite: new Date().toISOString().slice(0, 10), adresse_site: s.lieu || '', contact_client: '', observations: '' };
+  const visite = v || { points: {}, surfaces: {}, fichiers: [], date_visite: new Date().toISOString().slice(0, 10), adresse_site: '', contact_client: '', observations: '' };
   const pts = { ...(visite.points || {}) }, surf = { ...(visite.surfaces || {}) };
   const peutEcrire = ['formateur', 'admin'].includes(S.profil?.role) && s.statut !== 'cloturee';
   const dis = peutEcrire ? '' : 'disabled';
@@ -184,8 +184,13 @@ async function ouvrirVisitePrealable() {
   });
 }
 
-async function changerTypeLieuSession(type) {
-  await modifierChampSession('lieu_type', type, 'type de lieu');
-  toast(type === 'client' ? 'Session chez le client : la visite préalable est obligatoire avant la pratique' : 'Session en centre de formation');
+async function changerLieuSession(valeur) {
+  const centre = valeur === 'client' ? null : (S.referentiel.centres || []).find(c => c.id === Number(valeur));
+  const maj = valeur === 'client' ? { lieu_type: 'client', lieu: 'Chez le client (intra)' }
+    : { lieu_type: 'centre', lieu: centre ? centre.nom : null, centre_examen_id: Number(valeur) };
+  const { error } = await sb.from('sessions_formation').update(maj).eq('id', S.session.id);
+  if (error) return erreurSupabase('Modification du lieu', error);
+  Object.assign(S.session, maj);
+  toast(valeur === 'client' ? 'Intra : la visite préalable est obligatoire avant la pratique' : 'Session en centre de formation');
   rendreDetailSession($('#contenu'));
 }

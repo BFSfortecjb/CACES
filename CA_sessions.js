@@ -111,12 +111,11 @@ function nouvelleSession() {
           <select name="formateur_id">${optionsPersonnes(S.profil.id)}</select></label>
         <label>Testeur de la session <span class="aide" id="aide-testeur">(différent du formateur)</span>
           <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null, null, true)}</select></label>
-        <label>Agence / centre de déroulement du test
-          <select name="centre_examen_id"><option value="">—</option>
-            ${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
         <label>Lieu de réalisation des tests
-          <select name="lieu_type"><option value="centre">Centre de formation</option><option value="client">Chez le client (intra) — visite préalable obligatoire</option></select></label>
-        <label>Lieu <input name="lieu" placeholder="Ex : Sèvremont"></label>
+          <select name="lieu_choix">${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
+            <option value="client">Chez le client (intra) — visite préalable obligatoire</option></select></label>
+        <label id="bloc-agence-org" hidden>Agence organisatrice (cachet, secrétariat)
+          <select name="agence_org"><option value="">—</option>${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
         <label class="case"><input type="checkbox" name="en_cdt"> Test en conditions de travail (CDT)</label>
       </div>
       <fieldset><legend>Catégories de CACES visées</legend>${cases_categories()}</fieldset>
@@ -135,6 +134,7 @@ function nouvelleSession() {
     tt.innerHTML = '<option value="">— à affecter —</option>' + optionsPersonnes(t0, null, true, cats);
   };
   $$('#form-session input[name=categorie]').forEach(i => i.addEventListener('change', majPersonnes));
+  $('#form-session [name=lieu_choix]').addEventListener('change', e => { $('#bloc-agence-org').hidden = e.target.value !== 'client'; });
 
   $('#type-session').addEventListener('change', e => {
     const aut = e.target.value === 'autorisation';
@@ -155,13 +155,14 @@ function nouvelleSession() {
       return toast('Le testeur doit être une personne différente du formateur.', 'erreur', 6000);
     }
     try {
-      const code = genererCodeAcces();
+      const code = genererCodeAcces(), lieuClient = f.lieu_choix.value === 'client';
       const { data: s, error } = await sb.from('sessions_formation').insert({
         nom: f.nom.value.trim(), type_session: f.type_session.value, numero_session_galaxy: f.galaxy.value.trim() || null,
         entreprise: f.entreprise.value.trim() || null, date_debut: f.date_debut.value || null,
         formateur_id: f.formateur_id.value, testeur_id: f.testeur_id.value || null,
-        centre_examen_id: f.centre_examen_id.value ? Number(f.centre_examen_id.value) : null,
-        lieu: f.lieu.value.trim() || null, lieu_type: f.lieu_type.value, en_cdt: f.en_cdt.checked, code_acces: code, statut: 'brouillon',
+        centre_examen_id: lieuClient ? (f.agence_org.value ? Number(f.agence_org.value) : null) : Number(f.lieu_choix.value),
+        lieu: lieuClient ? 'Chez le client (intra)' : ((S.referentiel.centres.find(c => c.id === Number(f.lieu_choix.value)) || {}).nom || null),
+        lieu_type: lieuClient ? 'client' : 'centre', en_cdt: f.en_cdt.checked, code_acces: code, statut: 'brouillon',
       }).select().single();
       if (error) throw error;
       if (f.date_fin.value && f.date_debut.value && f.date_fin.value >= f.date_debut.value) {
@@ -315,16 +316,15 @@ async function rendreDetailSession(zone) {
         <button class="lien" onclick="navigator.clipboard.writeText('${esc(lien)}');toast('Lien copié')">Copier le lien</button></div>
       <div><b>N° de session Galaxy</b><div>${esc(s.numero_session_galaxy) || '<i>non renseigné</i>'}</div>
         ${d.ecriture ? '<button class="lien" onclick="modifierNumeroGalaxy()">Modifier</button>' : ''}</div>
-      <div><b>Lieu</b><div>${esc(s.lieu) || '<i>non renseigné</i>'}
-        ${d.ecriture ? '<button class="lien" onclick="modifierLieuSession()">Modifier</button>' : ''}</div>
-        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerTypeLieuSession(this.value)">
-          <option value="centre" ${s.lieu_type !== 'client' ? 'selected' : ''}>${LIEU_TYPE.centre}</option>
-          <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>${LIEU_TYPE.client}</option></select>
+      <div><b>Lieu des tests</b><div>
+        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerLieuSession(this.value)">
+          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${s.lieu_type !== 'client' && c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
+          <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>Chez le client (intra)</option></select></div>
         ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Visite préalable</button>' : ''}</div>
-      <div><b>Agence (cachet, secrétariat)</b><div>
+      ${s.lieu_type === 'client' ? `<div><b>Agence organisatrice (cachet, secrétariat)</b><div>
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
           <option value="">— à choisir —</option>
-          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div></div>
+          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div></div>` : ''}
       <div><b>Formateur (FISE, horomètre)</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
           ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div></div>

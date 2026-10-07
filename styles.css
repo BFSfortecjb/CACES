@@ -573,7 +573,13 @@ details h4 { margin-top: 14px; font-size: 13px; color: var(--gris-doux); }
 .adeq-banniere.ok { background: #dff3e3; color: #1c5d2e; } .adeq-banniere.ko { background: #fdf4e2; color: #7a4c00; }
 .adeq-ligne { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 4px 0; border-top: 1px solid #eee; }
 .adeq-ligne label { display: flex; align-items: center; gap: 12px; flex: 1; min-height: 48px; font-size: 15px; }
-.adeq-ligne input[type=checkbox] { width: 28px; height: 28px; }
+.adeq-ligne input[type=checkbox] { width: 28px; height: 28px; min-width: 28px; flex: none; margin: 0; padding: 0; }
+.adeq-ligne label span { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.adeq-ligne label.case { flex: none; font-size: 14px; min-height: 32px; }
+.adeq-ligne .aide { flex-basis: 100%; margin: 0 0 4px 40px; }
+#form-visite fieldset { min-width: 0; padding: 8px 10px; }
+#form-visite input[type=number] { width: 120px; max-width: 100%; }
+@media (max-width: 600px) { .adeq-ligne { align-items: flex-start; } #form-visite .grille-2 { grid-template-columns: 1fr; } }
 .adeq-ligne.ok span { color: #1c5d2e; }
 .adeq-aide { flex-basis: 100%; background: var(--gris-fond); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
 .adeq-nc { background: #fbe3e3; color: var(--rouge); padding: 10px 12px; border-radius: 10px; margin: 12px 0; }
