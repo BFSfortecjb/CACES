@@ -155,7 +155,7 @@ async function afficherPratique(st, cat) {
         ${(variantes.length ? variantes : ['']).map((v, i) => `<label>Engin utilisé${v ? ' — ' + esc(v) : ''}
           <select class="prat-engin" data-i="${i}">${optEngin}</select></label>
           ${v && typesDuGroupe(v).length > 1 ? `<label>Type d'engin${' — ' + esc(v)}
-            <select class="prat-type" data-g="${esc(v)}"><option value="">— choisir —</option>${typesDuGroupe(v).map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></label>` : ''}`).join('')}
+            <select class="prat-type" data-g="${esc(v)}"><option value="">— choisir —</option>${typesDuGroupe(v).map(t => `<option value="${esc(t)}">${esc(libelleTypeEngin(cat.categorie_code, t))}</option>`).join('')}</select></label>` : ''}`).join('')}
         ${dispo.length ? `<fieldset><legend>Options passées (+0,5 UT chacune)</legend>${dispo.map(k =>
           `<label class="case"><input type="checkbox" data-opt="${k}"> ${esc(OPTIONS_PRATIQUE[k].libelle)}</label>`).join('')}</fieldset>` : ''}
       </div>
@@ -198,15 +198,17 @@ async function afficherPratique(st, cat) {
   }
 
   /* ---------- 2. engin + examen d'adéquation ---------- */
+  let visiteOk = true;
+  visitePrealableOk().then(v => { visiteOk = v; if (!v && $('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
   function majAdeq() {
     const ids = $$('.prat-engin').map(s => s.value);
     const typesOk = groupes.every(g => typesDuGroupe(g).length <= 1 || typeChoisi[g]);
     const tous = ids.length && ids.every(Boolean) && typesOk;
     const essai = !!$('#prat-essai')?.checked;
-    const ok = essai || (tous && ids.every(id => adeq[id]?.conforme));
+    const ok = essai || (tous && visiteOk && ids.every(id => adeq[id]?.conforme));
     const zoneA = $('#prat-adeq');
     $('#prat-corps').hidden = !ok; $('#prat-barre').hidden = !ok;
-    zoneA.innerHTML = essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
+    zoneA.innerHTML = !essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
             — ${esc([e.designation, e.marque, e.modele].filter(Boolean).join(' '))}
@@ -334,7 +336,8 @@ async function afficherPratique(st, cat) {
   $$('.prat-engin').forEach(s => s.addEventListener('change', () => {
     const g = variantes[Number(s.dataset.i)], t = (enginParId(s.value) || {}).type_engin;
     if (g && t && typesDuGroupe(g).length > 1) {
-      const types = typesDuGroupe(g), v = types.find(x => x === t) || types.find(x => x.toLowerCase() === String(t).toLowerCase());
+      const types = typesDuGroupe(g), [tc, tt] = String(t).includes(':') ? String(t).split(':') : [null, t];
+      const v = (tc && tc !== cat.categorie_code) ? null : (types.find(x => x === tt) || types.find(x => x.toLowerCase() === String(tt).toLowerCase()));
       const sel = document.querySelector(`.prat-type[data-g="${g}"]`);
       if (v && sel) { sel.value = v; typeChoisi[g] = v; }
     }

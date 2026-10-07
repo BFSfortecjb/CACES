@@ -114,6 +114,8 @@ function nouvelleSession() {
         <label>Agence / centre de déroulement du test
           <select name="centre_examen_id"><option value="">—</option>
             ${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
+        <label>Lieu de réalisation des tests
+          <select name="lieu_type"><option value="centre">Centre de formation</option><option value="client">Chez le client (intra) — visite préalable obligatoire</option></select></label>
         <label>Lieu <input name="lieu" placeholder="Ex : Sèvremont"></label>
         <label class="case"><input type="checkbox" name="en_cdt"> Test en conditions de travail (CDT)</label>
       </div>
@@ -159,7 +161,7 @@ function nouvelleSession() {
         entreprise: f.entreprise.value.trim() || null, date_debut: f.date_debut.value || null,
         formateur_id: f.formateur_id.value, testeur_id: f.testeur_id.value || null,
         centre_examen_id: f.centre_examen_id.value ? Number(f.centre_examen_id.value) : null,
-        lieu: f.lieu.value.trim() || null, en_cdt: f.en_cdt.checked, code_acces: code, statut: 'brouillon',
+        lieu: f.lieu.value.trim() || null, lieu_type: f.lieu_type.value, en_cdt: f.en_cdt.checked, code_acces: code, statut: 'brouillon',
       }).select().single();
       if (error) throw error;
       if (f.date_fin.value && f.date_debut.value && f.date_fin.value >= f.date_debut.value) {
@@ -315,6 +317,11 @@ async function rendreDetailSession(zone) {
         ${d.ecriture ? '<button class="lien" onclick="modifierNumeroGalaxy()">Modifier</button>' : ''}</div>
       <div><b>Lieu</b><div>${esc(s.lieu) || '<i>non renseigné</i>'}</div>
         ${d.ecriture ? '<button class="lien" onclick="modifierLieuSession()">Modifier</button>' : ''}</div>
+      <div><b>Type de lieu</b><div>
+        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerTypeLieuSession(this.value)">
+          <option value="centre" ${s.lieu_type !== 'client' ? 'selected' : ''}>${LIEU_TYPE.centre}</option>
+          <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>${LIEU_TYPE.client}</option></select></div>
+        ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Visite préalable</button>' : ''}</div>
       <div><b>Agence (cachet, secrétariat)</b><div>
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
           <option value="">— à choisir —</option>
@@ -363,6 +370,7 @@ async function rendreDetailSession(zone) {
 
   try {
     if (typeof QRCode === 'undefined') throw new Error('bibliothèque QRCode non chargée');
+    if (s.lieu_type === 'client') statutVisiteHtml(s).then(h => { const z = $('#visite-statut'); if (z) z.innerHTML = h; });
     $('#qr-passation').innerHTML = '';
     new QRCode($('#qr-passation'), { text: lien, width: 140, height: 140 });
   } catch (e) { const p = $('#qr-erreur'); if (p) { p.hidden = false; p.textContent = 'QR code indisponible : ' + e.message; } }
