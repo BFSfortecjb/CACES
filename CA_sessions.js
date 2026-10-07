@@ -326,6 +326,7 @@ async function rendreDetailSession(zone) {
     <div class="carte">
       <b>🚜 Engins utilisés :</b> ${engins.nb}${engins.rouges ? ` <span class="etat erreur">${engins.rouges} non conforme(s)</span>` : ''}
       <button onclick="appelModule('ouvrirEnginsSession')">Renseigner les engins</button>
+      ${d.formateur ? `<button onclick="appelModule('ouvrirHorometreSession')">⏱ Horomètre (pointage)</button>` : ''}
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
       <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
       ${d.ecriture ? `<button onclick="appelModule('envoyerSecretariat')">✉️ Envoi au secrétariat</button>` : ''}
