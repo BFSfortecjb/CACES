@@ -416,9 +416,11 @@ async function ouvrirEnginsSession() {
 /** Tableau des prochaines VGP des engins du centre (propriété), du plus urgent au moins urgent. */
 async function rendreAlerteVgp(zone) {
   if (!zone || !['formateur', 'admin'].includes(S.profil?.role)) return;
+  const det = zone.closest('details');
   const { data: engins, error } = await sb.from('engins').select('id, designation, marque, modele, numero_serie, soumis_vgp')
     .eq('provenance', 'propriete').eq('actif', true);
   if (error || !(engins || []).length) { zone.innerHTML = ''; return; }
+  if (det) det.hidden = false;
   const soumis = engins.filter(e => e.soumis_vgp !== false);
   if (!soumis.length) { zone.innerHTML = ''; return; }
   const centresEngins = await chargerCentresEngins();
@@ -436,8 +438,11 @@ async function rendreAlerteVgp(zone) {
   const LIB = { manquante: ['ko', 'VGP manquante'], a_saisir: ['avertissement', 'Échéance à saisir'], observations: ['ko', 'Observations non levées'],
     expiree: ['ko', 'Expirée'], urgent: ['ko', 'Moins de 30 jours'], proche: ['avertissement', 'Moins de 90 jours'], ok: ['ok', 'À jour'] };
   const aTraiter = lignes.filter(x => x.etat !== 'ok').length;
+  const nbRouge = lignes.filter(x => LIB[x.etat][0] === 'ko').length;
+  const sum = $('#sum-vgp');
+  if (sum) sum.innerHTML = nbRouge ? `<span class="etat ko">${nbRouge} urgent${nbRouge > 1 ? 'es' : 'e'}</span>` + (aTraiter > nbRouge ? ` <span class="etat avertissement">${aTraiter - nbRouge} à prévoir</span>` : '')
+    : aTraiter ? `<span class="etat avertissement">${aTraiter} à prévoir</span>` : '<span class="etat ok">toutes à jour</span>';
   zone.innerHTML = `
-    <h3 style="margin-top:28px">VGP des engins du centre${aTraiter ? ` <span class="etat ko">${aTraiter} à traiter</span>` : ' <span class="etat ok">toutes à jour</span>'}</h3>
     <table class="tableau"><thead><tr><th>Engin</th><th>N° de série</th><th>Centre(s)</th><th>Prochaine VGP</th><th>Dans</th><th>État</th></tr></thead><tbody>
     ${lignes.map(x => `<tr><td>${esc(libelleEngin(x.e).replace(/ n°.*$/, ''))}</td><td>${esc(x.e.numero_serie || '')}</td><td>${esc(nomsCentres(centresEngins.get(x.e.id))) || '—'}</td>
       <td>${x.ech ? esc(dateFr(x.ech)) : '—'}</td>

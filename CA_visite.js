@@ -122,8 +122,10 @@ async function rendreReperages(zone) {
   const { data, error } = await sb.from('visites_prealables').select('*').order('date_visite', { ascending: false });
   if (error) { zone.innerHTML = ''; return; }
   const peut = ['formateur', 'admin'].includes(S.profil?.role);
-  zone.innerHTML = `<div class="carte"><div class="barre-actions"><h3>Repérages clients (visites préalables intra)</h3>
-    ${peut ? '<button class="principal" onclick="ouvrirFicheVisite(null,false)">+ Nouveau repérage</button>' : ''}</div>
+  const nbKo = (data || []).filter(v => !v.conforme).length;
+  const sum = $('#sum-reperages');
+  if (sum) sum.innerHTML = !(data || []).length ? '<span class="etat">aucun</span>' : nbKo ? `<span class="etat avertissement">${data.length} dont ${nbKo} à compléter</span>` : `<span class="etat ok">${data.length} conforme${data.length > 1 ? 's' : ''}</span>`;
+  zone.innerHTML = `<div class="carte">${peut ? '<div class="barre-actions"><span></span><button class="principal" onclick="ouvrirFicheVisite(null,false)">+ Nouveau repérage</button></div>' : ''}
     ${(data || []).length ? `<table class="table"><thead><tr><th>Client</th><th>Site</th><th>Date</th><th>Catégories</th><th>État</th><th></th></tr></thead><tbody>
       ${data.map(v => `<tr><td>${esc(v.client) || '—'}</td><td>${esc(v.adresse_site) || '—'}</td><td>${v.date_visite ? dateFr(v.date_visite) : '—'}</td>
         <td>${(v.categories || []).map(c => esc(c.referentiel_code + ' ' + c.categorie_code)).join(', ') || '—'}</td>

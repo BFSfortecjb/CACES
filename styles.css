@@ -651,3 +651,11 @@ html, body { overflow-x: hidden; max-width: 100%; }
   .modale { width: 100%; }
   .modale-fond { padding: 12px 8px; }
 }
+
+details.repliable { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; margin: 0 0 10px; padding: 0 14px; }
+details.repliable > summary { cursor: pointer; padding: 12px 0; list-style: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+details.repliable > summary::-webkit-details-marker { display: none; }
+details.repliable > summary::before { content: "▸"; color: #777; }
+details.repliable[open] > summary::before { content: "▾"; }
+details.repliable[hidden] { display: none; }
+details.repliable > div { padding-bottom: 12px; }

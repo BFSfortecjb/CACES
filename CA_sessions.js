@@ -45,6 +45,8 @@ async function rendreSessions(zone) {
   const peutEcrire = S.profil?.role === 'admin' || S.profil?.role === 'formateur';
 
   zone.innerHTML = `
+    <details class="repliable" id="det-vgp" hidden><summary><b>VGP des engins du centre</b> <span id="sum-vgp"></span></summary><div id="alerte-vgp"></div></details>
+    <details class="repliable" id="det-reperages"><summary><b>Repérages clients (visites préalables intra)</b> <span id="sum-reperages"></span></summary><div id="reperages"></div></details>
     <div class="barre-actions">
       <h2>Sessions de formation</h2>
       ${peutEcrire ? '<button class="principal" onclick="nouvelleSession()">+ Nouvelle session</button>' : ''}
@@ -69,9 +71,7 @@ async function rendreSessions(zone) {
                 onclick="supprimerSession('${s.id}')">🗑</button>` : ''}</td>
         </tr>`).join('') || '<tr><td colspan="11" class="vide">Aucune session pour le moment.</td></tr>'}
       </tbody>
-    </table>
-    <div id="reperages"></div>
-    <div id="alerte-vgp"></div>`;
+    </table>`;
   if (typeof rendreReperages === 'function') rendreReperages($('#reperages'));
   if (typeof rendreAlerteVgp === 'function') rendreAlerteVgp($('#alerte-vgp'));
 }
