@@ -277,12 +277,24 @@ const nomFormateur = id => {
 };
 
 /* -------------------------- référentiel ---------------------------- */
+/** Lit toute une table par pages de 1000 lignes (limite de l'API : sans cela les grilles au-delà de 1000 critères sont tronquées). */
+async function lireToutesLesLignes(fabrique) {
+  const lignes = [];
+  for (let debut = 0; ; debut += 1000) {
+    const { data, error } = await fabrique().range(debut, debut + 999);
+    if (error) return { data: lignes, error };
+    lignes.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: lignes, error: null };
+}
+
 async function chargerReferentiel() {
   const [refs, cats, themes, criteres, centres] = await Promise.all([
     sb.from('referentiels').select('*').order('code'),
     sb.from('categories_referentiel').select('*').order('referentiel_code').order('code'),
     sb.from('themes_referentiel').select('*').order('referentiel_code').order('id'),
-    sb.from('criteres_pratique').select('*').order('referentiel_code').order('categorie_code').order('ordre'),
+    lireToutesLesLignes(() => sb.from('criteres_pratique').select('*').order('referentiel_code').order('categorie_code').order('ordre').order('id')),
     sb.from('centres_examen').select('*').eq('actif', true).order('nom'),
   ]);
   S.referentiel = {
