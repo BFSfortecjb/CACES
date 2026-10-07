@@ -70,7 +70,9 @@ async function rendreSessions(zone) {
         </tr>`).join('') || '<tr><td colspan="11" class="vide">Aucune session pour le moment.</td></tr>'}
       </tbody>
     </table>
+    <div id="reperages"></div>
     <div id="alerte-vgp"></div>`;
+  if (typeof rendreReperages === 'function') rendreReperages($('#reperages'));
   if (typeof rendreAlerteVgp === 'function') rendreAlerteVgp($('#alerte-vgp'));
 }
 
@@ -113,7 +115,7 @@ function nouvelleSession() {
           <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null, null, true)}</select></label>
         <label>Lieu de réalisation des tests
           <select name="lieu_choix">${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
-            <option value="client">Chez le client (intra) — visite préalable obligatoire</option></select></label>
+            <option value="client">Chez le client (intra) — repérage client obligatoire</option></select></label>
         <label id="bloc-agence-org" hidden>Agence organisatrice (cachet, secrétariat)
           <select name="agence_org"><option value="">—</option>${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
         <label class="case"><input type="checkbox" name="en_cdt"> Test en conditions de travail (CDT)</label>
@@ -320,7 +322,7 @@ async function rendreDetailSession(zone) {
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerLieuSession(this.value)">
           ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${s.lieu_type !== 'client' && c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
           <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>Chez le client (intra)</option></select></div>
-        ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Visite préalable</button>' : ''}</div>
+        ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Repérage client</button>' : ''}</div>
       ${s.lieu_type === 'client' ? `<div><b>Agence organisatrice (cachet, secrétariat)</b><div>
         <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
           <option value="">— à choisir —</option>
