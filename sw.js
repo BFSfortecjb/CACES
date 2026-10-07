@@ -25,7 +25,7 @@
 // à servir indéfiniment les anciens fichiers en cache (voir la règle
 // ci-dessus), même après un rechargement forcé (Ctrl+F5 ne contourne PAS
 // le service worker).
-const CACHE_VERSION = 'caces-shell-v42';
+const CACHE_VERSION = 'caces-shell-v43';
 
 const FICHIERS_APP_SHELL = [
   './',

@@ -176,7 +176,7 @@ async function afficherDocumentsEngin(id, e, contexte, peutEcrire) {
 
   zone.innerHTML = `
     <h4 class="titre-theme">Documents (état au ${esc(dateFr(contexte.session?.date_debut || new Date().toISOString()))})</h4>
-    <table class="tableau"><thead><tr><th>Document</th><th>État</th><th>Date</th><th>Échéance</th><th>Photos</th><th></th></tr></thead><tbody>
+    <table class="tableau"><thead><tr><th>Document</th><th>État</th><th>Date</th><th>Échéance</th><th>Fichiers</th><th></th></tr></thead><tbody>
     ${(st.data || []).map(x => `<tr>
       <td>${esc(x.libelle)}${x.obligatoire ? ' <b title="À présenter le jour du test">*</b>' : ''}</td>
       <td><span class="etat ${cocher(x.type_code) ? (x.statut === 'manquant' ? 'neutre' : 'ok') : (x.statut === 'manquant' && !x.obligatoire ? 'neutre' : CLASSE_STATUT_DOC[x.statut])}">${esc(cocher(x.type_code) ? (x.statut === 'manquant' ? 'Non vérifié' : 'Vérifié') : (x.statut === 'manquant' && !x.obligatoire ? 'Non fourni' : LIBELLE_STATUT_DOC[x.statut]))}</span></td>
@@ -221,7 +221,7 @@ async function afficherDocumentsEngin(id, e, contexte, peutEcrire) {
     formulaireDocumentEngin(id, e, dernierParId(docs.data, b.dataset.modif).type_code, contexte, dernierParId(docs.data, b.dataset.modif))));
   zone.querySelectorAll('[data-suppr]').forEach(b => b.addEventListener('click', async () => {
     const d = dernierParId(docs.data, b.dataset.suppr);
-    if (!confirmer(`Supprimer ce document (${(window.TYPES_DOC_ENGIN || {})[d.type_code] || d.type_code}, ${dateFr(d.date_document)}) ? Les photos déjà envoyées restent sur le Drive.`)) return;
+    if (!confirmer(`Supprimer ce document (${(window.TYPES_DOC_ENGIN || {})[d.type_code] || d.type_code}, ${dateFr(d.date_document)}) ? Les fichiers déjà envoyés restent sur le Drive.`)) return;
     const { error } = await sb.from('engin_documents').delete().eq('id', d.id);
     if (error) return erreurSupabase('Suppression du document', error);
     toast('Document supprimé'); afficherDocumentsEngin(id, e, contexte, peutEcrire);
@@ -248,7 +248,7 @@ function formulaireDocumentEngin(engId, e, typeCode, contexte, doc = null) {
       <label>Date du document / de la vérification <input type="date" name="date_document" value="${v.date_document || new Date().toISOString().slice(0, 10)}"></label>
       ${type.avec_echeance ? `<label>Échéance (prochaine vérification, lue sur le rapport) <input type="date" name="date_echeance" value="${v.date_echeance || ''}"></label>` : ''}
       <label>Référence <input name="reference" value="${esc(v.reference || '')}" placeholder="N° de rapport…"></label>
-      <label>${doc ? 'Nouvelles photos (remplacent les photos actuelles)' : 'Photos du document'} <input type="file" name="photos" accept="image/*" capture="environment" multiple></label></div>
+      <label>${doc ? 'Nouveaux fichiers (remplacent les actuels)' : 'Photos ou PDF du document'} <input type="file" name="photos" accept="image/*,application/pdf" multiple></label></div>
       <label class="case"><input type="checkbox" name="physique" ${v.present_physiquement ? 'checked' : ''}>
         Document présent physiquement <span class="aide">(gros document, ex. notice d'instructions : pas de scan, il est conservé avec l'engin)</span></label>
       ${doc && (v.fichiers || []).length ? `<p class="aide">${v.fichiers.length} photo(s) actuelle(s) conservée(s) si vous n'en ajoutez pas de nouvelles.</p>` : ''}

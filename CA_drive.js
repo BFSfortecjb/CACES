@@ -32,14 +32,27 @@ async function envoyerSurDrive(chemin, nomFichier, mimeType, contenuBase64) {
   return { id: data.fichier_id, nom: nomFichier, lien: data.lien };
 }
 
-/** Photos choisies/prises dans un <input type=file> → Drive. Renvoie la liste de références. */
+const TAILLE_MAX_PDF = 8 * 1024 * 1024;   // 8 Mo : au-delà, le scan est à compresser ou le document à garder « présent physiquement »
+
+const lireEnBase64 = fichier => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result).split(',')[1]);
+  r.onerror = () => reject(new Error('Fichier illisible'));
+  r.readAsDataURL(fichier);
+});
+
+/** Photos ou PDF choisis dans un <input type=file> → Drive. Les photos sont réduites ; les PDF sont envoyés tels quels. */
 async function envoyerPhotosSurDrive(input, chemin, prefixeNom) {
   const refs = [];
   const fichiers = Array.from(input.files || []);
   for (let i = 0; i < fichiers.length; i++) {
-    const b64 = await reduirePhoto(fichiers[i]);
-    const horodatage = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    refs.push(await envoyerSurDrive(chemin, `${prefixeNom}_${horodatage}_${i + 1}.jpg`, 'image/jpeg', b64));
+    const f = fichiers[i], horodatage = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+      if (f.size > TAILLE_MAX_PDF) throw new Error(`« ${f.name} » dépasse 8 Mo : compressez-le, ou cochez « présent physiquement » pour un gros document.`);
+      refs.push(await envoyerSurDrive(chemin, `${prefixeNom}_${horodatage}_${i + 1}.pdf`, 'application/pdf', await lireEnBase64(f)));
+    } else {
+      refs.push(await envoyerSurDrive(chemin, `${prefixeNom}_${horodatage}_${i + 1}.jpg`, 'image/jpeg', await reduirePhoto(f)));
+    }
   }
   return refs;
 }
