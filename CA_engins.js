@@ -94,7 +94,7 @@ async function ouvrirFicheEngin(id, contexte = {}) {
     <form id="form-engin" class="formulaire">
       <div class="grille-2">
         <label>Désignation <input name="designation" required value="${esc(e.designation)}" placeholder="Ex : Pelle hydraulique 21 t"></label>
-        <label>Type d'engin <select name="type_engin">${typesEnginOptions(e.type_engin)}</select>
+        <label id="bloc-type-engin" hidden>Type d'engin <select name="type_engin">${typesEnginOptions(e.type_engin)}</select>
           <span class="aide">Sert à choisir automatiquement la bonne grille pratique (ex. motobasculeur, chargeuse ou compacteur pour la cat. A).</span></label>
         <label>Marque <input name="marque" value="${esc(e.marque || '')}"></label>
         <label>Modèle <input name="modele" value="${esc(e.modele || '')}"></label>
@@ -118,13 +118,25 @@ async function ouvrirFicheEngin(id, contexte = {}) {
     </form>
     <div id="zone-docs-engin"></div>`);
 
+  // Le type d'engin n'a de sens que pour les catégories R482A à plusieurs types : on ne l'affiche qu'une fois ces catégories cochées
+  const majTypeEngin = () => {
+    const cochees = $$('#form-engin input[name=cat]:checked').map(i => i.value.split('|'));   // [code, référentiel]
+    const permis = new Set(cochees.filter(([, r]) => r === 'R482A').map(([c]) => c));
+    const sel = $('#form-engin select[name=type_engin]');
+    [...sel.options].forEach(o => { o.hidden = !!o.value && !permis.has(o.value.split(':')[0]); o.disabled = o.hidden; });
+    if (sel.selectedOptions[0]?.disabled) sel.value = '';
+    $('#bloc-type-engin').hidden = ![...sel.options].some(o => o.value && !o.disabled);
+  };
+  $$('#form-engin input[name=cat]').forEach(i => i.addEventListener('change', majTypeEngin));
+  majTypeEngin();
+
   $('#form-engin').addEventListener('submit', async ev => {
     ev.preventDefault();
     const f = ev.target;
     const cs = $$('#form-engin input[name=cat]:checked').map(i => { const [c, r] = i.value.split('|'); return r + ' ' + c; });
     const refs = [...new Set($$('#form-engin input[name=cat]:checked').map(i => i.value.split('|')[1]))];
     const donnees = {
-      designation: f.designation.value.trim(), type_engin: f.type_engin.value.trim() || null,
+      designation: f.designation.value.trim(), type_engin: ($('#bloc-type-engin').hidden ? '' : f.type_engin.value.trim()) || null,
       marque: f.marque.value.trim() || null, modele: f.modele.value.trim() || null,
       numero_serie: f.numero_serie.value.trim() || null, annee: f.annee.value ? Number(f.annee.value) : null,
       provenance: f.provenance.value, proprietaire: f.proprietaire.value.trim() || null,
