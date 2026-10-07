@@ -105,7 +105,7 @@ function ecranFormateur(cible) {
   cible.innerHTML = `
     <header class="entete">
       <div class="titre">${esc(CONFIG.NOM_APPLICATION)}
-        <span class="badge">${esc(S.organisme?.raison_sociale || '')}</span></div>
+        ${S.organisme?.raison_sociale ? `<span class="badge">${esc(S.organisme.raison_sociale)}</span>` : ''}</div>
       <nav class="onglets">
         ${ongletsVisibles().map(([id, lib]) =>
           `<button data-onglet="${id}" class="${S.ecran === id ? 'actif' : ''}">${esc(lib)}</button>`).join('')}
