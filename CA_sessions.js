@@ -212,6 +212,12 @@ async function modifierLieuSession() {
   rendreDetailSession($('#contenu'));
 }
 
+async function changerAgenceSession(id) {
+  await modifierChampSession('centre_examen_id', id ? Number(id) : null, 'agence');
+  toast('Agence de la session mise à jour');
+  rendreDetailSession($('#contenu'));
+}
+
 async function changerFormateurSession(id) {
   if (id && id === S.session.testeur_id && !cumulAutorise(S.session.type_session, id)) {
     toast('Le formateur ne peut pas être aussi le testeur de la session.', 'erreur', 6000);
@@ -307,6 +313,10 @@ async function rendreDetailSession(zone) {
         ${d.ecriture ? '<button class="lien" onclick="modifierNumeroGalaxy()">Modifier</button>' : ''}</div>
       <div><b>Lieu</b><div>${esc(s.lieu) || '<i>non renseigné</i>'}</div>
         ${d.ecriture ? '<button class="lien" onclick="modifierLieuSession()">Modifier</button>' : ''}</div>
+      <div><b>Agence (cachet, secrétariat)</b><div>
+        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
+          <option value="">— à choisir —</option>
+          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div></div>
       <div><b>Formateur (FISE, horomètre)</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
           ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div></div>
