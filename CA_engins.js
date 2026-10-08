@@ -429,7 +429,7 @@ async function rendreAlerteVgp(zone) {
   const aujourdhui = new Date(); aujourdhui.setHours(12, 0, 0, 0);
   const lignes = soumis.map(e => {
     const l = (docs || []).filter(d => d.engin_id === e.id)
-      .sort((a, b) => String(b.date_document || b.created_at).localeCompare(String(a.date_document || a.created_at)))[0];
+      .sort((a, b) => String(b.date_document || '').localeCompare(String(a.date_document || '')) || String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
     const ech = l?.date_echeance || null;
     const jours = ech ? Math.round((new Date(ech + 'T12:00:00') - aujourdhui) / 86400000) : null;
     const etat = !l ? 'manquante' : !ech ? 'a_saisir' : l.observations_ouvertes ? 'observations' : jours < 0 ? 'expiree' : jours <= 30 ? 'urgent' : jours <= 90 ? 'proche' : 'ok';
