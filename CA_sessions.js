@@ -398,43 +398,62 @@ async function rendreDetailSession(zone) {
       </div>
     </div>
 
-    <div class="carte info-passation">
-      <div><b>Code à dicter en salle</b><div class="code-geant">${esc(s.code_acces)}</div></div>
-      <div><b>Adresse de connexion stagiaires</b><div><code>${esc(lien)}</code></div>
-        <button class="lien" onclick="navigator.clipboard.writeText('${esc(lien)}');toast('Lien copié')">Copier le lien</button></div>
-      <div><b>N° de session Galaxy</b><div>${esc(s.numero_session_galaxy) || '<i>non renseigné</i>'}</div>
-        ${d.ecriture ? '<button class="lien" onclick="modifierNumeroGalaxy()">Modifier</button>' : ''}</div>
-      <div><b>Lieu des tests</b><div>
-        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerLieuSession(this.value)">
-          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${s.lieu_type !== 'client' && c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
-          <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>Chez le client (intra)</option></select></div>
-        ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Repérage client</button>' : ''}</div>
-      ${s.lieu_type === 'client' ? `<div><b>Agence organisatrice (cachet, secrétariat)</b><div>
-        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
-          <option value="">— à choisir —</option>
-          ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div></div>` : ''}
-      <div><b>Catégories visées</b><div>${s._categories.map(c => `<span class="puce">${esc(c.referentiel_code)} ${esc(c.categorie_code)}</span>`).join(' ') || '<i>aucune</i>'}</div>
-        ${d.ecriture && !cloturee ? '<button class="lien" onclick="modifierCategoriesSession()">Modifier</button>' : ''}</div>
-      <div><b>Formateur (FISE, horomètre)${s._groupes.length ? ' — groupe 1' : ''}</b><div>
-        <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
-          ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div></div>
-      <div><b>Testeur principal (QCM, pratique)</b><div>
-        <select ${d.ecriture ? '' : 'disabled'} onchange="changerTesteurSession(this.value)">
-          <option value="">— à affecter —</option>${optionsPersonnes(s.testeur_id, null, true, s._categories)}</select></div></div>
-${s._groupes.length ? s._groupes.map(g => `<div><b>Formateur — groupe 2</b><div>
-        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerEquipeGroupe('formateur_id', this.value)">
-          <option value="">— à affecter —</option>${optionsPersonnes(g.formateur_id, null, false, s._categories)}</select></div>
-        ${d.ecriture && !cloturee ? '<button class="lien" onclick="supprimerGroupe2()">Supprimer le groupe 2</button>' : ''}</div>`).join('')
-        : (d.ecriture && !cloturee && s.type_session === 'caces' ? '<div><b>Groupes</b><div><button onclick="scinderSession()" title="Répartit les stagiaires en 2 groupes, chacun avec son formateur ; les testeurs restent libres (sauf pour leurs propres stagiaires)">✂ Scinder en 2 groupes</button></div></div>' : '')}
-      <div><b>Autres testeurs de la session</b><div>
-        ${(s._testeurs || []).map(t => `<span class="puce">${esc(nomFormateur(t))}${d.ecriture && !cloturee ? ` <button class="icone" title="Retirer" onclick="retirerTesteurSession('${t}')">✕</button>` : ''}</span>`).join(' ') || '<i>aucun</i>'}</div>
-        ${d.ecriture && !cloturee ? `<select onchange="ajouterTesteurSession(this.value)"><option value="">+ Ajouter un testeur…</option>${optionsPersonnes(null, null, true, s._categories)}</select>` : ''}
-        <div class="aide">Un testeur peut tester tous les stagiaires sauf ceux dont il est le formateur.</div></div>
-      <details class="qr-repliable">
-        <summary><b>QR code examen</b></summary>
-        <div id="qr-passation"></div>
-        <p id="qr-erreur" class="erreur-discrete" hidden></p>
-      </details>
+    <div class="carte fiche-session">
+      <section class="bloc">
+        <h4>Accès stagiaires</h4>
+        <div class="acces-stagiaires">
+          <div class="champ"><span class="etiquette">Code à dicter en salle</span><div class="code-geant">${esc(s.code_acces)}</div></div>
+          <div class="champ champ-large"><span class="etiquette">Adresse de connexion</span><div><code>${esc(lien)}</code></div>
+            <button class="lien" onclick="navigator.clipboard.writeText('${esc(lien)}');toast('Lien copié')">Copier le lien</button></div>
+          <details class="qr-repliable">
+            <summary><b>QR code examen</b></summary>
+            <div id="qr-passation"></div>
+            <p id="qr-erreur" class="erreur-discrete" hidden></p>
+          </details>
+        </div>
+      </section>
+
+      <section class="bloc">
+        <h4>Session</h4>
+        <div class="grille-champs">
+          <div class="champ"><span class="etiquette">N° de session Galaxy</span>
+            <div class="valeur">${esc(s.numero_session_galaxy) || '<i>non renseigné</i>'}
+              ${d.ecriture ? '<button class="lien" onclick="modifierNumeroGalaxy()">Modifier</button>' : ''}</div></div>
+          <div class="champ"><span class="etiquette">Lieu des tests</span>
+            <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerLieuSession(this.value)">
+              ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${s.lieu_type !== 'client' && c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
+              <option value="client" ${s.lieu_type === 'client' ? 'selected' : ''}>Chez le client (intra)</option></select>
+            ${s.lieu_type === 'client' ? '<div id="visite-statut"></div><button class="principal" onclick="ouvrirVisitePrealable()">📋 Repérage client</button>' : ''}</div>
+          ${s.lieu_type === 'client' ? `<div class="champ"><span class="etiquette">Agence organisatrice (cachet, secrétariat)</span>
+            <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerAgenceSession(this.value)">
+              <option value="">— à choisir —</option>
+              ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div>` : ''}
+          <div class="champ"><span class="etiquette">Catégories visées</span>
+            <div class="valeur">${s._categories.map(c => `<span class="puce">${esc(c.referentiel_code)} ${esc(c.categorie_code)}</span>`).join(' ') || '<i>aucune</i>'}
+              ${d.ecriture && !cloturee ? '<button class="lien" onclick="modifierCategoriesSession()">Modifier</button>' : ''}</div></div>
+        </div>
+      </section>
+
+      <section class="bloc">
+        <h4>Équipe</h4>
+        <div class="grille-champs">
+          <div class="champ"><span class="etiquette">Formateur${s._groupes.length ? ' — groupe 1' : ''} <small>(FISE, horomètre)</small></span>
+            <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
+              ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div>
+          ${s._groupes.length ? s._groupes.map(g => `<div class="champ"><span class="etiquette">Formateur — groupe 2 <small>(FISE, horomètre)</small></span>
+            <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerEquipeGroupe('formateur_id', this.value)">
+              <option value="">— à affecter —</option>${optionsPersonnes(g.formateur_id, null, false, s._categories)}</select>
+            ${d.ecriture && !cloturee ? '<button class="lien" onclick="supprimerGroupe2()">Supprimer le groupe 2</button>' : ''}</div>`).join('')
+            : (d.ecriture && !cloturee && s.type_session === 'caces' ? '<div class="champ"><span class="etiquette">Groupes</span><button onclick="scinderSession()" title="Répartit les stagiaires en 2 groupes, chacun avec son formateur ; les testeurs restent libres (sauf pour leurs propres stagiaires)">✂ Scinder en 2 groupes</button></div>' : '')}
+          <div class="champ"><span class="etiquette">Testeur principal <small>(QCM, pratique)</small></span>
+            <select ${d.ecriture ? '' : 'disabled'} onchange="changerTesteurSession(this.value)">
+              <option value="">— à affecter —</option>${optionsPersonnes(s.testeur_id, null, true, s._categories)}</select></div>
+          <div class="champ"><span class="etiquette">Autres testeurs</span>
+            <div class="valeur">${(s._testeurs || []).map(t => `<span class="puce">${esc(nomFormateur(t))}${d.ecriture && !cloturee ? ` <button class="icone" title="Retirer" onclick="retirerTesteurSession('${t}')">✕</button>` : ''}</span>`).join(' ') || '<i>aucun</i>'}</div>
+            ${d.ecriture && !cloturee ? `<select onchange="ajouterTesteurSession(this.value)"><option value="">+ Ajouter un testeur…</option>${optionsPersonnes(null, null, true, s._categories)}</select>` : ''}
+            <div class="aide">Tous les stagiaires, sauf ceux dont il est le formateur.</div></div>
+        </div>
+      </section>
     </div>
 
     ${bandeauUt}

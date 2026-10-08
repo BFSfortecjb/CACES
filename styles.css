@@ -659,3 +659,19 @@ details.repliable > summary::before { content: "▸"; color: #777; }
 details.repliable[open] > summary::before { content: "▾"; }
 details.repliable[hidden] { display: none; }
 details.repliable > div { padding-bottom: 12px; }
+
+/* Fiche de session : 3 blocs (accès stagiaires, session, équipe) */
+.fiche-session { display: grid; gap: 4px; padding: 6px 18px 14px; }
+.fiche-session .bloc { padding: 10px 0 14px; border-top: 1px solid #ececec; }
+.fiche-session .bloc:first-child { border-top: 0; }
+.fiche-session h4 { margin: 0 0 10px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #777; }
+.fiche-session .grille-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 28px; align-items: start; }
+.fiche-session .acces-stagiaires { display: flex; flex-wrap: wrap; gap: 14px 32px; align-items: flex-start; }
+.fiche-session .champ { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.fiche-session .champ-large { flex: 1 1 320px; }
+.fiche-session .etiquette { font-weight: 700; font-size: 14px; }
+.fiche-session .etiquette small { font-weight: 400; color: #777; }
+.fiche-session .champ select { width: 100%; max-width: 100%; }
+.fiche-session .valeur { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fiche-session .champ .lien, .fiche-session .champ > button { align-self: flex-start; }
+.fiche-session .qr-repliable { align-self: flex-start; }
