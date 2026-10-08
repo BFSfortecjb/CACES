@@ -56,7 +56,7 @@ async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
       if (!conforme && !(nc.traitee && nc.fiche))
         return toast('Point(s) non conforme(s) : coche « traitée immédiatement » et « fiche de non-conformité ».', 'erreur', 6000);
       const { error } = await sb.from('adequations_session').upsert({
-        session_id: sessionId, engin_id: engin.id, testeur_id: ((S.session._groupes || []).some(g => g.testeur_id === S.profil?.id) && S.session.testeur_id !== S.profil?.id) ? S.profil.id : S.session.testeur_id, date_examen: new Date().toISOString(),
+        session_id: sessionId, engin_id: engin.id, testeur_id: testeurDeLEpreuve(), date_examen: new Date().toISOString(),
         points: pts, non_conformite: conforme ? null : nc, conforme }, { onConflict: 'session_id,engin_id' });
       if (error) return erreurSupabase('Enregistrement de l\'examen d\'adéquation', error);
       toast(conforme ? 'Examen d\'adéquation enregistré' : 'Non-conformité enregistrée : le test reste bloqué', conforme ? undefined : 'erreur', 5000);

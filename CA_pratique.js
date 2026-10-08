@@ -408,7 +408,7 @@ async function afficherPratique(st, cat) {
       id: (crypto.randomUUID ? crypto.randomUUID() : null),
       epreuve: {
         stagiaire_id: st.id, session_id: S.session.id, referentiel_code: cat.referentiel_code, categorie_code: cat.categorie_code,
-        formateur_id: equipeStagiaire(st).formateur_id, testeur_id: equipeStagiaire(st).testeur_id,
+        formateur_id: equipeStagiaire(st).formateur_id, testeur_id: testeurDeLEpreuve(),
         mode_essai: !!$('#prat-essai')?.checked,
         engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: acquises.length ? acquises : null,
         ut_options: opts.reduce((s2, k) => s2 + OPTIONS_PRATIQUE[k].ut, 0),

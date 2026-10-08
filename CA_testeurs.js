@@ -174,7 +174,7 @@ async function debloquerCodeTesteur(id) {
 /* ---- Attestation du testeur sur une session (saisie du code) ---- */
 async function testeurAAtteste(sessionId) {
   const s = S.session, moi = S.profil?.id;
-  const jeSuisTesteur = s && (s.testeur_id === moi || (s._groupes || []).some(g => g.testeur_id === moi));
+  const jeSuisTesteur = s && testeursSession(s).includes(moi);
   let q = sb.from('attestations_testeur').select('id').eq('session_id', sessionId);
   if (jeSuisTesteur) q = q.eq('testeur_id', moi);   // chaque testeur (groupe 1 ou 2) saisit son propre code
   const { data } = await q.limit(1);

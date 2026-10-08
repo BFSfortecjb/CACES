@@ -45,7 +45,7 @@ async function ouvrirPlanning() {
 
   const optionsJours = valeur => `<option value="">— jour de début —</option>` +
     jours.test.map(j => `<option value="${j}" ${valeur === j ? 'selected' : ''}>${esc(dateFr(j))}</option>`).join('');
-  const sel = (id, ref, cat, ep) => `<select ${(S.vision === 'admin' || equipeStagiaire(stagParId[id]).testeur_id === S.profil?.id) && !cloturee ? '' : 'disabled'}
+  const sel = (id, ref, cat, ep) => `<select ${peutTesterStagiaire(stagParId[id]) && !cloturee ? '' : 'disabled'}
       onchange="planifierEpreuve('${id}','${ref}','${cat}','${ep}',this.value)">${optionsJours(choix[cle(id, ref, cat, ep)])}</select>`;
 
   const lignes = (stags || []).map(st => {
