@@ -115,17 +115,18 @@ async function afficherCharges(quota, quotaPratique) {
 
 /** Bandeau de charge du testeur dans le détail d'une session (jours de test, ou jour de début à défaut). */
 async function bandeauChargeTesteur(s) {
-  if (!s.testeur_id) return '';
+  const testeurs = testeursSession(s);
+  if (!testeurs.length) return '';
   const jt = typeof joursSession === 'function' ? (await joursSession(s.id)).test : [];
   const jours = jt.length ? jt : [s.date_debut].filter(Boolean);
   if (!jours.length) return '';
-  const res = await Promise.all(jours.map(j => chargePrevueJour(s.testeur_id, j)));
-  const depasse = res.some(c => c.depasse);
-  return `<div class="carte ${depasse ? 'refus' : ''}"><b>Charge du testeur</b>
+  const resParTesteur = await Promise.all(testeurs.map(t => Promise.all(jours.map(j => chargePrevueJour(t, j)))));
+  const depasse = resParTesteur.some(res => res.some(c => c.depasse));
+  return `<div class="carte ${depasse ? 'refus' : ''}"><b>Charge ${testeurs.length > 1 ? 'des testeurs' : 'du testeur'}</b>
     <button class="lien" onclick="appelModule('ouvrirPlanning')">📅 Planning</button>
-    ${jours.map((j, i) => `<div>${esc(dateFr(j))} — prévu ${res[i].tot.toFixed(2)} UT / ${res[i].quota}
-      (dont ${res[i].prat.toFixed(2)} pratique / ${res[i].quotaPrat}) ; réalisé ${res[i].reel.toFixed(2)} UT
-      ${res[i].depasse ? ' ⚠' : ''}</div>`).join('')}
+    ${testeurs.map((t, k) => resParTesteur[k].map((c, i) => `<div>${testeurs.length > 1 ? esc(nomFormateur(t)) + ' — ' : ''}${esc(dateFr(jours[i]))} — prévu ${c.tot.toFixed(2)} UT / ${c.quota}
+      (dont ${c.prat.toFixed(2)} pratique / ${c.quotaPrat}) ; réalisé ${c.reel.toFixed(2)} UT
+      ${c.depasse ? ' ⚠' : ''}</div>`).join('')).join('')}
     ${depasse ? '<b>Attention :</b> charge prévue au-delà de la limite un jour au moins — des épreuves seraient refusées ; répartis les candidats sur un autre jour de test (📅 Planning) ou un autre testeur.' : ''}</div>`;
 }
 
@@ -172,7 +173,11 @@ async function debloquerCodeTesteur(id) {
 
 /* ---- Attestation du testeur sur une session (saisie du code) ---- */
 async function testeurAAtteste(sessionId) {
-  const { data } = await sb.from('attestations_testeur').select('id').eq('session_id', sessionId).limit(1);
+  const s = S.session, moi = S.profil?.id;
+  const jeSuisTesteur = s && (s.testeur_id === moi || (s._groupes || []).some(g => g.testeur_id === moi));
+  let q = sb.from('attestations_testeur').select('id').eq('session_id', sessionId);
+  if (jeSuisTesteur) q = q.eq('testeur_id', moi);   // chaque testeur (groupe 1 ou 2) saisit son propre code
+  const { data } = await q.limit(1);
   return !!(data && data.length);
 }
 /** À appeler avant ouvrirTheorie / ouvrirPratique : résout true si le testeur est attesté. */

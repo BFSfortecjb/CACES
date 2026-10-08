@@ -29,10 +29,11 @@ async function ouvrirPlanning() {
   const s = S.session, d = droitsSession(s), cloturee = s.statut === 'cloturee';
   const jours = await joursSession(s.id);
   const { data: stags } = await sb.from('stagiaires')
-    .select('id, nom, prenom, stagiaire_categories(referentiel_code, categorie_code, theorie_validee, pratique_validee)')
+    .select('id, nom, prenom, groupe_id, stagiaire_categories(referentiel_code, categorie_code, theorie_validee, pratique_validee)')
     .eq('session_id', s.id).order('nom');
   const { data: plan } = await sb.from('planning_tests').select('*')
     .in('stagiaire_id', (stags || []).map(x => x.id).concat(['00000000-0000-0000-0000-000000000000']));
+  const stagParId = Object.fromEntries((stags || []).map(x => [x.id, x]));
   const cle = (id, ref, cat, ep) => `${id}|${ref}|${cat}|${ep}`;
   const choix = {}; (plan || []).forEach(p => { choix[cle(p.stagiaire_id, p.referentiel_code, p.categorie_code, p.epreuve)] = p.jour; });
 
@@ -44,7 +45,7 @@ async function ouvrirPlanning() {
 
   const optionsJours = valeur => `<option value="">— jour de début —</option>` +
     jours.test.map(j => `<option value="${j}" ${valeur === j ? 'selected' : ''}>${esc(dateFr(j))}</option>`).join('');
-  const sel = (id, ref, cat, ep) => `<select ${d.testeur && !cloturee ? '' : 'disabled'}
+  const sel = (id, ref, cat, ep) => `<select ${(S.vision === 'admin' || equipeStagiaire(stagParId[id]).testeur_id === S.profil?.id) && !cloturee ? '' : 'disabled'}
       onchange="planifierEpreuve('${id}','${ref}','${cat}','${ep}',this.value)">${optionsJours(choix[cle(id, ref, cat, ep)])}</select>`;
 
   const lignes = (stags || []).map(st => {
@@ -67,17 +68,18 @@ async function ouvrirPlanning() {
     ${jours.test.length ? `<table class="tableau"><thead><tr><th>Stagiaire</th><th>Théorie (QCM)</th><th>Pratique</th></tr></thead>
       <tbody>${lignes || '<tr><td colspan="3" class="vide">Aucun stagiaire.</td></tr>'}</tbody></table>`
       : '<p class="aide">Ajoute au moins un jour de test pour répartir les épreuves.</p>'}`, { large: true });
-  if (s.testeur_id) afficherChargeJours(s, jours.test.length ? jours.test : [s.date_debut].filter(Boolean));
+  if (testeursSession(s).length) afficherChargeJours(s, jours.test.length ? jours.test : [s.date_debut].filter(Boolean));
 }
 
 async function afficherChargeJours(s, liste) {
   const zone = $('#charge-jours'); if (!zone) return;
-  const res = await Promise.all(liste.map(j => chargePrevueJour(s.testeur_id, j)));
+  const testeurs = testeursSession(s);
+  const resT = await Promise.all(testeurs.map(t => Promise.all(liste.map(j => chargePrevueJour(t, j)))));
   zone.innerHTML = '<table class="tableau"><thead><tr><th>Jour</th><th>Charge prévue du testeur</th><th>Réalisé</th></tr></thead><tbody>' +
-    liste.map((j, i) => { const c = res[i]; return `<tr><td>${esc(dateFr(j))}</td>
+    testeurs.map((t, k) => liste.map((j, i) => { const c = resT[k][i]; return `<tr><td>${testeurs.length > 1 ? esc(nomFormateur(t)) + ' — ' : ''}${esc(dateFr(j))}</td>
       <td><span class="etat ${c.depasse ? 'erreur' : ''}">${c.tot.toFixed(2)} / ${c.quota} UT</span>
         <span class="aide">dont ${c.prat.toFixed(2)} / ${c.quotaPrat} pratique</span>${c.depasse ? ' ⚠ trop chargé' : ''}</td>
-      <td>${c.reel.toFixed(2)} UT</td></tr>`; }).join('') + '</tbody></table>';
+      <td>${c.reel.toFixed(2)} UT</td></tr>`; }).join('')).join('') + '</tbody></table>';
 }
 
 async function ajouterJourSession(type) {
@@ -105,5 +107,5 @@ async function planifierEpreuve(stagiaireId, ref, cat, epreuve, jour) {
     : await sb.from('planning_tests').delete().match(cle);
   if (error) return erreurSupabase('Planification', error);
   const jours = await joursSession(S.session.id);
-  if (S.session.testeur_id) afficherChargeJours(S.session, jours.test.length ? jours.test : [S.session.date_debut].filter(Boolean));
+  if (testeursSession(S.session).length) afficherChargeJours(S.session, jours.test.length ? jours.test : [S.session.date_debut].filter(Boolean));
 }

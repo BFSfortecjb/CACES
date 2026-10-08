@@ -18,11 +18,20 @@ const STATUTS_SESSION = {
 function droitsSession(s) {
   const admin = S.vision === 'admin';
   return {
-    formateur: admin || s?.formateur_id === S.profil?.id,
-    testeur: admin || s?.testeur_id === S.profil?.id,
+    formateur: admin || s?.formateur_id === S.profil?.id || (s?._groupes || []).some(g => g.formateur_id === S.profil?.id),
+    testeur: admin || s?.testeur_id === S.profil?.id || (s?._groupes || []).some(g => g.testeur_id === S.profil?.id),
     ecriture: S.profil?.role === 'admin' || S.profil?.role === 'formateur',
   };
 }
+
+/** Équipe effective d'un stagiaire : groupe 1 (groupe_id nul) = formateur/testeur de la session ; groupe 2 = ceux du groupe. */
+function equipeStagiaire(st, s = S.session) {
+  const g = st?.groupe_id ? (s?._groupes || []).find(x => x.id === st.groupe_id) : null;
+  return st?.groupe_id ? { formateur_id: g?.formateur_id || null, testeur_id: g?.testeur_id || null }
+    : { formateur_id: s?.formateur_id || null, testeur_id: s?.testeur_id || null };
+}
+/** Testeurs distincts de la session (groupe 1 + groupe 2). */
+const testeursSession = s => [...new Set([s?.testeur_id, ...(s?._groupes || []).map(g => g.testeur_id)].filter(Boolean))];
 
 /** Une même personne peut-elle être formateur ET testeur ? (autorisation de conduite, ou dérogation individuelle) */
 const peutCumuler = id => !!(S.formateurs || []).find(f => f.id === id)?.cumul_formateur_testeur;
@@ -260,6 +269,40 @@ async function changerFormateurSession(id) {
   rendreDetailSession($('#contenu'));
 }
 
+/* ====================== Groupes (2 maximum) ====================== */
+async function scinderSession() {
+  if (!confirmer('Scinder la session en 2 groupes ? Le formateur et le testeur actuels restent ceux du groupe 1 ; tu affectes ensuite ceux du groupe 2 (en général : le formateur 1 teste le groupe 2 et inversement).')) return;
+  const { error } = await sb.from('session_groupes').insert({ session_id: S.session.id, numero: 2 });
+  if (error) return erreurSupabase('Création du groupe 2', error);
+  toast('Groupe 2 créé : affecte son formateur et son testeur, puis répartis les stagiaires');
+  rendreDetailSession($('#contenu'));
+}
+async function changerEquipeGroupe(champ, id) {
+  const g = S.session._groupes[0]; if (!g) return;
+  const autre = champ === 'formateur_id' ? g.testeur_id : g.formateur_id;
+  if (id && id === autre && !cumulAutorise(S.session.type_session, id)) {
+    toast('Dans un même groupe, le testeur doit être une personne différente du formateur.', 'erreur', 6000);
+    return rendreDetailSession($('#contenu'));
+  }
+  const { error } = await sb.from('session_groupes').update({ [champ]: id || null }).eq('id', g.id);
+  if (error) { erreurSupabase('Équipe du groupe 2', error); return rendreDetailSession($('#contenu')); }
+  toast('Groupe 2 mis à jour');
+  rendreDetailSession($('#contenu'));
+}
+async function supprimerGroupe2() {
+  if (!confirmer('Supprimer le groupe 2 ? Ses stagiaires repassent dans le groupe 1.')) return;
+  const { error } = await sb.from('session_groupes').delete().eq('session_id', S.session.id);
+  if (error) return erreurSupabase('Suppression du groupe 2', error);
+  toast('Groupe 2 supprimé');
+  rendreDetailSession($('#contenu'));
+}
+async function changerGroupeStagiaire(stagiaireId, valeur) {
+  const g = (S.session._groupes || [])[0];
+  const { error } = await sb.from('stagiaires').update({ groupe_id: valeur === '2' && g ? g.id : null }).eq('id', stagiaireId);
+  if (error) erreurSupabase('Changement de groupe', error);
+  rendreDetailSession($('#contenu'));
+}
+
 async function changerTesteurSession(id) {
   if (id && id === S.session.formateur_id && !cumulAutorise(S.session.type_session, id)) {
     toast('Le testeur doit être une personne différente du formateur.', 'erreur', 6000);
@@ -310,15 +353,17 @@ const LIBELLE_CLASSE_TITRE = {
 async function rendreDetailSession(zone) {
   const s = S.session;
   zone.innerHTML = '<p class="chargement">Chargement…</p>';
-  const d = droitsSession(s);
 
-  const [{ data: stagiaires, error }, { data: cats }] = await Promise.all([
+  const [{ data: stagiaires, error }, { data: cats }, { data: groupes }] = await Promise.all([
     sb.from('stagiaires').select('*, stagiaire_categories(referentiel_code, categorie_code, theorie_validee, pratique_validee)')
       .eq('session_id', s.id).order('ordre').order('nom'),
     sb.from('session_categories').select('referentiel_code, categorie_code').eq('session_id', s.id),
+    sb.from('session_groupes').select('*').eq('session_id', s.id).order('numero'),
   ]);
   if (error) return erreurSupabase('Lecture des stagiaires', error);
   s._categories = cats || [];
+  s._groupes = groupes || [];
+  const d = droitsSession(s);
 
   const engins = typeof resumeEnginsSession === 'function' ? await resumeEnginsSession(s.id) : { nb: 0, rouges: 0 };
   const bandeauUt = (typeof bandeauChargeTesteur === 'function' && s.type_session !== 'autorisation') ? await bandeauChargeTesteur(s) : '';
@@ -354,12 +399,20 @@ async function rendreDetailSession(zone) {
           ${(S.referentiel.centres || []).map(c => `<option value="${c.id}" ${c.id === s.centre_examen_id ? 'selected' : ''}>${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></div></div>` : ''}
       <div><b>Catégories visées</b><div>${s._categories.map(c => `<span class="puce">${esc(c.referentiel_code)} ${esc(c.categorie_code)}</span>`).join(' ') || '<i>aucune</i>'}</div>
         ${d.ecriture && !cloturee ? '<button class="lien" onclick="modifierCategoriesSession()">Modifier</button>' : ''}</div>
-      <div><b>Formateur (FISE, horomètre)</b><div>
+      <div><b>Formateur (FISE, horomètre)${s._groupes.length ? ' — groupe 1' : ''}</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerFormateurSession(this.value)">
           ${optionsPersonnes(s.formateur_id, null, false, s._categories)}</select></div></div>
-      <div><b>Testeur (QCM, pratique)</b><div>
+      <div><b>Testeur (QCM, pratique)${s._groupes.length ? ' — groupe 1' : ''}</b><div>
         <select ${d.ecriture ? '' : 'disabled'} onchange="changerTesteurSession(this.value)">
           <option value="">— à affecter —</option>${optionsPersonnes(s.testeur_id, null, true, s._categories)}</select></div></div>
+${s._groupes.length ? s._groupes.map(g => `<div><b>Formateur — groupe 2</b><div>
+        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerEquipeGroupe('formateur_id', this.value)">
+          <option value="">— à affecter —</option>${optionsPersonnes(g.formateur_id, null, false, s._categories)}</select></div></div>
+      <div><b>Testeur — groupe 2</b><div>
+        <select ${d.ecriture && !cloturee ? '' : 'disabled'} onchange="changerEquipeGroupe('testeur_id', this.value)">
+          <option value="">— à affecter —</option>${optionsPersonnes(g.testeur_id, null, true, s._categories)}</select></div>
+        ${d.ecriture && !cloturee ? '<button class="lien" onclick="supprimerGroupe2()">Supprimer le groupe 2</button>' : ''}</div>`).join('')
+        : (d.ecriture && !cloturee && s.type_session === 'caces' ? '<div><b>Groupes</b><div><button onclick="scinderSession()" title="Répartit les stagiaires en 2 groupes : chaque formateur teste le groupe de l\'autre">✂ Scinder en 2 groupes</button></div></div>' : '')}
       <details class="qr-repliable">
         <summary><b>QR code examen</b></summary>
         <div id="qr-passation"></div>
@@ -387,10 +440,10 @@ async function rendreDetailSession(zone) {
     </div>
 
     <table class="tableau">
-      <thead><tr><th>Nom</th><th>Prénom</th><th>Fonction</th><th>Catégories visées</th>
+      <thead><tr><th>Nom</th><th>Prénom</th><th>Fonction</th><th>Catégories visées</th>${s._groupes.length ? '<th>Groupe</th>' : ''}
         <th>Actions</th></tr></thead>
       <tbody>${(stagiaires || []).map(st => ligneStagiaire(st, d)).join('')
-        || '<tr><td colspan="5" class="vide">Aucun stagiaire. Ajoute-les un par un ou importe un fichier Excel.</td></tr>'}
+        || '<tr><td colspan="6" class="vide">Aucun stagiaire. Ajoute-les un par un ou importe un fichier Excel.</td></tr>'}
       </tbody>
     </table>`;
 
@@ -411,9 +464,14 @@ function ligneStagiaire(st, d) {
   const btn = (autorise, icone, titre, appel, raison) => `<button class="icone" ${autorise ? '' : 'disabled'}
       title="${esc(autorise ? titre : titre + ' — ' + raison)}" onclick="${appel}">${icone}</button>`;
   const id = st.id;
+  const admin = S.vision === 'admin', eq = equipeStagiaire(st);
+  d = { ...d, formateur: admin || eq.formateur_id === S.profil?.id, testeur: admin || eq.testeur_id === S.profil?.id };
+  const groupes = S.session?._groupes || [];
+  const celluleGroupe = !groupes.length ? '' : `<td><select ${d.ecriture && S.session.statut !== 'cloturee' ? '' : 'disabled'} onchange="changerGroupeStagiaire('${id}', this.value)">
+      <option value="1" ${st.groupe_id ? '' : 'selected'}>Groupe 1</option><option value="2" ${st.groupe_id ? 'selected' : ''}>Groupe 2</option></select></td>`;
   return `<tr>
     <td>${esc(st.nom)}</td><td>${esc(st.prenom)}</td><td>${esc(st.fonction)}</td>
-    <td>${puces}</td>
+    <td>${puces}</td>${celluleGroupe}
     <td class="actions">
       ${btn(d.formateur, '📋', 'FISE — évaluation en formation (formateur)', `appelModule('ouvrirFise','${id}')`, 'réservé au formateur de la session')}
       ${btn(d.formateur, '⏱', 'Suivi horomètre (formateur)', `appelModule('ouvrirHorometre','${id}')`, 'réservé au formateur de la session')}

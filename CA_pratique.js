@@ -79,7 +79,7 @@ function calculerPratique(tous, points, opt = {}) {
 
 async function ouvrirPratique(stagiaireId) {
   const { data: st, error } = await sb.from('stagiaires')
-    .select('id, nom, prenom, stagiaire_categories(referentiel_code, categorie_code, pratique_validee)').eq('id', stagiaireId).single();
+    .select('id, nom, prenom, groupe_id, stagiaire_categories(referentiel_code, categorie_code, pratique_validee)').eq('id', stagiaireId).single();
   if (error) return erreurSupabase('Lecture du stagiaire', error);
   const cats = st.stagiaire_categories || [];
   if (!cats.length) return toast('Ce stagiaire n\'a aucune catégorie visée.', 'erreur');
@@ -408,7 +408,7 @@ async function afficherPratique(st, cat) {
       id: (crypto.randomUUID ? crypto.randomUUID() : null),
       epreuve: {
         stagiaire_id: st.id, session_id: S.session.id, referentiel_code: cat.referentiel_code, categorie_code: cat.categorie_code,
-        formateur_id: S.session.formateur_id, testeur_id: S.session.testeur_id,
+        formateur_id: equipeStagiaire(st).formateur_id, testeur_id: equipeStagiaire(st).testeur_id,
         mode_essai: !!$('#prat-essai')?.checked,
         engin_id: engins[0] || null, engin_secondaire_id: engins[1] || null, options: acquises.length ? acquises : null,
         ut_options: opts.reduce((s2, k) => s2 + OPTIONS_PRATIQUE[k].ut, 0),
