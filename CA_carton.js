@@ -26,6 +26,8 @@ async function categoriesValidees(stagiaireId) {
 
 /* Signataire du carton (à terme : Paramètres > Organisme). */
 const SIGNATAIRE_CARTON = 'M.BOUA - Gérant';
+const NUMERO_INRS = 'D-609-03';        // « Inscrit dans la base INRS sous le n° … » (verso du carton)
+const SITE_WEB_BFS = 'www.bfs-prevention.fr';
 const LIBELLE_OPTION = { telecommande: 'Télécommande', porte_engins: 'Porte-engins' };
 
 /** QR code → data URL PNG (bibliothèque qrcodejs). */
@@ -74,14 +76,15 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
     const nomComplet = `${st.nom} ${st.prenom}`.trim();
     const ne = st.date_naissance ? ` né(e) le ${dateFr(st.date_naissance)}` : '';
     const logo = await imageEnDataUrl('assets/logo_bfs.png');
+    const logoAm = avecCarton ? await imageFacultative('assets/logo_assurance_maladie.jpg') : null;
     const premierCert = Object.values(certs)[0];
     const qr = (avecCarton && premierCert && typeof QRCode !== 'undefined') ? await qrDataUrl(urlVerification(premierCert.numero)) : null;
-    let signature = null, signataire = SIGNATAIRE_CARTON, agence = '';
+    let signature = null, signataire = SIGNATAIRE_CARTON, agence = '', ctr = {};
     if (avecCarton) {
       const centres = S.referentiel?.centres || [];
       const c = centres.find(x => x.id === S.session?.centre_examen_id) || centres.find(x => x.signataire) || {};
       if (c.signataire) signataire = c.signataire;
-      agence = c.agence || '';
+      agence = c.agence || ''; ctr = c;
       if (c.signature_cachet_path) { const u = await urlPhotoStagiaire(c.signature_cachet_path); if (u) signature = await imageEnDataUrl(u); }
     }
     let photo = null;
@@ -89,6 +92,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
 
     const boite = (x, y, w, h) => { doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(x, y, w, h); };
     const noir = () => doc.setTextColor(0, 0, 0);
+    const bleu = () => doc.setTextColor(0, 112, 192);
     const gris = () => doc.setTextColor(110, 110, 110);
 
     // Un jeu de 2 pages par référentiel
@@ -109,14 +113,13 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
       const k = avecCarton ? 0.8 : 1;              // compression verticale
       const Y = y => oy + (y - 15) * k + (avecCarton ? 0 : 15);
       if (avecCarton) {
-        boite(8, 6, 194, 98);
         if (photo) doc.addImage(photo, 'JPEG', 14, 10, 30, 40); else { boite(14, 10, 30, 40); doc.setFontSize(8); doc.text('Photo', 29, 31, { align: 'center' }); }
         doc.setFontSize(7); doc.text('Titulaire (en toutes lettres)', 29, 55, { align: 'center' });
-        doc.setFontSize(9); doc.text(`M. ${nomComplet}`.slice(0, 30), 29, 60, { align: 'center' });
+        doc.setFontSize(9); bleu(); doc.text(`M. ${nomComplet}`.slice(0, 30), 29, 60, { align: 'center' }); noir();
         doc.setFontSize(7); doc.text('Date de naissance du titulaire', 29, 67, { align: 'center' });
-        doc.setFontSize(9); doc.text(st.date_naissance ? dateFr(st.date_naissance) : '', 29, 72, { align: 'center' });
+        doc.setFontSize(9); bleu(); doc.text(st.date_naissance ? dateFr(st.date_naissance) : '', 29, 72, { align: 'center' }); noir();
         doc.setFontSize(7); doc.text('Signataire (en toutes lettres)', 29, 79, { align: 'center' });
-        doc.setFontSize(9); doc.text(signataire, 29, 84, { align: 'center' });
+        doc.setFontSize(9); bleu(); doc.text(signataire, 29, 84, { align: 'center' }); noir();
         doc.setFontSize(7); doc.text('Délivré par l\'agence' + (agence ? ' ' + agence : ''), 29, 91, { align: 'center', maxWidth: 40 });
         if (signature) doc.addImage(signature, 'JPEG', 12, 92, 34, 11);
 
@@ -135,16 +138,16 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
           doc.setFontSize(7); doc.text(doc.splitTextToSize(libelleCategorie(ref, c.categorie_code), cols[1] - 2), xs[1] + cols[1] / 2, y + 4.5, { align: 'center' });
           const opts = ref.startsWith('R482') ? ['telecommande', 'porte_engins'].map(o =>
             `${LIBELLE_OPTION[o]} ${(ce.options || []).includes(o) ? 'OUI' : 'NON'}`) : [];
-          doc.setFontSize(7.5); doc.text([ce.numero || '', ...opts], xs[2] + cols[2] / 2, y + 3.2, { align: 'center', lineHeightFactor: 1.1 });
+          doc.setFontSize(7.5); bleu(); doc.text([ce.numero || '', ...opts], xs[2] + cols[2] / 2, y + 3.2, { align: 'center', lineHeightFactor: 1.1 });
           doc.text(nomFormateur(ce.testeur_id) || '', xs[3] + cols[3] / 2, y + 6.5, { align: 'center' });
-          doc.text([dateFr(ce.date_delivrance), dateFr(ce.date_expiration)], xs[4] + cols[4] / 2, y + 4.5, { align: 'center' });
+          doc.text([dateFr(ce.date_delivrance), dateFr(ce.date_expiration)], xs[4] + cols[4] / 2, y + 4.5, { align: 'center' }); noir();
           y += 11;
         });
         if (qr) {
           doc.addImage(qr, 'PNG', 179, 84, 19, 19);
           doc.setFontSize(6); doc.text('Vérifier ce titre', 188.5, 83, { align: 'center' });
         }
-        doc.setFontSize(6.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 205, 105, { angle: 90 }); noir();
+        doc.setFontSize(6.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 205, 105, { angle: 90 }); noir();        doc.setLineDash([1.5, 1.2], 0); doc.setDrawColor(90); doc.line(0, 108, 210, 108); doc.setLineDash([], 0); doc.setDrawColor(0);
       }
 
       /* ---------- Recto : autorisation de conduite ---------- */
@@ -178,17 +181,48 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
 
       /* ---------- Verso ---------- */
       doc.addPage(); noir();
-      doc.setFontSize(10.5); doc.text(`En foi de quoi j'autorise ${nomComplet} à conduire la ou les catégories ${codesCat}`, 15, 22);
-      boite(15, 28, 180, 120);
-      doc.setFontSize(9.5); doc.text(libelles, 18, 35);
+      let vy = 0;                                   // décalage du bas du verso (le haut porte le verso du carton)
+      if (avecCarton) {
+        vy = 96;
+        const nomAg = (agence || 'BFS').slice(0, 60);
+        const adr = String(ctr.adresse || '').split(/\n|,\s*/).filter(Boolean).slice(0, 3);
+        // colonne gauche
+        doc.setFontSize(7); doc.text('Titulaire (en toutes lettres)', 14, 12);
+        doc.setFontSize(9); bleu(); doc.text(`M. ${nomComplet}`.slice(0, 40), 22, 20); noir();
+        doc.setFontSize(7); doc.text('N° de CACES® obtenu(s)', 14, 32);
+        doc.setFontSize(8.5); bleu(); doc.text(libelles.map(l => l.split(' — ')[0]).slice(0, 7), 18, 39); noir();
+        doc.setFontSize(8.5); bleu(); doc.setFont('helvetica', 'bold'); doc.text(nomAg, 14, 72, { maxWidth: 80 });
+        doc.setFont('helvetica', 'normal'); doc.text(adr, 14, 77); noir();
+        doc.setFontSize(7); doc.text(`Inscrit dans la base INRS sous le n° ${NUMERO_INRS}`, 70, 92, { align: 'center' });
+        doc.setFillColor(238, 238, 238); doc.setDrawColor(0); doc.rect(8, 95, 124, 9, 'FD');
+        doc.setFontSize(6); doc.text(['Pour vérifier la validité de ce(s) CACES® [employeurs] ou pour éditer l\'attestation correspondante [titulaire]',
+          'consulter la base de données CACES® sur le site : http://www.ameli.fr'], 70, 98.5, { align: 'center' });
+        doc.setFontSize(6.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 136, 104, { angle: 90 }); noir();
+        // colonne droite
+        doc.addImage(logo, 'PNG', 150, 8, 40, 21.7);
+                doc.setFontSize(7); doc.text(adr, 170, 38, { align: 'center' });
+        gris(); doc.setFontSize(7.5);
+        const coord = []; if (ctr.telephone) coord.push('Tél : ' + ctr.telephone); if (ctr.email_secretariat) coord.push('Mail : ' + ctr.email_secretariat); coord.push('Site Web : ' + SITE_WEB_BFS);
+        doc.text(coord, 170, 38 + adr.length * 3.6 + 3, { align: 'center', lineHeightFactor: 1.5 }); noir();
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('CACES®', 170, 70, { align: 'center' }); doc.setFont('helvetica', 'normal');
+        gris(); doc.setFontSize(6.5); doc.text(['La marque CACES® est protégée par un dépôt à', 'l\'INPI sous le numéro 03.3237295'], 170, 77, { align: 'center', lineHeightFactor: 1.4 }); noir();
+        if (logoAm) doc.addImage(logoAm, 'JPEG', 155, 87, 30, 14);
+        doc.setLineDash([1.5, 1.2], 0); doc.setDrawColor(90); doc.line(0, 108, 210, 108); doc.setLineDash([], 0); doc.setDrawColor(0);
+        // repères de pliage en 3 volets égaux (la couverture BFS occupe le dernier tiers, centrée à x = 170)
+        doc.setDrawColor(90); [8 + 194 / 3, 8 + 2 * 194 / 3].forEach(x => doc.line(x, 105, x, 108)); doc.setDrawColor(0);
+      }
+      doc.setFontSize(10.5); doc.text(`En foi de quoi j'autorise ${nomComplet} à conduire la ou les catégories ${codesCat}`, 15, 22 + vy);
+      boite(15, 28 + vy, 180, avecCarton ? 64 : 120);
+      doc.setFontSize(9.5); doc.text(libelles, 18, 35 + vy);
       doc.setFontSize(10.5);
-      doc.text('Autorisation de conduite délivrée le', 15, 163); doc.text('__/__/____', 150, 163);
-      doc.text('Date limite de validité', 15, 174); doc.text('__/__/____', 150, 174);
-      doc.setFontSize(8); doc.text('(Limite de validité à définir par l\'employeur)', 15, 180);
+      const dy = avecCarton ? vy - 60 : 0;
+      doc.text('Autorisation de conduite délivrée le', 15, 163 + dy); doc.text('__/__/____', 150, 163 + dy);
+      doc.text('Date limite de validité', 15, 174 + dy); doc.text('__/__/____', 150, 174 + dy);
+      doc.setFontSize(8); doc.text('(Limite de validité à définir par l\'employeur)', 15, 180 + dy);
       doc.setFontSize(10);
-      doc.text(['Signature de l\'employeur ou son délégataire', 'avec le cachet de l\'entreprise :'], 15, 192);
-      doc.text(`Signature de ${nomComplet}`, 112, 197);
-      boite(15, 202, 85, 45); boite(110, 202, 85, 45);
+      doc.text(['Signature de l\'employeur ou son délégataire', 'avec le cachet de l\'entreprise :'], 15, 192 + dy);
+      doc.text(`Signature de ${nomComplet}`, 112, 197 + dy);
+      boite(15, 202 + dy, 85, avecCarton ? 40 : 45); boite(110, 202 + dy, 85, avecCarton ? 40 : 45);
       doc.setFontSize(7.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 105, 285, { align: 'center' });
     });
 
