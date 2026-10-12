@@ -49,6 +49,7 @@ create table if not exists __SCHEMA__.categories_referentiel (
 -- Colonnes ajoutees apres la version initiale du schema (idempotent, sans
 -- effet si la table vient d'etre creee ci-dessus avec ces colonnes deja
 -- presentes) :
+alter table __SCHEMA__.categories_referentiel add column if not exists temps_reference_min int;
 alter table __SCHEMA__.referentiels add column if not exists ut_theorique numeric not null default 1;
 alter table __SCHEMA__.categories_referentiel add column if not exists ut_pratique numeric not null default 1;
 
@@ -882,15 +883,18 @@ begin
     return 0;
   end if;
 
+  -- Les stagiaires ayant un TITRE délivré (certificat) sont conservés tels quels : leur identité sert à la
+  -- vérification publique du titre (QR code) et à la traçabilité réglementaire (archivage long hors application).
   with cible as (
     update __SCHEMA__.stagiaires s
-      set nom = 'Anonymisé', prenom = '', email = null
+      set nom = 'Anonymisé', prenom = '', email = null, date_naissance = null, fonction = null, entreprise = null, photo_path = null
       from __SCHEMA__.sessions_formation sf
       where sf.id = s.session_id
         and sf.statut = 'cloturee'
         and sf.date_cloture is not null
         and sf.date_cloture < now() - (v_delai || ' days')::interval
         and s.nom <> 'Anonymisé'
+        and not exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id)
       returning s.id
   )
   select count(*) into v_nb from cible;
@@ -1719,13 +1723,17 @@ insert into __SCHEMA__.types_document_engin (code, libelle, obligatoire, avec_ec
   ('notice', 'Notice d''instructions (en français)', true, false, 1),
   ('conformite', 'Déclaration CE de conformité / certificat de conformité', true, false, 2),
   ('vgp', 'Rapport de vérification générale périodique (VGP)', true, true, 3),
-  ('adequation', 'Examen d''adéquation', true, false, 4),
   ('mise_service', 'Vérification de mise ou remise en service', false, false, 5),
   ('conservation', 'Vérification annuelle de l''état de conservation (engin non soumis aux VGP)', false, true, 6),
   ('mise_a_disposition', 'Certificat de conformité de mise à disposition (matériel loué ou prêté)', false, false, 7),
   ('autre', 'Autre document', false, false, 8)
 on conflict (code) do update set libelle = excluded.libelle, obligatoire = excluded.obligatoire,
   avec_echeance = excluded.avec_echeance, ordre = excluded.ordre;
+alter table __SCHEMA__.types_document_engin add column if not exists a_cocher boolean not null default false;  -- se coche (VGP / carnet) au lieu de se deposer
+update __SCHEMA__.types_document_engin set a_cocher = true where code in ('mise_service','conservation','mise_a_disposition');
+update __SCHEMA__.types_document_engin set avec_echeance = false where code = 'conservation';
+delete from __SCHEMA__.engin_documents where type_code = 'adequation';
+delete from __SCHEMA__.types_document_engin where code = 'adequation';
 
 create table if not exists __SCHEMA__.engin_documents (
   id uuid primary key default gen_random_uuid(),
@@ -1743,6 +1751,7 @@ create table if not exists __SCHEMA__.engin_documents (
   ajoute_par uuid references __SCHEMA__.formateurs(id),
   created_at timestamptz not null default now()
 );
+alter table __SCHEMA__.engin_documents add column if not exists present_physiquement boolean not null default false;  -- gros document (notice) non scanne, conserve avec l'engin
 create index if not exists engin_documents_engin_idx on __SCHEMA__.engin_documents (engin_id, type_code);
 
 -- Avis du formateur sur un engin, pour memoire (historique date et signe)
@@ -1881,7 +1890,7 @@ create policy engin_documents_ecriture on __SCHEMA__.engin_documents for insert 
 drop policy if exists engin_documents_modif on __SCHEMA__.engin_documents;
 create policy engin_documents_modif on __SCHEMA__.engin_documents for update using (__SCHEMA__.caces_role() in ('formateur','admin')) with check (__SCHEMA__.caces_role() in ('formateur','admin'));
 drop policy if exists engin_documents_suppr on __SCHEMA__.engin_documents;
-create policy engin_documents_suppr on __SCHEMA__.engin_documents for delete using (__SCHEMA__.caces_role() = 'admin');
+create policy engin_documents_suppr on __SCHEMA__.engin_documents for delete using (__SCHEMA__.caces_role() in ('formateur','admin'));
 
 drop policy if exists engin_avis_lecture on __SCHEMA__.engin_avis;
 create policy engin_avis_lecture on __SCHEMA__.engin_avis for select using (__SCHEMA__.caces_role() is not null);
@@ -2050,6 +2059,173 @@ alter table __SCHEMA__.sessions_formation drop constraint if exists sessions_typ
 alter table __SCHEMA__.sessions_formation add constraint sessions_type_session_check check (type_session in ('caces','autorisation'));
 -- Personne autorisee a etre a la fois formateur ET testeur d'une session CACES (derogation reservee).
 alter table __SCHEMA__.formateurs add column if not exists cumul_formateur_testeur boolean not null default false;
+-- Tests chez le client (intra) : type de lieu + visite prealable obligatoire (exigences des recommandations :
+-- inspection commune, plan de prevention, adequation du site a l'annexe 4, convention de mise a disposition).
+alter table __SCHEMA__.sessions_formation add column if not exists lieu_type text not null default 'centre';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'sessions_lieu_type_check') then
+    alter table __SCHEMA__.sessions_formation add constraint sessions_lieu_type_check check (lieu_type in ('centre','client'));
+  end if;
+end $$;
+
+create table if not exists __SCHEMA__.visites_prealables (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null unique references __SCHEMA__.sessions_formation(id) on delete cascade,
+  date_visite date,
+  visiteur_id uuid references __SCHEMA__.formateurs(id),
+  contact_client text,                       -- nom / fonction de la personne rencontree chez le client
+  adresse_site text,                         -- lieu exact de realisation des tests
+  points jsonb not null default '{}'::jsonb, -- case cochee par point de la check-list
+  surfaces jsonb not null default '{}'::jsonb, -- mesures relevees (m2) par categorie
+  observations text,
+  conforme boolean not null default false,
+  fichiers jsonb not null default '[]'::jsonb, -- [{id, nom, lien}] sur le Drive : plan de prevention, convention, photos, plan de situation
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table __SCHEMA__.visites_prealables enable row level security;
+drop policy if exists visites_prealables_lecture on __SCHEMA__.visites_prealables;
+create policy visites_prealables_lecture on __SCHEMA__.visites_prealables for select using (__SCHEMA__.caces_role() is not null);
+drop policy if exists visites_prealables_ecriture on __SCHEMA__.visites_prealables;
+create policy visites_prealables_ecriture on __SCHEMA__.visites_prealables for all
+  using (__SCHEMA__.caces_role() in ('formateur','admin')) with check (__SCHEMA__.caces_role() in ('formateur','admin'));
+revoke all on __SCHEMA__.visites_prealables from public, anon;
+grant select, insert, update, delete on __SCHEMA__.visites_prealables to authenticated;
+
+-- Patch 07/10/2026 u : reperage client = visite prealable independante d'une session.
+-- Idempotent. A coller dans le SQL Editor du projet Univers BFS (apres le patch t).
+alter table __SCHEMA__.visites_prealables alter column session_id drop not null;
+alter table __SCHEMA__.visites_prealables drop constraint if exists visites_prealables_session_id_key;
+alter table __SCHEMA__.visites_prealables add column if not exists client text;
+alter table __SCHEMA__.visites_prealables add column if not exists categories jsonb not null default '[]'::jsonb;
+alter table __SCHEMA__.sessions_formation add column if not exists visite_id uuid references __SCHEMA__.visites_prealables(id) on delete set null;
+update __SCHEMA__.sessions_formation s set visite_id = v.id from __SCHEMA__.visites_prealables v where v.session_id = s.id and s.visite_id is null;
+
+
+-- Rattachement des engins du centre (propriete) a un ou plusieurs centres : un engin peut naviguer sur plusieurs centres.
+create table if not exists __SCHEMA__.engin_centres (
+  engin_id uuid not null references __SCHEMA__.engins(id) on delete cascade,
+  centre_id int not null references __SCHEMA__.centres_examen(id) on delete cascade,
+  primary key (engin_id, centre_id)
+);
+alter table __SCHEMA__.engin_centres enable row level security;
+drop policy if exists engin_centres_lecture on __SCHEMA__.engin_centres;
+create policy engin_centres_lecture on __SCHEMA__.engin_centres for select using (__SCHEMA__.caces_role() is not null);
+drop policy if exists engin_centres_ecriture on __SCHEMA__.engin_centres;
+create policy engin_centres_ecriture on __SCHEMA__.engin_centres for all
+  using (__SCHEMA__.caces_role() in ('formateur','admin')) with check (__SCHEMA__.caces_role() in ('formateur','admin'));
+revoke all on __SCHEMA__.engin_centres from public, anon;
+grant select, insert, update, delete on __SCHEMA__.engin_centres to authenticated;
+
+-- Formateurs qui ne sont pas testeurs : seuls les comptes « habilités testeur » peuvent etre affectes comme
+-- testeur d'une session (defaut true pour ne rien casser chez les comptes existants).
+alter table __SCHEMA__.formateurs add column if not exists est_testeur boolean not null default true;
+
+drop function if exists __SCHEMA__.rattacher_formateur_par_email(text, text, text, text);
+create or replace function __SCHEMA__.rattacher_formateur_par_email(
+  p_email text, p_nom text, p_prenom text, p_role text default 'formateur', p_testeur boolean default true)
+returns text
+language plpgsql
+security definer
+set search_path = __SCHEMA__, public, extensions
+as $$
+declare v_id uuid;
+begin
+  if coalesce((select f.role from __SCHEMA__.formateurs f where f.id = auth.uid()), '') <> 'admin' then
+    raise exception 'Reserve aux administrateurs';
+  end if;
+  if p_role not in ('formateur','admin','secretariat') then
+    raise exception 'Role invalide';
+  end if;
+  select u.id into v_id from auth.users u where lower(u.email) = lower(p_email);
+  if v_id is null then
+    raise exception 'Aucun compte avec cet e-mail dans l''Univers BFS';
+  end if;
+  if exists (select 1 from __SCHEMA__.formateurs f where f.id = v_id) then
+    return 'deja_rattache';
+  end if;
+  insert into __SCHEMA__.formateurs (id, email, nom, prenom, role, actif, est_testeur)
+  values (v_id, lower(p_email), p_nom, p_prenom, p_role, true, p_testeur);
+  return 'rattache';
+end;
+$$;
+revoke all on function __SCHEMA__.rattacher_formateur_par_email(text,text,text,text,boolean) from public, anon;
+grant execute on function __SCHEMA__.rattacher_formateur_par_email(text,text,text,text,boolean) to authenticated;
+
+-- Habilitations par categorie : un formateur / un testeur peut n'etre habilite que pour certaines categories.
+-- Regle : aucune ligne pour (personne, fonction) = toutes les categories ; sinon seulement celles listees.
+create table if not exists __SCHEMA__.formateur_habilitations (
+  formateur_id uuid not null references __SCHEMA__.formateurs(id) on delete cascade,
+  fonction text not null check (fonction in ('formateur','testeur')),
+  referentiel_code text not null,
+  categorie_code text not null,
+  primary key (formateur_id, fonction, referentiel_code, categorie_code),
+  foreign key (referentiel_code, categorie_code) references __SCHEMA__.categories_referentiel(referentiel_code, code)
+);
+alter table __SCHEMA__.formateur_habilitations enable row level security;
+drop policy if exists formateur_habilitations_lecture on __SCHEMA__.formateur_habilitations;
+create policy formateur_habilitations_lecture on __SCHEMA__.formateur_habilitations
+  for select using (__SCHEMA__.caces_role() is not null);
+drop policy if exists formateur_habilitations_admin on __SCHEMA__.formateur_habilitations;
+create policy formateur_habilitations_admin on __SCHEMA__.formateur_habilitations
+  for all using (__SCHEMA__.caces_role() = 'admin') with check (__SCHEMA__.caces_role() = 'admin');
+revoke all on __SCHEMA__.formateur_habilitations from public, anon;
+grant select, insert, update, delete on __SCHEMA__.formateur_habilitations to authenticated;
+
+create or replace function __SCHEMA__.caces_habilite(p_personne uuid, p_fonction text, p_ref text, p_cat text)
+returns boolean language sql stable security definer
+set search_path = __SCHEMA__, public, extensions
+as $$
+  select not exists (select 1 from __SCHEMA__.formateur_habilitations h where h.formateur_id = p_personne and h.fonction = p_fonction)
+      or exists (select 1 from __SCHEMA__.formateur_habilitations h where h.formateur_id = p_personne and h.fonction = p_fonction
+                 and h.referentiel_code = p_ref and h.categorie_code = p_cat);
+$$;
+revoke all on function __SCHEMA__.caces_habilite(uuid,text,text,text) from public, anon;
+grant execute on function __SCHEMA__.caces_habilite(uuid,text,text,text) to authenticated;
+
+-- Controle a l'affectation (changement de formateur / testeur d'une session deja creee)
+create or replace function __SCHEMA__.caces_controle_testeur_habilite()
+returns trigger language plpgsql set search_path = __SCHEMA__, public, extensions as $$
+declare c record;
+begin
+  if new.testeur_id is not null and not coalesce((select f.est_testeur from __SCHEMA__.formateurs f where f.id = new.testeur_id), false) then
+    raise exception 'Cette personne n''est pas habilitee testeur (voir Comptes)';
+  end if;
+  if tg_op = 'UPDATE' then
+    for c in select referentiel_code, categorie_code from __SCHEMA__.session_categories where session_id = new.id loop
+      if new.formateur_id is not null and not __SCHEMA__.caces_habilite(new.formateur_id, 'formateur', c.referentiel_code, c.categorie_code) then
+        raise exception 'Le formateur n''est pas habilite pour %', c.referentiel_code || ' ' || c.categorie_code;
+      end if;
+      if new.testeur_id is not null and not __SCHEMA__.caces_habilite(new.testeur_id, 'testeur', c.referentiel_code, c.categorie_code) then
+        raise exception 'Le testeur n''est pas habilite pour %', c.referentiel_code || ' ' || c.categorie_code;
+      end if;
+    end loop;
+  end if;
+  return new;
+end; $$;
+drop trigger if exists trg_controle_testeur_habilite on __SCHEMA__.sessions_formation;
+create trigger trg_controle_testeur_habilite before insert or update of formateur_id, testeur_id on __SCHEMA__.sessions_formation
+  for each row execute function __SCHEMA__.caces_controle_testeur_habilite();
+
+-- Controle a l'ajout d'une categorie a une session
+create or replace function __SCHEMA__.caces_controle_categorie_session()
+returns trigger language plpgsql set search_path = __SCHEMA__, public, extensions as $$
+declare s record;
+begin
+  select formateur_id, testeur_id into s from __SCHEMA__.sessions_formation where id = new.session_id;
+  if s.formateur_id is not null and not __SCHEMA__.caces_habilite(s.formateur_id, 'formateur', new.referentiel_code, new.categorie_code) then
+    raise exception 'Le formateur de la session n''est pas habilite pour %', new.referentiel_code || ' ' || new.categorie_code;
+  end if;
+  if s.testeur_id is not null and not __SCHEMA__.caces_habilite(s.testeur_id, 'testeur', new.referentiel_code, new.categorie_code) then
+    raise exception 'Le testeur de la session n''est pas habilite pour %', new.referentiel_code || ' ' || new.categorie_code;
+  end if;
+  return new;
+end; $$;
+drop trigger if exists trg_controle_categorie_session on __SCHEMA__.session_categories;
+create trigger trg_controle_categorie_session before insert on __SCHEMA__.session_categories
+  for each row execute function __SCHEMA__.caces_controle_categorie_session();
+
+
 
 -- Testeur <> formateur : impose pour une session CACES, sauf derogation individuelle ; libre en autorisation de conduite.
 alter table __SCHEMA__.sessions_formation drop constraint if exists sessions_testeur_different_formateur;
@@ -2347,3 +2523,990 @@ grant execute on function __SCHEMA__.caces_identifier_stagiaire(text, uuid) to a
 grant execute on function __SCHEMA__.caces_stagiaire_profil(text) to anon;
 grant execute on function __SCHEMA__.caces_completer_stagiaire(text, date, text) to anon;
 grant execute on function __SCHEMA__.caces_verifier_titre(text) to anon;
+
+-- Patch 07/10/2026 w : revue securite des fonctions + purge RGPD renforcee (consignes transversales du 07/10/2026).
+-- Idempotent. A coller dans le SQL Editor du projet Univers BFS.
+-- Constats de la revue : 0 fonction trigger executable par anon/authenticated ; les 32 fonctions ont un search_path fixe ;
+-- anon = uniquement les 10 fonctions stagiaire / verification publique ; fonctions sensibles authentifiees (emettre_certificat,
+-- debloquer/definir_code_testeur, definir_dossier_drive, purger, rattacher_formateur_par_email) controlent deja le role.
+-- Tables sans policy (compteurs_certificat, config_drive, testeur_codes) = acces uniquement via fonctions security definer (voulu).
+
+-- 1. Verification publique d'un titre : prenom reduit a l'initiale (pas de donnee superflue).
+create or replace function __SCHEMA__.caces_verifier_titre(p_numero text) returns jsonb
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare c __SCHEMA__.certificats; s __SCHEMA__.stagiaires; r jsonb;
+begin
+  select * into c from __SCHEMA__.certificats where numero = upper(trim(p_numero));
+  if not found then return jsonb_build_object('trouve', false, 'statut', 'inconnu'); end if;
+  select * into s from __SCHEMA__.stagiaires where id = c.stagiaire_id;
+  select jsonb_agg(jsonb_build_object(
+      'numero', x.numero, 'categorie', x.categorie_code,
+      'categorie_libelle', (select cr.libelle from __SCHEMA__.categories_referentiel cr where cr.referentiel_code = x.referentiel_code and cr.code = x.categorie_code),
+      'options', coalesce(x.options, '{}'),
+      'date_delivrance', x.date_delivrance, 'date_expiration', x.date_expiration,
+      'statut', case when x.date_expiration < current_date then 'expire' else 'valide' end)
+    order by x.categorie_code)
+  into r
+  from __SCHEMA__.certificats x where x.stagiaire_id = c.stagiaire_id and x.referentiel_code = c.referentiel_code;
+  return jsonb_build_object(
+    'trouve', true,
+    'statut', case when c.date_expiration < current_date then 'expire' else 'valide' end,
+    'nom', s.nom, 'prenom', case when coalesce(s.prenom, '') = '' then '' else left(s.prenom, 1) || '.' end,
+    'referentiel', c.referentiel_code,
+    'referentiel_libelle', (select libelle from __SCHEMA__.referentiels where code = c.referentiel_code),
+    'numero', c.numero, 'titres', r);
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_verifier_titre(text) from public;
+grant execute on function __SCHEMA__.caces_verifier_titre(text) to anon, authenticated;
+
+-- 2. QCM stagiaire : refus de demarrer sur une session cloturee.
+create or replace function __SCHEMA__.caces_demarrer_qcm(p_code text, p_referentiel_code text) returns uuid
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare
+  v_stagiaire_id uuid;
+  v_tirage_id uuid;
+  v_graine bigint;
+begin
+  select s.id into v_stagiaire_id from __SCHEMA__.stagiaires s
+    join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+   where s.code_acces_individuel = p_code and sf.statut <> 'cloturee';
+  if v_stagiaire_id is null then
+    raise exception 'Code d''accès invalide ou session clôturée.';
+  end if;
+
+  select id into v_tirage_id from __SCHEMA__.qcm_tirages
+    where stagiaire_id = v_stagiaire_id and referentiel_code = p_referentiel_code and statut = 'en_cours'
+    order by date_debut desc limit 1;
+  if v_tirage_id is not null then
+    return v_tirage_id;
+  end if;
+
+  v_graine := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  insert into __SCHEMA__.qcm_tirages (stagiaire_id, referentiel_code, graine, testeur_id)
+    values (v_stagiaire_id, p_referentiel_code, v_graine,
+            (select sf.testeur_id from __SCHEMA__.stagiaires st
+               join __SCHEMA__.sessions_formation sf on sf.id = st.session_id
+              where st.id = v_stagiaire_id))
+    returning id into v_tirage_id;
+
+  perform setseed((v_graine % 1000000)::float / 1000000.0);
+  insert into __SCHEMA__.qcm_tirage_questions (tirage_id, question_id, ordre)
+  select v_tirage_id, q.id, row_number() over (order by random())
+  from __SCHEMA__.questions_qcm q
+  join __SCHEMA__.themes_referentiel t on t.id = q.theme_id
+  where t.referentiel_code = p_referentiel_code and q.actif = true;
+
+  return v_tirage_id;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_demarrer_qcm(text, text) from public;
+grant execute on function __SCHEMA__.caces_demarrer_qcm(text, text) to anon, authenticated;
+
+-- 3. Purge RGPD : liste des photos a supprimer (le front les efface via l'API Storage AVANT la purge).
+create or replace function __SCHEMA__.caces_purge_chemins_photos() returns setof text
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  if coalesce(__SCHEMA__.caces_role(), '') <> 'admin' then raise exception 'Reserve a un administrateur.'; end if;
+  return query
+    select s.photo_path from __SCHEMA__.stagiaires s
+    join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+    cross join __SCHEMA__.parametres_application p
+    where p.id = 1 and coalesce(p.purge_active, false)
+      and sf.statut = 'cloturee' and sf.date_cloture is not null
+      and sf.date_cloture < now() - (p.purge_delai_jours || ' days')::interval
+      and s.photo_path is not null;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_purge_chemins_photos() from public, anon;
+grant execute on function __SCHEMA__.caces_purge_chemins_photos() to authenticated;
+
+-- 4. Purge RGPD : tous les stagiaires des sessions cloturees perdent photo, e-mail, naissance, entreprise, fonction et
+--    reponses detaillees au QCM. Les titulaires d'un titre gardent nom/prenom (verification publique) ; les autres sont anonymises.
+--    Conserves : identite des titulaires, formation, n° de titre, resultats (scores, validations), validite.
+create or replace function __SCHEMA__.caces_purger_sessions_cloturees() returns integer
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare
+  v_active boolean; v_delai int; v_nb int := 0;
+begin
+  if coalesce(__SCHEMA__.caces_role(), '') <> 'admin' then
+    raise exception 'Reserve a un administrateur.';
+  end if;
+  select purge_active, purge_delai_jours into v_active, v_delai from __SCHEMA__.parametres_application where id = 1;
+  if not coalesce(v_active, false) then return 0; end if;
+
+  with cible as (
+    update __SCHEMA__.stagiaires s
+      set nom = case when exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id) then s.nom else 'Anonymisé' end,
+          prenom = case when exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id) then s.prenom else '' end,
+          email = null, date_naissance = null, fonction = null, entreprise = null, photo_path = null
+      from __SCHEMA__.sessions_formation sf
+      where sf.id = s.session_id
+        and sf.statut = 'cloturee' and sf.date_cloture is not null
+        and sf.date_cloture < now() - (v_delai || ' days')::interval
+        and (   (s.nom <> 'Anonymisé' and not exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id))
+             or (s.email is not null or s.date_naissance is not null or s.fonction is not null
+                 or s.entreprise is not null or s.photo_path is not null))
+      returning s.id
+  )
+  select count(*) into v_nb from cible;
+
+  update __SCHEMA__.qcm_tirage_questions qtq
+     set reponse_stagiaire = null, correcte = null
+    from __SCHEMA__.qcm_tirages t
+    join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+    join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+   where qtq.tirage_id = t.id
+     and (qtq.reponse_stagiaire is not null or qtq.correcte is not null)
+     and sf.statut = 'cloturee' and sf.date_cloture is not null
+     and sf.date_cloture < now() - (v_delai || ' days')::interval;
+
+  if v_nb > 0 then
+    insert into __SCHEMA__.journal_audit (formateur_id, action, cible, detail)
+    values (auth.uid(), 'purge_donnees_personnelles', 'stagiaires',
+      jsonb_build_object('nb_traites', v_nb, 'delai_jours', v_delai));
+  end if;
+  return v_nb;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_purger_sessions_cloturees() from public, anon;
+grant execute on function __SCHEMA__.caces_purger_sessions_cloturees() to authenticated;
+
+-- Patch 07/10/2026 x : refus des comptes sans profil CACES sur 6 fonctions (regle commune : « un compte d'une autre brique ne passe nulle part »).
+-- Idempotent. A coller dans le SQL Editor du projet Univers BFS.
+-- Fonctions : caces_charge_prevue, caces_charge_stagiaire, caces_charge_testeur, caces_engin_statut, caces_a_un_code_testeur, caces_habilite.
+-- (caces_session_du_stagiaire est volontairement laissee telle quelle : elle sert a 8 policies.)
+-- Garde : refus si un compte connecte (auth.uid() non nul) n'a pas de profil CACES. Un appel interne sans JWT utilisateur
+-- (triggers declenches par le portail stagiaire) reste possible : anon n'a de toute facon aucun EXECUTE sur ces fonctions.
+
+create or replace function __SCHEMA__.exiger_profil_caces() returns void
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  if auth.uid() is not null and __SCHEMA__.caces_role() is null then
+    raise exception 'Non autorise : aucun profil CACES pour ce compte';
+  end if;
+end;
+$f$;
+revoke all on function __SCHEMA__.exiger_profil_caces() from public, anon, authenticated;
+
+create or replace function __SCHEMA__.caces_a_un_code_testeur() returns boolean
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return exists (select 1 from __SCHEMA__.testeur_codes where testeur_id = auth.uid());
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_habilite(p_personne uuid, p_fonction text, p_ref text, p_cat text) returns boolean
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return not exists (select 1 from __SCHEMA__.formateur_habilitations h where h.formateur_id = p_personne and h.fonction = p_fonction)
+      or exists (select 1 from __SCHEMA__.formateur_habilitations h where h.formateur_id = p_personne and h.fonction = p_fonction
+                 and h.referentiel_code = p_ref and h.categorie_code = p_cat);
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_charge_stagiaire(p_stagiaire uuid, p_jour date) returns numeric
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return coalesce((
+      select sum(r.ut_theorique) from (
+        select distinct t.referentiel_code from __SCHEMA__.qcm_tirages t
+        where t.stagiaire_id = p_stagiaire and t.statut <> 'abandonne'
+          and (t.date_debut at time zone 'Europe/Paris')::date = p_jour) d
+      join __SCHEMA__.referentiels r on r.code = d.referentiel_code), 0)
+    + coalesce((
+      select sum(c.ut_pratique + e.ut_options)
+      from __SCHEMA__.epreuves_pratique e
+      join __SCHEMA__.categories_referentiel c
+        on c.referentiel_code = e.referentiel_code and c.code = e.categorie_code
+      where e.stagiaire_id = p_stagiaire
+        and (e.date_passage at time zone 'Europe/Paris')::date = p_jour), 0);
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_charge_testeur(p_testeur uuid, p_jour date)
+returns table(ut_total numeric, ut_pratique numeric)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return query
+  with th as (
+    select t.referentiel_code, count(distinct t.stagiaire_id) as n
+    from __SCHEMA__.qcm_tirages t
+    where t.testeur_id = p_testeur and t.statut <> 'abandonne'
+      and (t.date_debut at time zone 'Europe/Paris')::date = p_jour
+    group by t.referentiel_code),
+  ut_th as (
+    select coalesce(sum(r.ut_theorique * ceil(th.n::numeric / greatest(p.max_candidats_theorie, 1))), 0) as v
+    from th join __SCHEMA__.referentiels r on r.code = th.referentiel_code
+    cross join __SCHEMA__.parametres_application p where p.id = 1),
+  pr as (
+    select coalesce(sum(c.ut_pratique + e.ut_options), 0) as v
+    from __SCHEMA__.epreuves_pratique e
+    join __SCHEMA__.categories_referentiel c
+      on c.referentiel_code = e.referentiel_code and c.code = e.categorie_code
+    where e.testeur_id = p_testeur
+      and (e.date_passage at time zone 'Europe/Paris')::date = p_jour)
+  select ut_th.v + pr.v, pr.v from ut_th, pr;
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_charge_prevue(p_testeur uuid, p_jour date)
+returns table(ut_total numeric, ut_pratique numeric)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return query
+  with base as (
+    select sf.id as session_id, s.id as stagiaire_id, sc.referentiel_code, sc.categorie_code,
+           sc.theorie_validee, sc.pratique_validee,
+           coalesce(pt.jour, sf.date_debut) as jour_theorie,
+           coalesce(pp.jour, sf.date_debut) as jour_pratique
+    from __SCHEMA__.sessions_formation sf
+    join __SCHEMA__.stagiaires s on s.session_id = sf.id
+    join __SCHEMA__.stagiaire_categories sc on sc.stagiaire_id = s.id
+    left join __SCHEMA__.planning_tests pt on pt.stagiaire_id = s.id and pt.referentiel_code = sc.referentiel_code
+         and pt.categorie_code = '' and pt.epreuve = 'theorie'
+    left join __SCHEMA__.planning_tests pp on pp.stagiaire_id = s.id and pp.referentiel_code = sc.referentiel_code
+         and pp.categorie_code = sc.categorie_code and pp.epreuve = 'pratique'
+    where sf.testeur_id = p_testeur and sf.statut <> 'cloturee' and sf.type_session = 'caces'),
+  th as (
+    select b1.session_id, b1.referentiel_code, count(distinct b1.stagiaire_id) as n from base b1
+    where b1.jour_theorie = p_jour and b1.theorie_validee is not true
+    group by b1.session_id, b1.referentiel_code),
+  ut_th as (
+    select coalesce(sum(r.ut_theorique * ceil(th.n::numeric / greatest(p.max_candidats_theorie, 1))), 0) as v
+    from th join __SCHEMA__.referentiels r on r.code = th.referentiel_code
+    cross join __SCHEMA__.parametres_application p where p.id = 1),
+  pr as (
+    select coalesce(sum(c.ut_pratique), 0) as v from base b
+    join __SCHEMA__.categories_referentiel c
+      on c.referentiel_code = b.referentiel_code and c.code = b.categorie_code
+    where b.jour_pratique = p_jour and b.pratique_validee is not true)
+  select ut_th.v + pr.v, pr.v from ut_th, pr;
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_engin_statut(p_engin uuid, p_jour date default current_date)
+returns table(type_code text, libelle text, obligatoire boolean, statut text, date_document date, date_echeance date, document_id uuid)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return query
+  select t.code, t.libelle,
+    case when t.code = 'vgp' then e.soumis_vgp
+         when t.code = 'conservation' then not e.soumis_vgp
+         else t.obligatoire end,
+    case
+      when d.id is null then 'manquant'
+      when t.code = 'vgp' and d.observations_ouvertes then 'observations'
+      when t.avec_echeance and d.date_echeance is null then 'a_completer'
+      when t.avec_echeance and d.date_echeance < p_jour then 'expire'
+      when t.avec_echeance and d.date_echeance < p_jour + 30 then 'bientot'
+      else 'ok'
+    end,
+    d.date_document, d.date_echeance, d.id
+  from __SCHEMA__.types_document_engin t
+  join __SCHEMA__.engins e on e.id = p_engin
+  left join lateral (
+    select x.* from __SCHEMA__.engin_documents x
+    where x.engin_id = p_engin and x.type_code = t.code
+    order by coalesce(x.date_document, x.created_at::date) desc, x.created_at desc limit 1) d on true
+  order by t.ordre;
+end;
+$f$;
+
+revoke all on function __SCHEMA__.caces_a_un_code_testeur() from public, anon;
+revoke all on function __SCHEMA__.caces_habilite(uuid, text, text, text) from public, anon;
+revoke all on function __SCHEMA__.caces_charge_stagiaire(uuid, date) from public, anon;
+revoke all on function __SCHEMA__.caces_charge_testeur(uuid, date) from public, anon;
+revoke all on function __SCHEMA__.caces_charge_prevue(uuid, date) from public, anon;
+revoke all on function __SCHEMA__.caces_engin_statut(uuid, date) from public, anon;
+grant execute on function __SCHEMA__.caces_a_un_code_testeur() to authenticated;
+grant execute on function __SCHEMA__.caces_habilite(uuid, text, text, text) to authenticated;
+grant execute on function __SCHEMA__.caces_charge_stagiaire(uuid, date) to authenticated;
+grant execute on function __SCHEMA__.caces_charge_testeur(uuid, date) to authenticated;
+grant execute on function __SCHEMA__.caces_charge_prevue(uuid, date) to authenticated;
+grant execute on function __SCHEMA__.caces_engin_statut(uuid, date) to authenticated;
+
+-- Patch 08/10/2026 y : groupes dans une session (formateur 1 / testeur 1 sur le groupe 1, formateur 2 / testeur 2 sur le groupe 2, roles croises).
+-- Idempotent. A coller dans le SQL Editor du projet Univers BFS (apres les patches w et x).
+-- Modele : le formateur et le testeur de la session (sessions_formation) restent ceux du GROUPE 1 (principal, stagiaire.groupe_id = null).
+-- Un seul groupe supplementaire possible (numero = 2) ont leur propre formateur et testeur. Les droits (RLS) se jugent par stagiaire.
+
+create table if not exists __SCHEMA__.session_groupes (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references __SCHEMA__.sessions_formation(id) on delete cascade,
+  numero smallint not null check (numero = 2),
+  formateur_id uuid references __SCHEMA__.formateurs(id),
+  testeur_id uuid references __SCHEMA__.formateurs(id),
+  created_at timestamptz not null default now(),
+  unique (session_id, numero)
+);
+alter table __SCHEMA__.session_groupes enable row level security;
+drop policy if exists session_groupes_lecture on __SCHEMA__.session_groupes;
+create policy session_groupes_lecture on __SCHEMA__.session_groupes for select to authenticated using (__SCHEMA__.caces_role() is not null);
+drop policy if exists session_groupes_ecriture on __SCHEMA__.session_groupes;
+create policy session_groupes_ecriture on __SCHEMA__.session_groupes for all to authenticated
+  using (__SCHEMA__.caces_role() in ('formateur','admin')) with check (__SCHEMA__.caces_role() in ('formateur','admin'));
+revoke all on __SCHEMA__.session_groupes from public, anon;
+grant select, insert, update, delete on __SCHEMA__.session_groupes to authenticated;
+
+alter table __SCHEMA__.stagiaires add column if not exists groupe_id uuid references __SCHEMA__.session_groupes(id) on delete set null;
+
+-- Equipe effective d'un stagiaire : groupe 1 (groupe_id null) = formateur/testeur de la session ; sinon ceux du groupe.
+create or replace function __SCHEMA__.caces_formateur_du_stagiaire(p_stagiaire uuid) returns uuid
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select case when s.groupe_id is null then sf.formateur_id else g.formateur_id end
+  from __SCHEMA__.stagiaires s join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+  left join __SCHEMA__.session_groupes g on g.id = s.groupe_id where s.id = p_stagiaire;
+$f$;
+create or replace function __SCHEMA__.caces_testeur_du_stagiaire(p_stagiaire uuid) returns uuid
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select case when s.groupe_id is null then sf.testeur_id else g.testeur_id end
+  from __SCHEMA__.stagiaires s join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+  left join __SCHEMA__.session_groupes g on g.id = s.groupe_id where s.id = p_stagiaire;
+$f$;
+create or replace function __SCHEMA__.caces_est_formateur_du_stagiaire(p_stagiaire uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce(__SCHEMA__.caces_role() = 'admin', false) or coalesce(__SCHEMA__.caces_formateur_du_stagiaire(p_stagiaire) = auth.uid(), false);
+$f$;
+create or replace function __SCHEMA__.caces_est_testeur_du_stagiaire(p_stagiaire uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce(__SCHEMA__.caces_role() = 'admin', false) or coalesce(__SCHEMA__.caces_testeur_du_stagiaire(p_stagiaire) = auth.uid(), false);
+$f$;
+revoke all on function __SCHEMA__.caces_formateur_du_stagiaire(uuid), __SCHEMA__.caces_testeur_du_stagiaire(uuid),
+  __SCHEMA__.caces_est_formateur_du_stagiaire(uuid), __SCHEMA__.caces_est_testeur_du_stagiaire(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_formateur_du_stagiaire(uuid), __SCHEMA__.caces_testeur_du_stagiaire(uuid),
+  __SCHEMA__.caces_est_formateur_du_stagiaire(uuid), __SCHEMA__.caces_est_testeur_du_stagiaire(uuid) to authenticated;
+
+-- Niveau session (documents, jours, adequation) : formateur / testeur de la session OU d'un de ses groupes.
+create or replace function __SCHEMA__.caces_est_formateur_de(p_session uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce(__SCHEMA__.caces_role() = 'admin', false)
+      or exists (select 1 from __SCHEMA__.sessions_formation s where s.id = p_session and s.formateur_id = auth.uid())
+      or exists (select 1 from __SCHEMA__.session_groupes g where g.session_id = p_session and g.formateur_id = auth.uid());
+$f$;
+create or replace function __SCHEMA__.caces_est_testeur_de(p_session uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce(__SCHEMA__.caces_role() = 'admin', false)
+      or exists (select 1 from __SCHEMA__.sessions_formation s where s.id = p_session and s.testeur_id = auth.uid())
+      or exists (select 1 from __SCHEMA__.session_groupes g where g.session_id = p_session and g.testeur_id = auth.uid());
+$f$;
+
+-- Policies par stagiaire (roles separes : on ne teste jamais ses propres stagiaires)
+drop policy if exists certificats_formateur_all on __SCHEMA__.certificats;
+create policy certificats_formateur_all on __SCHEMA__.certificats for all to authenticated
+  using (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id));
+drop policy if exists epreuve_resultats_formateur_all on __SCHEMA__.epreuve_pratique_resultats;
+create policy epreuve_resultats_formateur_all on __SCHEMA__.epreuve_pratique_resultats for all to authenticated
+  using (__SCHEMA__.caces_est_testeur_du_stagiaire((select e.stagiaire_id from __SCHEMA__.epreuves_pratique e where e.id = epreuve_pratique_resultats.epreuve_id)))
+  with check (__SCHEMA__.caces_est_testeur_du_stagiaire((select e.stagiaire_id from __SCHEMA__.epreuves_pratique e where e.id = epreuve_pratique_resultats.epreuve_id)));
+drop policy if exists epreuves_formateur_all on __SCHEMA__.epreuves_pratique;
+create policy epreuves_formateur_all on __SCHEMA__.epreuves_pratique for all to authenticated
+  using (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id));
+drop policy if exists fise_avis_formateur_all on __SCHEMA__.fise_avis;
+create policy fise_avis_formateur_all on __SCHEMA__.fise_avis for all to authenticated
+  using (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id));
+drop policy if exists fise_evaluations_formateur_all on __SCHEMA__.fise_evaluations;
+create policy fise_evaluations_formateur_all on __SCHEMA__.fise_evaluations for all to authenticated
+  using (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id));
+drop policy if exists planning_tests_ecriture on __SCHEMA__.planning_tests;
+create policy planning_tests_ecriture on __SCHEMA__.planning_tests for all to authenticated
+  using (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id));
+drop policy if exists qcm_tirage_questions_formateur_all on __SCHEMA__.qcm_tirage_questions;
+create policy qcm_tirage_questions_formateur_all on __SCHEMA__.qcm_tirage_questions for all to authenticated
+  using (__SCHEMA__.caces_est_testeur_du_stagiaire((select t.stagiaire_id from __SCHEMA__.qcm_tirages t where t.id = qcm_tirage_questions.tirage_id)))
+  with check (__SCHEMA__.caces_est_testeur_du_stagiaire((select t.stagiaire_id from __SCHEMA__.qcm_tirages t where t.id = qcm_tirage_questions.tirage_id)));
+drop policy if exists qcm_tirages_formateur_all on __SCHEMA__.qcm_tirages;
+create policy qcm_tirages_formateur_all on __SCHEMA__.qcm_tirages for all to authenticated
+  using (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id));
+drop policy if exists stagiaire_categories_formateur_all on __SCHEMA__.stagiaire_categories;
+create policy stagiaire_categories_formateur_all on __SCHEMA__.stagiaire_categories for all to authenticated
+  using (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id) or __SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id))
+  with check (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id) or __SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id));
+drop policy if exists suivi_horometre_formateur_all on __SCHEMA__.suivi_horometre;
+create policy suivi_horometre_formateur_all on __SCHEMA__.suivi_horometre for all to authenticated
+  using (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id)) with check (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id));
+
+-- Controles sur les groupes : testeur != formateur (sauf cumul autorise / autorisation de conduite), testeur habilite, habilitations par categorie.
+create or replace function __SCHEMA__.caces_controle_groupe() returns trigger
+language plpgsql set search_path = __SCHEMA__, public, extensions as $f$
+declare v_type text; c record;
+begin
+  select type_session into v_type from __SCHEMA__.sessions_formation where id = new.session_id;
+  if new.testeur_id is not null and new.testeur_id = new.formateur_id and v_type = 'caces'
+     and not coalesce((select f.cumul_formateur_testeur from __SCHEMA__.formateurs f where f.id = new.formateur_id), false) then
+    raise exception 'Le testeur du groupe doit etre une personne differente du formateur du groupe (session CACES).';
+  end if;
+  if new.testeur_id is not null and not coalesce((select f.est_testeur from __SCHEMA__.formateurs f where f.id = new.testeur_id), false) then
+    raise exception 'Cette personne n''est pas habilitee testeur (voir Comptes)';
+  end if;
+  for c in select referentiel_code, categorie_code from __SCHEMA__.session_categories where session_id = new.session_id loop
+    if new.formateur_id is not null and not __SCHEMA__.caces_habilite(new.formateur_id, 'formateur', c.referentiel_code, c.categorie_code) then
+      raise exception 'Le formateur du groupe n''est pas habilite pour %', c.referentiel_code || ' ' || c.categorie_code;
+    end if;
+    if new.testeur_id is not null and not __SCHEMA__.caces_habilite(new.testeur_id, 'testeur', c.referentiel_code, c.categorie_code) then
+      raise exception 'Le testeur du groupe n''est pas habilite pour %', c.referentiel_code || ' ' || c.categorie_code;
+    end if;
+  end loop;
+  return new;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_controle_groupe() from public, anon, authenticated;
+drop trigger if exists trg_controle_groupe on __SCHEMA__.session_groupes;
+create trigger trg_controle_groupe before insert or update on __SCHEMA__.session_groupes
+  for each row execute function __SCHEMA__.caces_controle_groupe();
+
+create or replace function __SCHEMA__.caces_controle_groupe_stagiaire() returns trigger
+language plpgsql set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  if new.groupe_id is not null and not exists (select 1 from __SCHEMA__.session_groupes g where g.id = new.groupe_id and g.session_id = new.session_id) then
+    raise exception 'Le groupe choisi n''appartient pas a la session du stagiaire.';
+  end if;
+  return new;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_controle_groupe_stagiaire() from public, anon, authenticated;
+drop trigger if exists trg_controle_groupe_stagiaire on __SCHEMA__.stagiaires;
+create trigger trg_controle_groupe_stagiaire before insert or update of groupe_id, session_id on __SCHEMA__.stagiaires
+  for each row execute function __SCHEMA__.caces_controle_groupe_stagiaire();
+
+-- Code testeur (attestation) : chaque testeur de la session (groupe 1 ou autre groupe) saisit le sien.
+create or replace function __SCHEMA__.caces_attester_testeur(p_session uuid, p_code text) returns boolean
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare c __SCHEMA__.testeur_codes%rowtype; s __SCHEMA__.sessions_formation%rowtype; v_principal boolean;
+begin
+  select * into s from __SCHEMA__.sessions_formation where id = p_session;
+  v_principal := found and s.testeur_id is not distinct from auth.uid();
+  if not found or (not v_principal and not exists (select 1 from __SCHEMA__.session_groupes g where g.session_id = p_session and g.testeur_id = auth.uid())) then
+    raise exception 'Vous n''etes pas le testeur de cette session'; end if;
+  if s.type_session = 'autorisation' then return true; end if;
+  if v_principal and s.formateur_id = s.testeur_id
+     and not coalesce((select cumul_formateur_testeur from __SCHEMA__.formateurs where id = s.formateur_id), false) then
+    raise exception 'Le testeur ne peut pas etre le formateur'; end if;
+  select * into c from __SCHEMA__.testeur_codes where testeur_id = auth.uid();
+  if not found then raise exception 'Aucun code testeur defini (Mon compte)'; end if;
+  if c.essais_echoues >= 5 then raise exception 'Code verrouille : contactez un administrateur'; end if;
+  if c.code_hash = extensions.crypt(p_code, c.code_hash) then
+    update __SCHEMA__.testeur_codes set essais_echoues = 0 where testeur_id = auth.uid();
+    insert into __SCHEMA__.attestations_testeur (session_id, testeur_id) values (p_session, auth.uid())
+      on conflict (session_id, testeur_id) do nothing;
+    return true;
+  end if;
+  update __SCHEMA__.testeur_codes set essais_echoues = essais_echoues + 1 where testeur_id = auth.uid();
+  return false;
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_exiger_attestation() returns trigger
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_session uuid;
+begin
+  v_session := __SCHEMA__.caces_session_du_stagiaire(new.stagiaire_id);
+  if v_session is not null and (select type_session from __SCHEMA__.sessions_formation where id = v_session) = 'autorisation' then
+    return new;
+  end if;
+  if v_session is not null and not exists (
+      select 1 from __SCHEMA__.attestations_testeur a
+      where a.session_id = v_session and a.testeur_id = __SCHEMA__.caces_testeur_du_stagiaire(new.stagiaire_id)) then
+    raise exception 'Le testeur doit saisir son code (4 chiffres) avant de demarrer les tests de ce groupe.';
+  end if;
+  return new;
+end;
+$f$;
+
+-- QCM stagiaire : le testeur du tirage est celui du groupe du stagiaire.
+create or replace function __SCHEMA__.caces_demarrer_qcm(p_code text, p_referentiel_code text) returns uuid
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare
+  v_stagiaire_id uuid; v_tirage_id uuid; v_graine bigint;
+begin
+  select s.id into v_stagiaire_id from __SCHEMA__.stagiaires s
+    join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+   where s.code_acces_individuel = p_code and sf.statut <> 'cloturee';
+  if v_stagiaire_id is null then
+    raise exception 'Code d''accès invalide ou session clôturée.';
+  end if;
+  select id into v_tirage_id from __SCHEMA__.qcm_tirages
+    where stagiaire_id = v_stagiaire_id and referentiel_code = p_referentiel_code and statut = 'en_cours'
+    order by date_debut desc limit 1;
+  if v_tirage_id is not null then return v_tirage_id; end if;
+  v_graine := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  insert into __SCHEMA__.qcm_tirages (stagiaire_id, referentiel_code, graine, testeur_id)
+    values (v_stagiaire_id, p_referentiel_code, v_graine, __SCHEMA__.caces_testeur_du_stagiaire(v_stagiaire_id))
+    returning id into v_tirage_id;
+  perform setseed((v_graine % 1000000)::float / 1000000.0);
+  insert into __SCHEMA__.qcm_tirage_questions (tirage_id, question_id, ordre)
+  select v_tirage_id, q.id, row_number() over (order by random())
+  from __SCHEMA__.questions_qcm q
+  join __SCHEMA__.themes_referentiel t on t.id = q.theme_id
+  where t.referentiel_code = p_referentiel_code and q.actif = true;
+  return v_tirage_id;
+end;
+$f$;
+
+-- Titre : formateur et testeur du groupe du stagiaire.
+create or replace function __SCHEMA__.caces_emettre_certificat(p_stagiaire uuid, p_ref text, p_cat text) returns __SCHEMA__.certificats
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare
+  v_session uuid; v_sf __SCHEMA__.sessions_formation; v_sc __SCHEMA__.stagiaire_categories;
+  v_ep __SCHEMA__.epreuves_pratique; v_cert __SCHEMA__.certificats; v_n int; v_date date; v_mois int; v_num text;
+begin
+  select session_id into v_session from __SCHEMA__.stagiaires where id = p_stagiaire;
+  if v_session is null then raise exception 'Stagiaire introuvable'; end if;
+  if not __SCHEMA__.caces_est_testeur_du_stagiaire(p_stagiaire) then raise exception 'Réservé au testeur du groupe du stagiaire ou à l''administrateur'; end if;
+  select * into v_sf from __SCHEMA__.sessions_formation where id = v_session;
+  if coalesce(v_sf.type_session, 'caces') <> 'caces' then raise exception 'Pas de numéro CACES pour une autorisation de conduite'; end if;
+  if coalesce(trim(v_sf.numero_session_galaxy), '') = '' then raise exception 'Le n° de session Galaxy est obligatoire pour numéroter un CACES'; end if;
+  select * into v_cert from __SCHEMA__.certificats where stagiaire_id = p_stagiaire and referentiel_code = p_ref and categorie_code = p_cat;
+  if found then return v_cert; end if;
+  select * into v_sc from __SCHEMA__.stagiaire_categories where stagiaire_id = p_stagiaire and referentiel_code = p_ref and categorie_code = p_cat;
+  if not coalesce(v_sc.theorie_validee, false) or not coalesce(v_sc.pratique_validee, false) then
+    raise exception 'Théorie et pratique doivent être validées';
+  end if;
+  select * into v_ep from __SCHEMA__.epreuves_pratique
+    where stagiaire_id = p_stagiaire and referentiel_code = p_ref and categorie_code = p_cat and reussi = true
+    order by date_passage desc limit 1;
+  v_date := coalesce(v_ep.date_passage::date, current_date);
+  select duree_validite_mois into v_mois from __SCHEMA__.referentiels where code = p_ref;
+  insert into __SCHEMA__.compteurs_certificat (referentiel_code, categorie_code, dernier) values (p_ref, p_cat, 1)
+    on conflict (referentiel_code, categorie_code) do update set dernier = __SCHEMA__.compteurs_certificat.dernier + 1
+    returning dernier into v_n;
+  v_num := to_char(v_date, 'YYYY.MM') || '.' || left(p_ref, 4) || '.' || p_cat || '.' || trim(v_sf.numero_session_galaxy) || '.' || lpad(v_n::text, 5, '0');
+  insert into __SCHEMA__.certificats (stagiaire_id, referentiel_code, categorie_code, numero, date_delivrance, date_expiration,
+                                 formateur_id, testeur_id, options, session_id)
+  values (p_stagiaire, p_ref, p_cat, v_num, v_date, (v_date + make_interval(months => coalesce(v_mois, 60)) - interval '1 day')::date,
+          __SCHEMA__.caces_formateur_du_stagiaire(p_stagiaire), coalesce(v_ep.testeur_id, __SCHEMA__.caces_testeur_du_stagiaire(p_stagiaire)), v_ep.options, v_session)
+  returning * into v_cert;
+  return v_cert;
+end;
+$f$;
+
+-- Charge prevue d'un testeur : stagiaires de SON groupe uniquement.
+create or replace function __SCHEMA__.caces_charge_prevue(p_testeur uuid, p_jour date)
+returns table(ut_total numeric, ut_pratique numeric)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return query
+  with base as (
+    select sf.id as session_id, s.id as stagiaire_id, sc.referentiel_code, sc.categorie_code,
+           sc.theorie_validee, sc.pratique_validee,
+           coalesce(pt.jour, sf.date_debut) as jour_theorie,
+           coalesce(pp.jour, sf.date_debut) as jour_pratique
+    from __SCHEMA__.sessions_formation sf
+    join __SCHEMA__.stagiaires s on s.session_id = sf.id
+    join __SCHEMA__.stagiaire_categories sc on sc.stagiaire_id = s.id
+    left join __SCHEMA__.planning_tests pt on pt.stagiaire_id = s.id and pt.referentiel_code = sc.referentiel_code
+         and pt.categorie_code = '' and pt.epreuve = 'theorie'
+    left join __SCHEMA__.planning_tests pp on pp.stagiaire_id = s.id and pp.referentiel_code = sc.referentiel_code
+         and pp.categorie_code = sc.categorie_code and pp.epreuve = 'pratique'
+    where __SCHEMA__.caces_testeur_du_stagiaire(s.id) = p_testeur and sf.statut <> 'cloturee' and sf.type_session = 'caces'),
+  th as (
+    select b1.session_id, b1.referentiel_code, count(distinct b1.stagiaire_id) as n from base b1
+    where b1.jour_theorie = p_jour and b1.theorie_validee is not true
+    group by b1.session_id, b1.referentiel_code),
+  ut_th as (
+    select coalesce(sum(r.ut_theorique * ceil(th.n::numeric / greatest(p.max_candidats_theorie, 1))), 0) as v
+    from th join __SCHEMA__.referentiels r on r.code = th.referentiel_code
+    cross join __SCHEMA__.parametres_application p where p.id = 1),
+  pr as (
+    select coalesce(sum(c.ut_pratique), 0) as v from base b
+    join __SCHEMA__.categories_referentiel c
+      on c.referentiel_code = b.referentiel_code and c.code = b.categorie_code
+    where b.jour_pratique = p_jour and b.pratique_validee is not true)
+  select ut_th.v + pr.v, pr.v from ut_th, pr;
+end;
+$f$;
+
+-- Patch 08/10/2026 z : simplification des groupes. Un groupe = un FORMATEUR ; les testeurs de la session sont une liste libre
+-- (session_testeurs, en plus du testeur principal de la session) : chaque testeur peut tester n'importe quel stagiaire SAUF ceux
+-- dont il est le formateur (sauf cumul autorise ou autorisation de conduite). Limites d'UT par testeur inchangees.
+-- Idempotent. Remplace le modele « formateur + testeur par groupe » du patch y.
+
+create table if not exists __SCHEMA__.session_testeurs (
+  session_id uuid not null references __SCHEMA__.sessions_formation(id) on delete cascade,
+  testeur_id uuid not null references __SCHEMA__.formateurs(id),
+  created_at timestamptz not null default now(),
+  primary key (session_id, testeur_id)
+);
+alter table __SCHEMA__.session_testeurs enable row level security;
+drop policy if exists session_testeurs_lecture on __SCHEMA__.session_testeurs;
+create policy session_testeurs_lecture on __SCHEMA__.session_testeurs for select to authenticated using (__SCHEMA__.caces_role() is not null);
+drop policy if exists session_testeurs_ecriture on __SCHEMA__.session_testeurs;
+create policy session_testeurs_ecriture on __SCHEMA__.session_testeurs for all to authenticated
+  using (__SCHEMA__.caces_role() in ('formateur','admin')) with check (__SCHEMA__.caces_role() in ('formateur','admin'));
+revoke all on __SCHEMA__.session_testeurs from public, anon;
+grant select, insert, update, delete on __SCHEMA__.session_testeurs to authenticated;
+
+create or replace function __SCHEMA__.caces_controle_session_testeur() returns trigger
+language plpgsql set search_path = __SCHEMA__, public, extensions as $f$
+declare c record;
+begin
+  if not coalesce((select f.est_testeur from __SCHEMA__.formateurs f where f.id = new.testeur_id), false) then
+    raise exception 'Cette personne n''est pas habilitee testeur (voir Comptes)';
+  end if;
+  for c in select referentiel_code, categorie_code from __SCHEMA__.session_categories where session_id = new.session_id loop
+    if not __SCHEMA__.caces_habilite(new.testeur_id, 'testeur', c.referentiel_code, c.categorie_code) then
+      raise exception 'Ce testeur n''est pas habilite pour %', c.referentiel_code || ' ' || c.categorie_code;
+    end if;
+  end loop;
+  return new;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_controle_session_testeur() from public, anon, authenticated;
+drop trigger if exists trg_controle_session_testeur on __SCHEMA__.session_testeurs;
+create trigger trg_controle_session_testeur before insert or update on __SCHEMA__.session_testeurs
+  for each row execute function __SCHEMA__.caces_controle_session_testeur();
+
+-- Le groupe n'a plus que son formateur.
+create or replace function __SCHEMA__.caces_controle_groupe() returns trigger
+language plpgsql set search_path = __SCHEMA__, public, extensions as $f$
+declare c record;
+begin
+  for c in select referentiel_code, categorie_code from __SCHEMA__.session_categories where session_id = new.session_id loop
+    if new.formateur_id is not null and not __SCHEMA__.caces_habilite(new.formateur_id, 'formateur', c.referentiel_code, c.categorie_code) then
+      raise exception 'Le formateur du groupe n''est pas habilite pour %', c.referentiel_code || ' ' || c.categorie_code;
+    end if;
+  end loop;
+  return new;
+end;
+$f$;
+alter table __SCHEMA__.session_groupes drop column if exists testeur_id;
+
+-- Un testeur de la session peut-il tester ce stagiaire ? (testeur de la session, et pas le formateur du stagiaire)
+create or replace function __SCHEMA__.caces_peut_tester(p_testeur uuid, p_stagiaire uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce((
+    select (sf.testeur_id = p_testeur or exists (select 1 from __SCHEMA__.session_testeurs x where x.session_id = sf.id and x.testeur_id = p_testeur))
+       and (p_testeur is distinct from __SCHEMA__.caces_formateur_du_stagiaire(s.id)
+            or sf.type_session = 'autorisation'
+            or coalesce((select f.cumul_formateur_testeur from __SCHEMA__.formateurs f where f.id = p_testeur), false))
+    from __SCHEMA__.stagiaires s join __SCHEMA__.sessions_formation sf on sf.id = s.session_id where s.id = p_stagiaire), false);
+$f$;
+-- Testeur par defaut d'un stagiaire (QCM passe sur le telephone du stagiaire, estimation de charge) : premier testeur de la session autorise.
+create or replace function __SCHEMA__.caces_testeur_du_stagiaire(p_stagiaire uuid) returns uuid
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select c.t from (
+    select sf.testeur_id as t, 0 as o from __SCHEMA__.stagiaires s join __SCHEMA__.sessions_formation sf on sf.id = s.session_id where s.id = p_stagiaire
+    union all
+    select x.testeur_id, 1 from __SCHEMA__.stagiaires s join __SCHEMA__.session_testeurs x on x.session_id = s.session_id where s.id = p_stagiaire) c
+  where c.t is not null and __SCHEMA__.caces_peut_tester(c.t, p_stagiaire)
+  order by c.o limit 1;
+$f$;
+create or replace function __SCHEMA__.caces_est_testeur_du_stagiaire(p_stagiaire uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce(__SCHEMA__.caces_role() = 'admin', false) or __SCHEMA__.caces_peut_tester(auth.uid(), p_stagiaire);
+$f$;
+create or replace function __SCHEMA__.caces_est_testeur_de(p_session uuid) returns boolean
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select coalesce(__SCHEMA__.caces_role() = 'admin', false)
+      or exists (select 1 from __SCHEMA__.sessions_formation s where s.id = p_session and s.testeur_id = auth.uid())
+      or exists (select 1 from __SCHEMA__.session_testeurs x where x.session_id = p_session and x.testeur_id = auth.uid());
+$f$;
+revoke all on function __SCHEMA__.caces_peut_tester(uuid, uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_peut_tester(uuid, uuid) to authenticated;
+
+-- Code testeur : chaque testeur de la session saisit le sien.
+create or replace function __SCHEMA__.caces_attester_testeur(p_session uuid, p_code text) returns boolean
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare c __SCHEMA__.testeur_codes%rowtype; s __SCHEMA__.sessions_formation%rowtype; v_principal boolean;
+begin
+  select * into s from __SCHEMA__.sessions_formation where id = p_session;
+  v_principal := found and s.testeur_id is not distinct from auth.uid();
+  if not found or (not v_principal and not exists (select 1 from __SCHEMA__.session_testeurs x where x.session_id = p_session and x.testeur_id = auth.uid())) then
+    raise exception 'Vous n''etes pas testeur de cette session'; end if;
+  if s.type_session = 'autorisation' then return true; end if;
+  if v_principal and s.formateur_id = s.testeur_id
+     and not coalesce((select cumul_formateur_testeur from __SCHEMA__.formateurs where id = s.formateur_id), false) then
+    raise exception 'Le testeur ne peut pas etre le formateur'; end if;
+  select * into c from __SCHEMA__.testeur_codes where testeur_id = auth.uid();
+  if not found then raise exception 'Aucun code testeur defini (Mon compte)'; end if;
+  if c.essais_echoues >= 5 then raise exception 'Code verrouille : contactez un administrateur'; end if;
+  if c.code_hash = extensions.crypt(p_code, c.code_hash) then
+    update __SCHEMA__.testeur_codes set essais_echoues = 0 where testeur_id = auth.uid();
+    insert into __SCHEMA__.attestations_testeur (session_id, testeur_id) values (p_session, auth.uid())
+      on conflict (session_id, testeur_id) do nothing;
+    return true;
+  end if;
+  update __SCHEMA__.testeur_codes set essais_echoues = essais_echoues + 1 where testeur_id = auth.uid();
+  return false;
+end;
+$f$;
+
+-- L'attestation exigee est celle du testeur qui fait (ou qui est affecte a) l'epreuve ; ce testeur ne doit pas etre le formateur du stagiaire.
+create or replace function __SCHEMA__.caces_exiger_attestation() returns trigger
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_session uuid;
+begin
+  v_session := __SCHEMA__.caces_session_du_stagiaire(new.stagiaire_id);
+  if v_session is not null and (select type_session from __SCHEMA__.sessions_formation where id = v_session) = 'autorisation' then
+    return new;
+  end if;
+  if v_session is not null then
+    if new.testeur_id is null then
+      raise exception 'Aucun testeur disponible pour ce stagiaire (testeur de la session = formateur du groupe ?).';
+    end if;
+    if not __SCHEMA__.caces_peut_tester(new.testeur_id, new.stagiaire_id) then
+      raise exception 'Ce testeur ne peut pas tester ce stagiaire (testeur absent de la session, ou formateur du stagiaire).';
+    end if;
+    if not exists (select 1 from __SCHEMA__.attestations_testeur a where a.session_id = v_session and a.testeur_id = new.testeur_id) then
+      raise exception 'Le testeur doit saisir son code (4 chiffres) avant de demarrer les tests.';
+    end if;
+  end if;
+  return new;
+end;
+$f$;
+
+-- Patch 12/10/2026 aa : CDT = Centre de Deroulement de Test (site permanent certifie), et non « conditions de travail ».
+-- en_cdt est desormais derive du lieu : session en centre = CDT ; chez le client (intra) = hors CDT. Idempotent.
+update __SCHEMA__.sessions_formation set en_cdt = (lieu_type = 'centre') where en_cdt is distinct from (lieu_type = 'centre');
+-- Patch 12/10/2026 ab : illustrations des questions du QCM (pictogrammes, panneaux, photos).
+-- Idempotent. questions_qcm.illustration = chemin relatif (assets/qcm/<code>.jpg, dans le depot GitHub) ou URL publique (bucket
+-- caces-illustrations-qcm, alimente par l'ecran « Banque de questions »). Les images des supports papier theorie CASTEST (R482A, R489, R486A)
+-- ont ete extraites et rattachees par comparaison de texte (scripts/extraire_illustrations_qcm.py).
+alter table __SCHEMA__.questions_qcm add column if not exists illustration text;
+
+update __SCHEMA__.questions_qcm q set illustration = v.chemin
+from (values
+  ('R482A-CIRC-01', 'assets/qcm/R482A-CIRC-01.jpg'),
+  ('R482A-CIRC-02', 'assets/qcm/R482A-CIRC-02.jpg'),
+  ('R482A-CIRC-03', 'assets/qcm/R482A-CIRC-03.jpg'),
+  ('R482A-CIRC-04', 'assets/qcm/R482A-CIRC-04.jpg'),
+  ('R482A-CIRC-05', 'assets/qcm/R482A-CIRC-05.jpg'),
+  ('R482A-CIRC-08', 'assets/qcm/R482A-CIRC-08.jpg'),
+  ('R482A-CIRC-11', 'assets/qcm/R482A-CIRC-11.jpg'),
+  ('R482A-CIRC-12', 'assets/qcm/R482A-CIRC-12.jpg'),
+  ('R482A-CONN-02', 'assets/qcm/R482A-CONN-02.jpg'),
+  ('R482A-CONN-03', 'assets/qcm/R482A-CONN-03.jpg'),
+  ('R482A-CONN-04', 'assets/qcm/R482A-CONN-04.jpg'),
+  ('R482A-CONN-06', 'assets/qcm/R482A-CONN-06.jpg'),
+  ('R482A-CONN-07', 'assets/qcm/R482A-CONN-07.jpg'),
+  ('R482A-CONN-08', 'assets/qcm/R482A-CONN-08.jpg'),
+  ('R482A-CONN-10', 'assets/qcm/R482A-CONN-10.jpg'),
+  ('R482A-CONN-11', 'assets/qcm/R482A-CONN-11.jpg'),
+  ('R482A-CONN-12', 'assets/qcm/R482A-CONN-12.jpg'),
+  ('R482A-EXPL-01', 'assets/qcm/R482A-EXPL-01.jpg'),
+  ('R482A-EXPL-02', 'assets/qcm/R482A-EXPL-02.jpg'),
+  ('R482A-EXPL-03', 'assets/qcm/R482A-EXPL-03.jpg'),
+  ('R482A-EXPL-05', 'assets/qcm/R482A-EXPL-05.jpg'),
+  ('R482A-EXPL-06', 'assets/qcm/R482A-EXPL-06.jpg'),
+  ('R482A-EXPL-07', 'assets/qcm/R482A-EXPL-07.jpg'),
+  ('R482A-EXPL-08', 'assets/qcm/R482A-EXPL-08.jpg'),
+  ('R482A-EXPL-09', 'assets/qcm/R482A-EXPL-09.jpg'),
+  ('R482A-EXPL-10', 'assets/qcm/R482A-EXPL-10.jpg'),
+  ('R482A-EXPL-11', 'assets/qcm/R482A-EXPL-11.jpg'),
+  ('R482A-EXPL-12', 'assets/qcm/R482A-EXPL-12.jpg'),
+  ('R482A-EXPL-14', 'assets/qcm/R482A-EXPL-14.jpg'),
+  ('R482A-EXPL-17', 'assets/qcm/R482A-EXPL-17.jpg'),
+  ('R482A-EXPL-18', 'assets/qcm/R482A-EXPL-18.jpg'),
+  ('R482A-EXPL-20', 'assets/qcm/R482A-EXPL-20.jpg'),
+  ('R482A-EXPL-21', 'assets/qcm/R482A-EXPL-21.jpg'),
+  ('R482A-EXPL-22', 'assets/qcm/R482A-EXPL-22.jpg'),
+  ('R482A-EXPL-23', 'assets/qcm/R482A-EXPL-23.jpg'),
+  ('R482A-EXPL-24', 'assets/qcm/R482A-EXPL-24.jpg'),
+  ('R482A-EXPL-25', 'assets/qcm/R482A-EXPL-25.jpg'),
+  ('R482A-EXPL-26', 'assets/qcm/R482A-EXPL-26.jpg'),
+  ('R482A-EXPL-27', 'assets/qcm/R482A-EXPL-27.jpg'),
+  ('R482A-EXPL-28', 'assets/qcm/R482A-EXPL-28.jpg'),
+  ('R482A-EXPL-29', 'assets/qcm/R482A-EXPL-29.jpg'),
+  ('R482A-EXPL-30', 'assets/qcm/R482A-EXPL-30.jpg'),
+  ('R482A-EXPL-31', 'assets/qcm/R482A-EXPL-31.jpg'),
+  ('R482A-EXPL-32', 'assets/qcm/R482A-EXPL-32.jpg'),
+  ('R482A-EXPL-33', 'assets/qcm/R482A-EXPL-33.jpg'),
+  ('R482A-EXPL-34', 'assets/qcm/R482A-EXPL-34.jpg'),
+  ('R482A-EXPL-35', 'assets/qcm/R482A-EXPL-35.jpg'),
+  ('R482A-EXPL-36', 'assets/qcm/R482A-EXPL-36.jpg'),
+  ('R482A-EXPL-39', 'assets/qcm/R482A-EXPL-39.jpg'),
+  ('R482A-EXPL-40', 'assets/qcm/R482A-EXPL-40.jpg'),
+  ('R482A-EXPL-41', 'assets/qcm/R482A-EXPL-41.jpg'),
+  ('R482A-EXPL-42', 'assets/qcm/R482A-EXPL-42.jpg'),
+  ('R482A-EXPL-43', 'assets/qcm/R482A-EXPL-43.jpg'),
+  ('R482A-FIN_-01', 'assets/qcm/R482A-FIN_-01.jpg'),
+  ('R482A-FIN_-02', 'assets/qcm/R482A-FIN_-02.jpg'),
+  ('R482A-FIN_-03', 'assets/qcm/R482A-FIN_-03.jpg'),
+  ('R482A-FIN_-04', 'assets/qcm/R482A-FIN_-04.jpg'),
+  ('R482A-TECH-01', 'assets/qcm/R482A-TECH-01.jpg'),
+  ('R482A-TECH-02', 'assets/qcm/R482A-TECH-02.jpg'),
+  ('R482A-TECH-03', 'assets/qcm/R482A-TECH-03.jpg'),
+  ('R482A-TECH-04', 'assets/qcm/R482A-TECH-04.jpg'),
+  ('R482A-TECH-05', 'assets/qcm/R482A-TECH-05.jpg'),
+  ('R482A-TECH-06', 'assets/qcm/R482A-TECH-06.jpg'),
+  ('R482A-TECH-07', 'assets/qcm/R482A-TECH-07.jpg'),
+  ('R482A-TECH-08', 'assets/qcm/R482A-TECH-08.jpg'),
+  ('R482A-TECH-09', 'assets/qcm/R482A-TECH-09.jpg'),
+  ('R482A-TECH-10', 'assets/qcm/R482A-TECH-10.jpg'),
+  ('R482A-TECH-11', 'assets/qcm/R482A-TECH-11.jpg'),
+  ('R482A-TECH-12', 'assets/qcm/R482A-TECH-12.jpg'),
+  ('R482A-TECH-13', 'assets/qcm/R482A-TECH-13.jpg'),
+  ('R482A-TECH-14', 'assets/qcm/R482A-TECH-14.jpg'),
+  ('R482A-TECH-15', 'assets/qcm/R482A-TECH-15.jpg'),
+  ('R482A-TECH-16', 'assets/qcm/R482A-TECH-16.jpg'),
+  ('R482A-TECH-17', 'assets/qcm/R482A-TECH-17.jpg'),
+  ('R482A-TECH-18', 'assets/qcm/R482A-TECH-18.jpg'),
+  ('R482A-TECH-19', 'assets/qcm/R482A-TECH-19.jpg'),
+  ('R482A-TECH-21', 'assets/qcm/R482A-TECH-21.jpg'),
+  ('R482A-TECH-22', 'assets/qcm/R482A-TECH-22.jpg'),
+  ('R482A-TECH-23', 'assets/qcm/R482A-TECH-23.jpg'),
+  ('R482A-TECH-24', 'assets/qcm/R482A-TECH-24.jpg'),
+  ('R482A-TECH-25', 'assets/qcm/R482A-TECH-25.jpg'),
+  ('R482A-TECH-26', 'assets/qcm/R482A-TECH-26.jpg'),
+  ('R482A-TECH-27', 'assets/qcm/R482A-TECH-27.jpg'),
+  ('R482A-TECH-28', 'assets/qcm/R482A-TECH-28.jpg'),
+  ('R486A-CONN-01', 'assets/qcm/R486A-CONN-01.jpg'),
+  ('R486A-CONN-02', 'assets/qcm/R486A-CONN-02.jpg'),
+  ('R486A-CONN-03', 'assets/qcm/R486A-CONN-03.jpg'),
+  ('R486A-CONN-04', 'assets/qcm/R486A-CONN-04.jpg'),
+  ('R486A-CONN-05', 'assets/qcm/R486A-CONN-05.jpg'),
+  ('R486A-CONN-08', 'assets/qcm/R486A-CONN-08.jpg'),
+  ('R486A-CONN-09', 'assets/qcm/R486A-CONN-09.jpg'),
+  ('R486A-CONN-10', 'assets/qcm/R486A-CONN-10.jpg'),
+  ('R486A-CONN-11', 'assets/qcm/R486A-CONN-11.jpg'),
+  ('R486A-CONN-12', 'assets/qcm/R486A-CONN-12.jpg'),
+  ('R486A-CONN-13', 'assets/qcm/R486A-CONN-13.jpg'),
+  ('R486A-CONN-14', 'assets/qcm/R486A-CONN-14.jpg'),
+  ('R486A-EXPL-21', 'assets/qcm/R486A-EXPL-21.jpg'),
+  ('R486A-EXPL-41', 'assets/qcm/R486A-EXPL-41.jpg'),
+  ('R486A-EXPL-51', 'assets/qcm/R486A-EXPL-51.jpg'),
+  ('R486A-EXPL-53', 'assets/qcm/R486A-EXPL-53.jpg'),
+  ('R486A-EXPL-54', 'assets/qcm/R486A-EXPL-54.jpg'),
+  ('R486A-TECH-01', 'assets/qcm/R486A-TECH-01.jpg'),
+  ('R486A-TECH-02', 'assets/qcm/R486A-TECH-02.jpg'),
+  ('R486A-TECH-03', 'assets/qcm/R486A-TECH-03.jpg'),
+  ('R486A-TECH-04', 'assets/qcm/R486A-TECH-04.jpg'),
+  ('R486A-TECH-05', 'assets/qcm/R486A-TECH-05.jpg'),
+  ('R486A-TECH-06', 'assets/qcm/R486A-TECH-06.jpg'),
+  ('R486A-TECH-07', 'assets/qcm/R486A-TECH-07.jpg'),
+  ('R486A-TECH-08', 'assets/qcm/R486A-TECH-08.jpg'),
+  ('R486A-TECH-09', 'assets/qcm/R486A-TECH-09.jpg'),
+  ('R486A-TECH-10', 'assets/qcm/R486A-TECH-10.jpg'),
+  ('R486A-TECH-12', 'assets/qcm/R486A-TECH-12.jpg'),
+  ('R486A-TECH-13', 'assets/qcm/R486A-TECH-13.jpg'),
+  ('R486A-TECH-14', 'assets/qcm/R486A-TECH-14.jpg'),
+  ('R486A-TECH-15', 'assets/qcm/R486A-TECH-15.jpg'),
+  ('R486A-TECH-16', 'assets/qcm/R486A-TECH-16.jpg'),
+  ('R486A-TECH-17', 'assets/qcm/R486A-TECH-17.jpg'),
+  ('R486A-TECH-18', 'assets/qcm/R486A-TECH-18.jpg'),
+  ('R486A-TECH-19', 'assets/qcm/R486A-TECH-19.jpg'),
+  ('R486A-TECH-21', 'assets/qcm/R486A-TECH-21.jpg'),
+  ('R486A-TECH-22', 'assets/qcm/R486A-TECH-22.jpg'),
+  ('R486A-TECH-23', 'assets/qcm/R486A-TECH-23.jpg'),
+  ('R486A-TECH-24', 'assets/qcm/R486A-TECH-24.jpg'),
+  ('R486A-TECH-25', 'assets/qcm/R486A-TECH-25.jpg'),
+  ('R486A-TECH-26', 'assets/qcm/R486A-TECH-26.jpg'),
+  ('R489-CONN-01', 'assets/qcm/R489-CONN-01.jpg'),
+  ('R489-CONN-02', 'assets/qcm/R489-CONN-02.jpg'),
+  ('R489-CONN-03', 'assets/qcm/R489-CONN-03.jpg'),
+  ('R489-CONN-04', 'assets/qcm/R489-CONN-04.jpg'),
+  ('R489-CONN-05', 'assets/qcm/R489-CONN-05.jpg'),
+  ('R489-CONN-06', 'assets/qcm/R489-CONN-06.jpg'),
+  ('R489-CONN-10', 'assets/qcm/R489-CONN-10.jpg'),
+  ('R489-CONN-13', 'assets/qcm/R489-CONN-13.jpg'),
+  ('R489-CONN-14', 'assets/qcm/R489-CONN-14.jpg'),
+  ('R489-CONN-15', 'assets/qcm/R489-CONN-15.jpg'),
+  ('R489-EXPL-01', 'assets/qcm/R489-EXPL-01.jpg'),
+  ('R489-EXPL-02', 'assets/qcm/R489-EXPL-02.jpg'),
+  ('R489-EXPL-03', 'assets/qcm/R489-EXPL-03.jpg'),
+  ('R489-EXPL-04', 'assets/qcm/R489-EXPL-04.jpg'),
+  ('R489-EXPL-05', 'assets/qcm/R489-EXPL-05.jpg'),
+  ('R489-EXPL-06', 'assets/qcm/R489-EXPL-06.jpg'),
+  ('R489-EXPL-07', 'assets/qcm/R489-EXPL-07.jpg'),
+  ('R489-EXPL-08', 'assets/qcm/R489-EXPL-08.jpg'),
+  ('R489-EXPL-10', 'assets/qcm/R489-EXPL-10.jpg'),
+  ('R489-EXPL-12', 'assets/qcm/R489-EXPL-12.jpg'),
+  ('R489-EXPL-13', 'assets/qcm/R489-EXPL-13.jpg'),
+  ('R489-EXPL-14', 'assets/qcm/R489-EXPL-14.jpg'),
+  ('R489-EXPL-15', 'assets/qcm/R489-EXPL-15.jpg'),
+  ('R489-EXPL-16', 'assets/qcm/R489-EXPL-16.jpg'),
+  ('R489-EXPL-17', 'assets/qcm/R489-EXPL-17.jpg'),
+  ('R489-EXPL-18', 'assets/qcm/R489-EXPL-18.jpg'),
+  ('R489-EXPL-19', 'assets/qcm/R489-EXPL-19.jpg'),
+  ('R489-EXPL-20', 'assets/qcm/R489-EXPL-20.jpg'),
+  ('R489-EXPL-21', 'assets/qcm/R489-EXPL-21.jpg'),
+  ('R489-EXPL-22', 'assets/qcm/R489-EXPL-22.jpg'),
+  ('R489-EXPL-23', 'assets/qcm/R489-EXPL-23.jpg'),
+  ('R489-EXPL-24', 'assets/qcm/R489-EXPL-24.jpg'),
+  ('R489-EXPL-25', 'assets/qcm/R489-EXPL-25.jpg'),
+  ('R489-EXPL-26', 'assets/qcm/R489-EXPL-26.jpg'),
+  ('R489-EXPL-28', 'assets/qcm/R489-EXPL-28.jpg'),
+  ('R489-EXPL-30', 'assets/qcm/R489-EXPL-30.jpg'),
+  ('R489-EXPL-31', 'assets/qcm/R489-EXPL-31.jpg'),
+  ('R489-EXPL-32', 'assets/qcm/R489-EXPL-32.jpg'),
+  ('R489-EXPL-33', 'assets/qcm/R489-EXPL-33.jpg'),
+  ('R489-EXPL-35', 'assets/qcm/R489-EXPL-35.jpg'),
+  ('R489-EXPL-38', 'assets/qcm/R489-EXPL-38.jpg'),
+  ('R489-EXPL-39', 'assets/qcm/R489-EXPL-39.jpg'),
+  ('R489-EXPL-40', 'assets/qcm/R489-EXPL-40.jpg'),
+  ('R489-EXPL-41', 'assets/qcm/R489-EXPL-41.jpg'),
+  ('R489-EXPL-42', 'assets/qcm/R489-EXPL-42.jpg'),
+  ('R489-EXPL-43', 'assets/qcm/R489-EXPL-43.jpg'),
+  ('R489-EXPL-44', 'assets/qcm/R489-EXPL-44.jpg'),
+  ('R489-EXPL-45', 'assets/qcm/R489-EXPL-45.jpg'),
+  ('R489-EXPL-47', 'assets/qcm/R489-EXPL-47.jpg'),
+  ('R489-EXPL-48', 'assets/qcm/R489-EXPL-48.jpg'),
+  ('R489-TABL-01', 'assets/qcm/R489-TABL-01.jpg'),
+  ('R489-TABL-02', 'assets/qcm/R489-TABL-02.jpg'),
+  ('R489-TABL-06', 'assets/qcm/R489-TABL-06.jpg'),
+  ('R489-TABL-07', 'assets/qcm/R489-TABL-07.jpg'),
+  ('R489-TABL-08', 'assets/qcm/R489-TABL-08.jpg'),
+  ('R489-TABL-10', 'assets/qcm/R489-TABL-10.jpg'),
+  ('R489-TECH-02', 'assets/qcm/R489-TECH-02.jpg'),
+  ('R489-TECH-03', 'assets/qcm/R489-TECH-03.jpg'),
+  ('R489-TECH-04', 'assets/qcm/R489-TECH-04.jpg'),
+  ('R489-TECH-05', 'assets/qcm/R489-TECH-05.jpg'),
+  ('R489-TECH-06', 'assets/qcm/R489-TECH-06.jpg'),
+  ('R489-TECH-07', 'assets/qcm/R489-TECH-07.jpg'),
+  ('R489-TECH-08', 'assets/qcm/R489-TECH-08.jpg'),
+  ('R489-TECH-09', 'assets/qcm/R489-TECH-09.jpg'),
+  ('R489-TECH-10', 'assets/qcm/R489-TECH-10.jpg'),
+  ('R489-TECH-11', 'assets/qcm/R489-TECH-11.jpg'),
+  ('R489-TECH-12', 'assets/qcm/R489-TECH-12.jpg'),
+  ('R489-TECH-13', 'assets/qcm/R489-TECH-13.jpg'),
+  ('R489-TECH-14', 'assets/qcm/R489-TECH-14.jpg'),
+  ('R489-TECH-15', 'assets/qcm/R489-TECH-15.jpg'),
+  ('R489-TECH-16', 'assets/qcm/R489-TECH-16.jpg'),
+  ('R489-TECH-17', 'assets/qcm/R489-TECH-17.jpg'),
+  ('R489-TECH-18', 'assets/qcm/R489-TECH-18.jpg'),
+  ('R489-TECH-19', 'assets/qcm/R489-TECH-19.jpg'),
+  ('R489-TECH-20', 'assets/qcm/R489-TECH-20.jpg'),
+  ('R489-TECH-21', 'assets/qcm/R489-TECH-21.jpg'),
+  ('R489-TECH-25', 'assets/qcm/R489-TECH-25.jpg')
+) as v(code, chemin)
+where q.code = v.code and q.illustration is distinct from v.chemin;
+
+-- Le stagiaire (anon, par son code) recoit aussi l'illustration de chaque question de son tirage.
+drop function if exists __SCHEMA__.caces_questions_du_tirage(text, uuid);
+create function __SCHEMA__.caces_questions_du_tirage(p_code text, p_tirage_id uuid)
+returns table(question_id integer, ordre integer, enonce text, reponse_stagiaire boolean, illustration text)
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select qtq.question_id, qtq.ordre, q.enonce, qtq.reponse_stagiaire, q.illustration
+  from __SCHEMA__.qcm_tirage_questions qtq
+  join __SCHEMA__.questions_qcm q on q.id = qtq.question_id
+  join __SCHEMA__.qcm_tirages t on t.id = qtq.tirage_id
+  join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+  where qtq.tirage_id = p_tirage_id and s.code_acces_individuel = p_code
+  order by qtq.ordre;
+$f$;
+revoke all on function __SCHEMA__.caces_questions_du_tirage(text, uuid) from public;
+grant execute on function __SCHEMA__.caces_questions_du_tirage(text, uuid) to anon, authenticated;
+
+-- Bucket public en lecture (illustrations de formation, sans donnee personnelle) ; ecriture reservee a l'administrateur CACES.
+insert into storage.buckets (id, name, public) values ('caces-illustrations-qcm', 'caces-illustrations-qcm', true) on conflict (id) do nothing;
+drop policy if exists caces_illustrations_ajout on storage.objects;
+create policy caces_illustrations_ajout on storage.objects for insert to authenticated
+  with check (bucket_id = 'caces-illustrations-qcm' and coalesce(__SCHEMA__.caces_role(), '') = 'admin');
+drop policy if exists caces_illustrations_modif on storage.objects;
+create policy caces_illustrations_modif on storage.objects for update to authenticated
+  using (bucket_id = 'caces-illustrations-qcm' and coalesce(__SCHEMA__.caces_role(), '') = 'admin');
+drop policy if exists caces_illustrations_suppr on storage.objects;
+create policy caces_illustrations_suppr on storage.objects for delete to authenticated
+  using (bucket_id = 'caces-illustrations-qcm' and coalesce(__SCHEMA__.caces_role(), '') = 'admin');
+
