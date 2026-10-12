@@ -21,20 +21,23 @@ async function rendreBanque(zone) {
   S._questions = data || [];
   const nbActives = id => S._questions.filter(q => q.theme_id === id && q.actif).length;
   const q = (b.q || '').toLowerCase();
-  const liste = S._questions.filter(x => (!b.theme || String(x.theme_id) === String(b.theme)) && (!q || x.enonce.toLowerCase().includes(q)));
+  const liste = S._questions.filter(x => (!b.theme || String(x.theme_id) === String(b.theme)) && (!q || x.enonce.toLowerCase().includes(q)) && (!b.sansImage || !x.illustration));
+  const nbImages = S._questions.filter(x => x.illustration).length;
   zone.innerHTML = `
     <div class="barre-actions"><h2>Banque de questions</h2><button class="principal" onclick="modifierQuestion(null)">+ Question</button></div>
     <div class="formulaire"><div class="grille-2">
       <label>Référentiel <select onchange="AD.banque.ref=this.value;AD.banque.theme='';rendreBanque(zoneAdmin())">${optRefs(b.ref)}</select></label>
-      <label>Recherche <input value="${esc(b.q)}" onchange="AD.banque.q=this.value;rendreBanque(zoneAdmin())"></label></div></div>
+      <label>Recherche <input value="${esc(b.q)}" onchange="AD.banque.q=this.value;rendreBanque(zoneAdmin())"></label>
+      <label class="case"><input type="checkbox" ${b.sansImage ? 'checked' : ''} onchange="AD.banque.sansImage=this.checked;rendreBanque(zoneAdmin())"> Questions sans illustration (${S._questions.length - nbImages} sur ${S._questions.length} ; ${nbImages} illustrée(s))</label></div></div>
     <table class="tableau"><thead><tr><th>Thème</th><th>Questions actives</th><th>Barème officiel</th></tr></thead><tbody>
       ${themes.map(t => `<tr class="${String(b.theme) === String(t.id) ? 'ligne-active' : ''}">
         <td><button class="lien" onclick="AD.banque.theme='${t.id}';rendreBanque(zoneAdmin())">${esc(t.libelle)}</button></td>
         <td>${nbActives(t.id)}</td><td>${t.bareme_officiel_sur_100}${nbActives(t.id) !== t.bareme_officiel_sur_100 ? ' ⚠' : ''}</td></tr>`).join('')}</tbody></table>
     ${b.theme ? `<button class="lien" onclick="AD.banque.theme='';rendreBanque(zoneAdmin())">Tous les thèmes</button>` : ''}
     <p class="aide">${liste.length} question(s). Une question désactivée n'est plus tirée (les copies déjà corrigées sont conservées).</p>
-    <table class="tableau"><thead><tr><th>Code</th><th>Énoncé</th><th>Réponse</th><th>Actif</th><th></th></tr></thead><tbody>
+    <table class="tableau"><thead><tr><th>Code</th><th>Énoncé</th><th>Illustration</th><th>Réponse</th><th>Actif</th><th></th></tr></thead><tbody>
       ${liste.map(x => `<tr class="${x.actif ? '' : 'termine'}"><td>${esc(x.code || '')}</td><td>${esc(x.enonce)}</td>
+        <td>${x.illustration ? `<img class="mini-illustration" loading="lazy" src="${esc(x.illustration)}" alt="">` : '—'}</td>
         <td>${x.reponse ? 'Vrai' : 'Faux'}</td><td>${x.actif ? 'Oui' : 'Non'}</td>
         <td><button class="lien" onclick="modifierQuestion(${x.id})">Modifier</button></td></tr>`).join('')}</tbody></table>`;
 }
@@ -48,12 +51,35 @@ function modifierQuestion(id) {
     <label>Énoncé <textarea name="enonce" rows="4" required>${esc(x.enonce)}</textarea></label>
     <label>Bonne réponse <select name="reponse"><option value="1" ${x.reponse ? 'selected' : ''}>Vrai</option><option value="0" ${x.reponse ? '' : 'selected'}>Faux</option></select></label>
     <label><input type="checkbox" name="actif" ${x.actif ? 'checked' : ''}> Question active</label>
+    <fieldset><legend>Illustration (pictogramme, panneau, photo…)</legend>
+      <div id="q-apercu">${x.illustration ? `<img class="illustration-qcm" src="${esc(x.illustration)}" alt="">` : '<i>aucune</i>'}</div>
+      <input type="file" name="image" accept="image/*">
+      ${x.illustration ? '<label class="case"><input type="checkbox" name="retirer_image"> Retirer l\'illustration</label>' : ''}
+      <p class="aide">Affichée sous l'énoncé, aussi pour le stagiaire. L'image est réduite automatiquement.</p></fieldset>
     <button class="principal" type="submit">Enregistrer</button></form>`);
+  $('#form-q').elements.image.addEventListener('change', async ev => {
+    const fch = ev.target.files[0]; if (!fch) return;
+    $('#q-apercu').innerHTML = `<img class="illustration-qcm" src="${URL.createObjectURL(fch)}" alt="">`;
+  });
   $('#form-q').addEventListener('submit', async ev => {
     ev.preventDefault(); const f = ev.target;
     const ligne = { theme_id: Number(f.theme.value), code: f.code.value.trim() || null, enonce: f.enonce.value.trim(), reponse: f.reponse.value === '1', actif: f.actif.checked };
-    const { error } = id ? await sb.from('questions_qcm').update(ligne).eq('id', id) : await sb.from('questions_qcm').insert(ligne);
-    if (error) return erreurSupabase('Enregistrement de la question', error);
+    const rep = id ? await sb.from('questions_qcm').update(ligne).eq('id', id).select('id').single() : await sb.from('questions_qcm').insert(ligne).select('id').single();
+    if (rep.error) return erreurSupabase('Enregistrement de la question', rep.error);
+    try {
+      const qid = rep.data.id;
+      if (f.image.files[0]) {   // nouvelle illustration : réduite puis stockée dans le bucket public caces-illustrations-qcm
+        const b64 = await reduirePhoto(f.image.files[0], 800, 0.82);
+        const blob = await (await fetch('data:image/jpeg;base64,' + b64)).blob();
+        const chemin = `${(ligne.code || 'q' + qid).replace(/[^A-Za-z0-9_-]/g, '_')}-${Date.now()}.jpg`;
+        const up = await sb.storage.from('caces-illustrations-qcm').upload(chemin, blob, { contentType: 'image/jpeg', upsert: true });
+        if (up.error) throw up.error;
+        const url = sb.storage.from('caces-illustrations-qcm').getPublicUrl(chemin).data.publicUrl;
+        const e2 = await sb.from('questions_qcm').update({ illustration: url }).eq('id', qid); if (e2.error) throw e2.error;
+      } else if (f.retirer_image?.checked) {
+        const e3 = await sb.from('questions_qcm').update({ illustration: null }).eq('id', qid); if (e3.error) throw e3.error;
+      }
+    } catch (e) { return erreurSupabase('Enregistrement de l\'illustration', e); }
     toast('Question enregistrée'); fermerModale(); rendreBanque(zoneAdmin());
   });
 }

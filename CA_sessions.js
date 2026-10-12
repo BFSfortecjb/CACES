@@ -129,12 +129,11 @@ function nouvelleSession() {
           <select name="formateur_id">${optionsPersonnes(S.profil.id)}</select></label>
         <label>Testeur de la session <span class="aide" id="aide-testeur">(différent du formateur)</span>
           <select name="testeur_id"><option value="">— à affecter —</option>${optionsPersonnes(null, null, true)}</select></label>
-        <label>Lieu de réalisation des tests
+        <label>Lieu des tests <span class="aide">(centre de déroulement de test — CDT — ou chez le client)</span>
           <select name="lieu_choix">${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}
             <option value="client">Chez le client (intra) — repérage client obligatoire</option></select></label>
         <label id="bloc-agence-org" hidden>Agence organisatrice (cachet, secrétariat)
           <select name="agence_org"><option value="">—</option>${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
-        <label class="case"><input type="checkbox" name="en_cdt"> Test en conditions de travail (CDT)</label>
       </div>
       <fieldset><legend>Catégories de CACES visées</legend>${cases_categories()}</fieldset>
       <div class="pied-modale">
@@ -180,7 +179,7 @@ function nouvelleSession() {
         formateur_id: f.formateur_id.value, testeur_id: f.testeur_id.value || null,
         centre_examen_id: lieuClient ? (f.agence_org.value ? Number(f.agence_org.value) : null) : Number(f.lieu_choix.value),
         lieu: lieuClient ? 'Chez le client (intra)' : ((S.referentiel.centres.find(c => c.id === Number(f.lieu_choix.value)) || {}).nom || null),
-        lieu_type: lieuClient ? 'client' : 'centre', en_cdt: f.en_cdt.checked, code_acces: code, statut: 'brouillon',
+        lieu_type: lieuClient ? 'client' : 'centre', en_cdt: !lieuClient, code_acces: code, statut: 'brouillon',
       }).select().single();
       if (error) throw error;
       if (f.date_fin.value && f.date_debut.value && f.date_fin.value >= f.date_debut.value) {

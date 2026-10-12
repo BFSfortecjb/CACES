@@ -243,8 +243,8 @@ async function ouvrirFicheVisite(id, pourSession) {
 
 async function changerLieuSession(valeur) {
   const centre = valeur === 'client' ? null : (S.referentiel.centres || []).find(c => c.id === Number(valeur));
-  const maj = valeur === 'client' ? { lieu_type: 'client', lieu: 'Chez le client (intra)' }
-    : { lieu_type: 'centre', lieu: centre ? centre.nom : null, centre_examen_id: Number(valeur) };
+  const maj = valeur === 'client' ? { lieu_type: 'client', lieu: 'Chez le client (intra)', en_cdt: false }
+    : { lieu_type: 'centre', lieu: centre ? centre.nom : null, centre_examen_id: Number(valeur), en_cdt: true };
   const { error } = await sb.from('sessions_formation').update(maj).eq('id', S.session.id);
   if (error) return erreurSupabase('Modification du lieu', error);
   Object.assign(S.session, maj);

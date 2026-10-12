@@ -675,3 +675,6 @@ details.repliable > div { padding-bottom: 12px; }
 .fiche-session .valeur { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .fiche-session .champ .lien, .fiche-session .champ > button { align-self: flex-start; }
 .fiche-session .qr-repliable { align-self: flex-start; }
+
+.illustration-qcm { display: block; max-width: 100%; max-height: 280px; margin: 8px auto; border-radius: 8px; object-fit: contain; }
+.mini-illustration { height: 44px; width: auto; max-width: 90px; border-radius: 4px; object-fit: cover; display: block; }

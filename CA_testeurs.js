@@ -131,14 +131,13 @@ async function bandeauChargeTesteur(s) {
 }
 
 
-/* ---- Taux de tests en conditions de travail (CDT) par famille et par année ---- */
+/* ---- Taux de tests en centre de déroulement de test (CDT) par famille et par année ---- */
 async function afficherTauxCdt() {
   const z = $('#zone-cdt'); if (!z) return;
   const { data, error } = await sb.from('v_taux_cdt').select('*').order('annee', { ascending: false }).order('famille');
   if (error) { z.innerHTML = ''; return erreurSupabase('Lecture des taux CDT', error); }
-  z.innerHTML = `<h3>Tests en conditions de travail (CDT)</h3>
-    <p class="aide">Part des tests réalisés en CDT (case « Test en CDT » de la session) par famille et par année,
-      comparée au minimum fixé par le référentiel de certification.</p>
+  z.innerHTML = `<h3>Tests en centre de déroulement de test (CDT)</h3>
+    <p class="aide">Un CDT est un site permanent certifié qui dispose uniquement des moyens techniques pour le passage des tests. Part des tests réalisés en CDT (sessions dont le lieu est un centre, et non chez le client) par famille et par année, comparée au minimum fixé par le référentiel de certification (tableau T1).</p>
     <table class="tableau"><thead><tr><th>Année</th><th>Famille</th><th>Tests</th><th>dont CDT</th><th>Taux</th><th>Minimum</th><th></th></tr></thead><tbody>
     ${(data || []).map(r => { const ok = r.seuil == null || Number(r.taux) >= r.seuil;
       return `<tr><td>${r.annee}</td><td>${esc(r.famille)}</td><td>${r.nb_tests}</td><td>${r.nb_cdt}</td>

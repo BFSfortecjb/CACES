@@ -127,6 +127,7 @@ function ecranQcmStagiaire(cible, tirage, ref, qs) {
       <b id="stag-compteur"></b></p>
     ${qs.map(q => `<div class="carte" data-q="${q.question_id}">
       <p><b>${q.ordre}.</b> ${esc(q.enonce)}</p>
+      ${q.illustration ? `<img class="illustration-qcm" loading="lazy" src="${esc(q.illustration)}" alt="Illustration de la question ${q.ordre}">` : ''}
       <div class="barre-actions">
         <button class="nom" data-v="1">Vrai</button><button class="nom" data-v="0">Faux</button></div></div>`).join('')}
     <button class="principal" id="stag-fin" style="width:100%;padding:14px">Terminer et corriger</button></div>`;

@@ -81,7 +81,7 @@ async function rendreParcEngins(zone) {
 
 // Types d'engin des grilles pratiques R482A (en clair). Clé = catégorie:code de la grille.
 const TYPES_ENGIN_GRILLE = {
-  'A:MB': 'Motobasculeur compact', 'A:CH': 'Chargeuse compacte', 'A:CP': 'Compacteur compact',
+  'A:PH': 'Pelle hydraulique compacte (engin n° 1)', 'A:MB': 'Motobasculeur compact', 'A:CH': 'Chargeuse compacte', 'A:CP': 'Compacteur compact',
   'B2:CA': 'Engin de forage à conducteur accompagnant (télécommande)', 'B2:CP': 'Engin de forage à conducteur porté',
   'C1:Ch': 'Chargeuse', 'C1:CP': 'Chargeuse-pelleteuse',
 };
