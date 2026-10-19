@@ -93,6 +93,7 @@ function ecranCategoriesStagiaire(cible, lignes) {
   const i = lignes[0];
   // un QCM par référentiel (la banque est commune aux catégories d'un référentiel)
   const refs = [...new Set(lignes.map(l => l.referentiel_code))];
+  surveillerSeanceStagiaire(cible, lignes);
   pageStagiaire(cible, `
     <div class="carte">
       <p>Bonjour <b>${esc(i.prenom)} ${esc(i.nom)}</b><br>Session : ${esc(i.session_nom)}</p>
@@ -167,4 +168,72 @@ function resultatQcmStagiaire(cible, r) {
     ${(r.detail_themes || []).map(t => `<tr><td>${esc(t.theme)}</td><td>${esc(t.note_pct)} %</td>
       <td>${esc(t.nb_correct)} / ${esc(t.nb_questions)}</td></tr>`).join('')}</tbody></table>
     <p class="aide">Le résultat définitif te sera communiqué par ton testeur.</p>`);
+}
+
+
+/* ---------- QCM général : le téléphone sert de télécommande ---------- */
+let _seanceTimer = null;
+function arreterSurveillanceSeance() { clearInterval(_seanceTimer); _seanceTimer = null; }
+
+/** Sur l'écran d'accueil du stagiaire : si le testeur lance une séance, bascule sur la télécommande. */
+function surveillerSeanceStagiaire(cible, lignes) {
+  arreterSurveillanceSeance();
+  const tick = async () => {
+    if (!document.body.contains(cible)) return arreterSurveillanceSeance();
+    try {
+      const e = ((await rpc('caces_seance_etat', { p_code: PS.code })) || [])[0];
+      if (e && e.etat === 'en_cours') { arreterSurveillanceSeance(); ecranTelecommande(cible, lignes); }
+    } catch (err) { /* hors ligne : on réessaie */ }
+  };
+  tick(); _seanceTimer = setInterval(tick, 3000);
+}
+
+function ecranTelecommande(cible, lignes) {
+  let etat = null, choix = null, ordreAffiche = 0, occupe = false;
+  const dessiner = () => {
+    const verrou = etat.valide;
+    const sel = choix !== null ? choix : etat.ma_reponse;
+    cible.innerHTML = `<div class="stagiaire-accueil telecommande">
+      <p class="aide">${esc(libelleReferentiel(etat.referentiel_code))} — Question ${etat.question_courante} / ${etat.nb_questions}</p>
+      <p><b>Regarde la question à l'écran, puis réponds.</b></p>
+      <div class="tc-vf"><button class="tc-btn ${sel === true ? 'sel' : ''}" data-v="1" ${verrou ? 'disabled' : ''}>VRAI</button>
+        <button class="tc-btn ${sel === false ? 'sel' : ''}" data-v="0" ${verrou ? 'disabled' : ''}>FAUX</button></div>
+      ${verrou ? '<div class="carte succes"><b>✔ Réponse validée</b><br>Attends la question suivante.</div>'
+        : `<button class="principal tc-valider" ${sel === null || sel === undefined ? 'disabled' : ''}>Valider ma réponse</button>
+           <p class="aide">Tu peux changer ton choix tant que tu n'as pas validé.</p>`}
+    </div>`;
+    $$('.tc-btn', cible).forEach(b => b.addEventListener('click', async () => {
+      choix = b.dataset.v === '1'; dessiner();
+      try { await rpc('caces_seance_repondre', { p_code: PS.code, p_seance: etat.seance_id, p_ordre: etat.question_courante, p_reponse: choix, p_valider: false }); }
+      catch (e) { toast(e.message); }
+    }));
+    $('.tc-valider', cible)?.addEventListener('click', async () => {
+      try {
+        await rpc('caces_seance_repondre', { p_code: PS.code, p_seance: etat.seance_id, p_ordre: etat.question_courante, p_reponse: choix !== null ? choix : etat.ma_reponse, p_valider: true });
+        etat.valide = true; dessiner();
+      } catch (e) { toast(e.message); }
+    });
+  };
+  const tick = async () => {
+    if (occupe) return;
+    if (!document.body.contains(cible)) return clearInterval(minuteur);
+    occupe = true;
+    try {
+      const e = ((await rpc('caces_seance_etat', { p_code: PS.code })) || [])[0];
+      if (!e) { clearInterval(minuteur); return ecranCategoriesStagiaire(cible, lignes); }
+      if (e.etat === 'terminee') {
+        clearInterval(minuteur);
+        const r = ((await rpc('caces_seance_resultat', { p_code: PS.code, p_seance: e.seance_id })) || [])[0];
+        return r ? resultatQcmStagiaire(cible, r) : ecranCategoriesStagiaire(cible, lignes);
+      }
+      const change = !etat || e.question_courante !== ordreAffiche || e.valide !== etat.valide
+        || (choix === null && e.ma_reponse !== etat.ma_reponse);
+      if (e.question_courante !== ordreAffiche) { choix = null; ordreAffiche = e.question_courante; }
+      etat = e;
+      if (change) dessiner();
+    } catch (err) { /* réseau : on réessaie */ }
+    occupe = false;
+  };
+  const minuteur = setInterval(tick, 1500);
+  tick();
 }

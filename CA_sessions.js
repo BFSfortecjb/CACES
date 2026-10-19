@@ -462,6 +462,7 @@ async function rendreDetailSession(zone) {
       ${d.formateur ? `<button onclick="appelModule('ouvrirHorometreSession')">⏱ Horomètre (pointage)</button>` : ''}
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
       <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
+      ${d.testeur && !cloturee && s.type_session !== 'autorisation' ? `<button onclick="appelModule('ouvrirQcmGeneral')" title="Questions projetées pour tout le groupe, avec téléphones ou boîtiers Quizbox">📺 QCM général</button>` : ''}
       ${d.ecriture ? `<button onclick="appelModule('envoyerSecretariat')">✉️ Envoi au secrétariat</button>` : ''}
     </div>
     <div class="barre-actions">
