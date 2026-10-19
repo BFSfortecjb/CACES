@@ -749,3 +749,6 @@ details.repliable > div { padding-bottom: 12px; }
 .qg-portrait .qg-enonce { font-size: 2.2em; }
 .note-faible { color: var(--rouge, #b00020); font-weight: 700; }
 .tableau-defilant { overflow-x: auto; }
+
+.ligne-profil { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border-bottom: 1px solid #eee; }
+.ligne-profil select { max-width: 60%; }

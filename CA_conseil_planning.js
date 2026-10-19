@@ -5,7 +5,8 @@
    Calcul 100 % navigateur (aucune écriture tant qu'on n'a pas cliqué « Appliquer au Planning »).
    Le contrôle bloquant reste celui de la base, sur la date réelle de l'épreuve.
    ===================================================================== */
-const CONSEIL = { dernier: null };
+const CONSEIL = { dernier: null, profils: {} };
+function changerProfilConseil(id, v) { CONSEIL.profils[id] = v; ouvrirConseilPlanning(CONSEIL.dernier?.n); }
 
 /** n jours ouvrés (lun–ven) après une date de départ (exclue). */
 function joursOuvresApres(depart, n) {
@@ -34,10 +35,10 @@ function calculerConseil(c) {
   };
   const poser = (t, j, item) => {
     const ch = lit(t, j); ch.tot += item.utCharge; if (item.epreuve === 'pratique') ch.prat += item.utCharge;
-    ch.items.push(item);
+    const o = { ...item, jour: j, testeur: t };
+    ch.items.push(o); aff.push(o);
     parStagJour[item.st.id + '|' + j] = (parStagJour[item.st.id + '|' + j] || 0) + item.utStag;
     if (item.epreuve === 'pratique') parCatJour[item.ref + ' ' + item.cat + '|' + j] = (parCatJour[item.ref + ' ' + item.cat + '|' + j] || 0) + item.utCharge;
-    aff.push({ ...item, jour: j, testeur: t });
   };
   const meilleur = (cands) => cands.sort((a, b) => a.score - b.score || a.ji - b.ji)[0];
 
@@ -69,40 +70,87 @@ function calculerConseil(c) {
     }
   }
 
-  /* ---- 2. Pratique : un bloc par stagiaire, du plus lourd au plus léger ---- */
+  /* ---- 2. Pratique ----
+     Ordre : stagiaires « stressés » (répartis sur 2 jours), puis « standard », compactage vers le dernier jour,
+     puis stagiaires « à l'aise » dans ce qui reste, le plus tôt possible. */
+  const profil = st => (c.profil && c.profil(st)) || 'standard';
   const blocs = c.stags.map(st => ({ st, items: (st.stagiaire_categories || []).filter(x => x.pratique_validee !== true)
     .map(x => ({ ref: x.referentiel_code, cat: x.categorie_code, ut: c.utCat(x.referentiel_code, x.categorie_code) })) }))
-    .filter(b => b.items.length).map(b => ({ ...b, ut: b.items.reduce((a, i) => a + i.ut, 0) }))
+    .filter(b => b.items.length).map(b => ({ ...b, ut: b.items.reduce((a, i) => a + i.ut, 0), profil: profil(b.st) }))
     .sort((a, b) => b.ut - a.ut || a.st.nom.localeCompare(b.st.nom));
 
-  const score = (t, j) => -jours.indexOf(j) * 100 - lit(t, j).tot; // pédagogie : on concentre la pratique sur les derniers jours, créneaux remplis un par un
-  for (const b of blocs) {
+  const scoreFin = (t, j) => -jours.indexOf(j) * 100 - lit(t, j).tot;   // derniers jours d'abord, créneau déjà entamé d'abord
+  const scoreDebut = (t, j) => jours.indexOf(j) * 100 - lit(t, j).tot;  // premiers jours d'abord
+  const mk = (b, i) => ({ st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, ut: i.ut, utCharge: i.ut, utStag: i.ut });
+  const NON = (b, i, raison) => non.push({ st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, ut: i.ut, raison });
+
+  const placerBloc = (b, items, score, joursOk) => {
     const elig = testeurs.filter(t => c.peut(b.st, t));
-    if (!elig.length) { b.items.forEach(i => non.push({ st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, raison: 'aucun testeur autorisé (formateur = testeur ?)' })); continue; }
-    // bloc entier : toutes les catégories chez le même testeur le même jour
-    const cands = [];
-    elig.forEach(t => jours.forEach((j, ji) => {
-      const okBloc = b.items.every((i, k) => { // vérifie cumulativement
-        const deja = b.items.slice(0, k).reduce((a, x) => a + x.ut, 0);
-        return ok(t, j, deja + i.ut, deja + i.ut, b.st.id, deja + i.ut, i.ref, i.cat);
-      }) && (() => { // engins : chaque catégorie séparément + plafond global du bloc
-        const ch = lit(t, j); return ch.tot + b.ut <= q.jour + 1e-9 && ch.prat + b.ut <= q.prat + 1e-9 && (parStagJour[b.st.id + '|' + j] || 0) + b.ut <= q.stag + 1e-9;
-      })();
-      if (okBloc) cands.push({ t, j, ji, score: score(t, j, b.ut) });
+    const ut = items.reduce((a, i) => a + i.ut, 0), cands = [];
+    elig.forEach(t => (joursOk || jours).forEach(j => {
+      const okB = items.every((i, k) => { const d = items.slice(0, k).reduce((a, x) => a + x.ut, 0); return ok(t, j, d + i.ut, d + i.ut, b.st.id, d + i.ut, i.ref, i.cat); })
+        && lit(t, j).tot + ut <= q.jour + 1e-9 && lit(t, j).prat + ut <= q.prat + 1e-9 && (parStagJour[b.st.id + '|' + j] || 0) + ut <= q.stag + 1e-9;
+      if (okB) cands.push({ t, j, ji: jours.indexOf(j), score: score(t, j) });
     }));
-    if (cands.length) {
-      const m = meilleur(cands);
-      b.items.forEach(i => poser(m.t, m.j, { st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, ut: i.ut, utCharge: i.ut, utStag: i.ut }));
-      continue;
-    }
-    // sinon : épreuve par épreuve
-    for (const i of b.items.sort((x, y) => y.ut - x.ut)) {
+    if (!cands.length) return null;
+    const m = meilleur(cands); items.forEach(i => poser(m.t, m.j, mk(b, i))); return m;
+  };
+  const placerItems = (b, items, score, joursOk) => {
+    const elig = testeurs.filter(t => c.peut(b.st, t));
+    for (const i of items.slice().sort((x, y) => y.ut - x.ut)) {
       const cs = [];
-      elig.forEach(t => jours.forEach((j, ji) => { if (ok(t, j, i.ut, i.ut, b.st.id, i.ut, i.ref, i.cat)) cs.push({ t, j, ji, score: score(t, j, i.ut) }); }));
-      if (!cs.length) { non.push({ st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, ut: i.ut, raison: 'plus de capacité' }); continue; }
-      const m = meilleur(cs);
-      poser(m.t, m.j, { st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, ut: i.ut, utCharge: i.ut, utStag: i.ut });
+      elig.forEach(t => (joursOk || jours).forEach(j => { if (ok(t, j, i.ut, i.ut, b.st.id, i.ut, i.ref, i.cat)) cs.push({ t, j, ji: jours.indexOf(j), score: score(t, j) }); }));
+      if (!cs.length) { NON(b, i, 'plus de capacité'); continue; }
+      const m = meilleur(cs); poser(m.t, m.j, mk(b, i));
     }
+  };
+  const sansTesteur = b => { if (testeurs.some(t => c.peut(b.st, t))) return false; b.items.forEach(i => NON(b, i, 'aucun testeur autorisé (formateur = testeur ?)')); return true; };
+
+  // a) stressés : la 1re épreuve (la plus légère) un jour avant, le reste groupé plus tard
+  for (const b of blocs.filter(x => x.profil === 'stresse')) {
+    if (sansTesteur(b)) continue;
+    const its = b.items.slice().sort((x, y) => x.ut - y.ut);
+    if (its.length < 2 || jours.length < 2) { placerBloc(b, its, scoreFin) || placerItems(b, its, scoreFin); continue; }
+    const reste = its.slice(1);
+    let m = placerBloc(b, reste, scoreFin);
+    if (m) {
+      const avant = jours.filter(j => jours.indexOf(j) < jours.indexOf(m.j));
+      const essai = placerBloc(b, [its[0]], scoreFin, avant);
+      if (!essai) placerItems(b, [its[0]], scoreFin);
+    } else placerItems(b, its, scoreFin);
+  }
+  // b) standard : bloc entier, derniers jours d'abord
+  for (const b of blocs.filter(x => x.profil === 'standard')) {
+    if (sansTesteur(b)) continue;
+    placerBloc(b, b.items, scoreFin) || placerItems(b, b.items, scoreFin);
+  }
+
+  // c) compactage : on remplit le dernier jour (6 UT de pratique max) en décalant des épreuves, sans casser les « stressés » (≥ 2 jours)
+  const retirer = (o) => {
+    const ch = lit(o.testeur, o.jour); ch.tot -= o.utCharge; ch.prat -= o.utCharge; ch.items.splice(ch.items.indexOf(o), 1); aff.splice(aff.indexOf(o), 1);
+    parStagJour[o.st.id + '|' + o.jour] -= o.utStag; parCatJour[o.ref + ' ' + o.cat + '|' + o.jour] -= o.utCharge;
+  };
+  const joursDe = (st, sauf) => new Set(aff.filter(a => a.st.id === st.id && a.epreuve === 'pratique' && a !== sauf).map(a => a.jour));
+  for (let ji = 0; ji < jours.length - 1; ji++) {
+    for (const o of aff.filter(a => a.epreuve === 'pratique' && a.jour === jours[ji]).sort((a, b) => b.utCharge - a.utCharge)) {
+      let bouge = false;
+      for (let jt = jours.length - 1; jt > ji && !bouge; jt--) {
+        if (profil(o.st) === 'stresse') { const js = joursDe(o.st, o); js.add(jours[jt]); if (js.size < 2) continue; }
+        const cs = testeurs.filter(x => c.peut(o.st, x)).sort((a, b) => lit(b, jours[jt]).tot - lit(a, jours[jt]).tot);
+        for (const x of cs) {
+          if (ok(x, jours[jt], o.utCharge, o.utCharge, o.st.id, o.utStag, o.ref, o.cat)) {
+            const it = { st: o.st, epreuve: o.epreuve, ref: o.ref, cat: o.cat, ut: o.ut, utCharge: o.utCharge, utStag: o.utStag };
+            retirer(o); poser(x, jours[jt], it); bouge = true; break;
+          }
+        }
+      }
+    }
+  }
+
+  // d) à l'aise : dans ce qui reste, le plus tôt possible
+  for (const b of blocs.filter(x => x.profil === 'aise')) {
+    if (sansTesteur(b)) continue;
+    placerBloc(b, b.items, scoreDebut) || placerItems(b, b.items, scoreDebut);
   }
 
   /* ---- 3. Diagnostic et alertes ---- */
@@ -151,12 +199,13 @@ async function ouvrirConseilPlanning(nbJoursDemande) {
     q: { jour: Number(prm?.quota_ut_jour ?? 7), prat: Number(prm?.quota_ut_pratique_jour ?? 6), stag: Number(prm?.quota_ut_stagiaire_jour ?? 7), maxTh: Number(prm?.max_candidats_theorie ?? 12) },
     utCat: (ref, cat) => Number((S.referentiel.categories.find(c => c.referentiel_code === ref && c.code === cat) || {}).ut_pratique || 0),
     utTh: ref => Number((S.referentiel.referentiels.find(r => r.code === ref) || {}).ut_theorique || 0),
+    profil: st => CONSEIL.profils[st.id] || 'standard',
     deja: (t, j) => deja[t + '|' + j] || { tot: 0, prat: 0 },
     peut: (st, t) => peutTesterStagiaire(st, s, t),
     nbTesteurs: st => testeurs.filter(t => peutTesterStagiaire(st, s, t)).length,
   };
   const r = calculerConseil(ctx);
-  CONSEIL.dernier = { r, ctx, nouveaux };
+  CONSEIL.dernier = { r, ctx, nouveaux, n };
   dessinerConseil(r, ctx, n, nouveaux);
 }
 
@@ -168,10 +217,11 @@ function dessinerConseil(r, ctx, n, nouveaux) {
     const parSt = {};
     ch.items.forEach(i => { const k = i.st.id + '|' + i.epreuve; (parSt[k] ||= { st: i.st, epreuve: i.epreuve, ref: i.ref, ut: 0, cats: [] }); parSt[k].ut += i.ut; if (i.cat) parSt[k].cats.push(i.cat); });
     const theo = Object.values(parSt).filter(x => x.epreuve === 'theorie');
-    const prat = Object.values(parSt).filter(x => x.epreuve === 'pratique');
+    const rang = x => ({ aise: 0, standard: 1, stresse: 2 }[ctx.profil(x.st)] ?? 1);
+    const prat = Object.values(parSt).filter(x => x.epreuve === 'pratique').sort((a, b) => rang(a) - rang(b));
     const lignes = [];
     if (theo.length) lignes.push(`<li>📝 Théorie ${esc(theo[0].ref)} (début d'après-midi) — ${theo.length} stagiaire(s)</li>`);
-    prat.forEach(x => lignes.push(`<li>${esc(x.st.nom)} ${esc((x.st.prenom || '').charAt(0))}. — ${esc(x.cats.join(', '))} <small>(${fmt(x.ut)} UT)</small></li>`));
+    prat.forEach(x => lignes.push(`<li>${{ aise: '🟢 ', stresse: '🟠 ' }[ctx.profil(x.st)] || ''}${esc(x.st.nom)} ${esc((x.st.prenom || '').charAt(0))}. — ${esc(x.cats.join(', '))} <small>(${fmt(x.ut)} UT)</small></li>`));
     const trop = ch.tot > q.jour + 1e-9 || ch.prat > q.prat + 1e-9;
     return `<td><div class="${trop ? 'note-faible' : ''}"><b>${fmt(ch.tot)} / ${q.jour} UT</b> <small>(pratique ${fmt(ch.prat)} / ${q.prat}${ch.base ? ` · dont ${fmt(ch.base)} déjà prévues ailleurs` : ''})</small></div>
       <ul class="liste-conseil">${lignes.join('') || '<li><i>libre</i></li>'}</ul></td>`;
@@ -186,6 +236,10 @@ function dessinerConseil(r, ctx, n, nouveaux) {
       <select id="conseil-nb" onchange="ouvrirConseilPlanning(this.value)">${[1, 2, 3, 4, 5, 6].map(k => `<option ${k === n ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
       ${nouveaux.length ? `<span class="aide">Jours à créer : ${nouveaux.map(dateFr).join(', ')}</span>` : ''}
       <p>${diag.join('<br>')}</p></div>
+    <details class="carte"><summary><b>Profil des stagiaires</b> <small>(🟢 à l'aise : passent en premier · 🟠 stressé : réparti sur 2 jours)</small></summary>
+      ${ctx.stags.map(st => `<div class="ligne-profil"><span>${esc(st.nom)} ${esc(st.prenom || '')}</span>
+        <select onchange="changerProfilConseil('${st.id}', this.value)">${[['aise', '🟢 À l\'aise — en premier'], ['standard', 'Standard'], ['stresse', '🟠 Stressé — sur 2 jours']]
+          .map(([v, l]) => `<option value="${v}" ${ctx.profil(st) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</details>
     <div class="tableau-defilant"><table class="tableau"><thead><tr><th>Jour</th>${testeurs.map(t => `<th>${esc(nomFormateur(t))}</th>`).join('')}</tr></thead><tbody>
       ${jours.map(j => `<tr><td>${esc(dateFr(j))}</td>${testeurs.map(t => cellule(t, j)).join('')}</tr>`).join('')}</tbody></table></div>
     ${r.non.length ? `<div class="carte"><b>Non placé :</b><ul>${r.non.slice(0, 20).map(x => `<li>${esc(x.st.nom)} ${esc(x.st.prenom)} — ${x.epreuve === 'theorie' ? 'théorie' : esc(x.ref + ' ' + x.cat)} : ${esc(x.raison)}</li>`).join('')}</ul></div>` : ''}
