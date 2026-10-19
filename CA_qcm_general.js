@@ -205,7 +205,7 @@ function dessinerEcranProjete() {
     <div class="qg-corps ${q?.illustration ? 'qg-avec-image' : ''}" style="font-size:${QG.police}em">
       <div class="qg-compteur">${esc(themeDe(QG.idx)?.libelle || libelleReferentiel(se.referentiel_code))} — Question ${QG.idx + 1} / ${n} <small style="opacity:.5">(${esc(q?.code || '')}${q?.illustration ? '' : ' · sans illustration'})</small></div>
       <div class="qg-enonce">${esc(q?.enonce || '')}</div>
-      ${q?.illustration ? `<img class="qg-illustration" title="Toucher pour agrandir" onclick="this.classList.toggle('zoom')" src="${esc(q.illustration)}" alt="Illustration de la question" onerror="this.outerHTML='<p class=aide>⚠ Image introuvable : '+this.getAttribute('src')+' (fichier non publié sur GitHub ?)</p>'">` : ''}
+      ${q?.illustration ? `<img class="qg-illustration" title="Toucher pour agrandir" onclick="this.classList.toggle('zoom')" onload="if(this.naturalHeight>this.naturalWidth*1.15)this.closest('.qg-corps')?.classList.add('qg-portrait')" src="${esc(q.illustration)}" alt="Illustration de la question" onerror="this.outerHTML='<p class=aide>⚠ Image introuvable : '+this.getAttribute('src')+' (fichier non publié sur GitHub ?)</p>'">` : ''}
       <div class="qg-vf"><span>VRAI</span><span>FAUX</span></div>
     </div>
     <div class="qg-pied">

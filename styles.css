@@ -737,3 +737,13 @@ details.repliable > div { padding-bottom: 12px; }
 .tc-zoom { position: fixed; inset: 0; z-index: 999; background: #fff; overflow: auto; touch-action: pan-x pan-y pinch-zoom; }
 .tc-zoom img { width: 100%; height: auto; display: block; }
 .tc-zoom .tc-fermer { position: sticky; top: 0; width: 100%; padding: 12px; font-size: 1.1rem; background: #222; color: #fff; border: 0; }
+
+/* image en hauteur (plaque de charge…) : texte à gauche, image à droite sur toute la hauteur */
+.qg-corps.qg-portrait { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "c i" "e i" "v i";
+  align-content: center; column-gap: 4vw; text-align: left; justify-items: start; }
+.qg-portrait .qg-compteur { grid-area: c; } .qg-portrait .qg-enonce { grid-area: e; font-size: 2em; }
+.qg-portrait .qg-vf { grid-area: v; } .qg-portrait .qg-illustration { grid-area: i; height: 80vh; width: auto; max-height: 80vh; max-width: 48vw; }
+/* mise en page 50 / 50 pour les images en hauteur */
+.qg-corps.qg-portrait { grid-template-columns: 1fr 1fr; padding-top: 1vh; padding-bottom: 1vh; overflow: hidden; }
+.qg-portrait .qg-illustration { justify-self: center; height: calc(100vh - 230px); max-height: none; width: auto; max-width: 46vw; object-fit: contain; }
+.qg-portrait .qg-enonce { font-size: 2.2em; }
