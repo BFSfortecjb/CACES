@@ -192,7 +192,7 @@ function lireIntroQg() {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(`Thème : ${th.libelle}. ${th.consigne || ''}`);
   u.lang = 'fr-FR'; u.rate = QG.vitesse;
-  const v = (speechSynthesis.getVoices() || []).find(x => /^fr/i.test(x.lang)); if (v) u.voice = v;
+  const v = voixChoisie(); if (v) u.voice = v;
   speechSynthesis.speak(u);
 }
 
@@ -216,6 +216,7 @@ function dessinerEcranProjete() {
       <button onclick="changerPoliceQg(-0.15)" title="Réduire le texte">A−</button>
       <button onclick="changerPoliceQg(0.15)" title="Agrandir le texte">A+</button>
       <label class="qg-voix"><input type="checkbox" ${QG.voixActive ? 'checked' : ''} onchange="basculerVoixQg(this.checked)"> 🔊 Voix</label>
+      ${selecteurVoixQg()}
       <input type="range" min="0.5" max="2" step="0.1" value="${QG.vitesse}" title="Vitesse de la voix" onchange="vitesseVoixQg(this.value)">
       <button onclick="lireQuestionQg(true)">↻ Relire</button>
       ${quiz ? '' : '<button onclick="afficherQrQg()">📱 QR code</button>'}
@@ -236,6 +237,19 @@ function dessinerEcranProjete() {
 function changerPoliceQg(delta) { QG.police = Math.min(2.2, Math.max(0.7, QG.police + delta)); dessinerEcranProjete(); }
 
 /* ---------- voix ---------- */
+const voixFr = () => (('speechSynthesis' in window) ? speechSynthesis.getVoices() : []).filter(v => /^fr/i.test(v.lang));
+function voixChoisie() {
+  let nom = null; try { nom = localStorage.getItem('caces_voix'); } catch (e) { /* stockage indisponible */ }
+  const l = voixFr();
+  return l.find(v => v.name === nom) || l.find(v => /enhanced|premium|am[ée]lie|thomas|google/i.test(v.name)) || l[0] || null;
+}
+function choisirVoixQg(nom) { try { localStorage.setItem('caces_voix', nom); } catch (e) { /* idem */ } lireQuestionQg(true); }
+const selecteurVoixQg = () => {
+  const l = voixFr(), cur = voixChoisie();
+  return l.length ? `<select title="Choisir la voix" onchange="choisirVoixQg(this.value)">${l.map(v =>
+    `<option value="${esc(v.name)}" ${cur && v.name === cur.name ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select>` : '';
+};
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { if (QG.enCours && QG.seance?.etat !== 'attente') dessinerEcranProjete(); };
 function lireQuestionQg(force) {
   if (!QG.voixActive || !('speechSynthesis' in window)) return;
   if (!force && QG.derniereLue === QG.idx) return;
@@ -244,7 +258,7 @@ function lireQuestionQg(force) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(`Question ${QG.idx + 1}. ${q.enonce}`);
   u.lang = 'fr-FR'; u.rate = QG.vitesse;
-  const v = (speechSynthesis.getVoices() || []).find(x => /^fr/i.test(x.lang));
+  const v = voixChoisie();
   if (v) u.voice = v;
   speechSynthesis.speak(u);
 }
