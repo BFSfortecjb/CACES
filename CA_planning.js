@@ -68,7 +68,9 @@ async function ouvrirPlanning() {
       <div id="charge-jours"></div></div>
     ${jours.test.length ? `<table class="tableau"><thead><tr><th>Stagiaire</th><th>Théorie (QCM)</th><th>Pratique</th></tr></thead>
       <tbody>${lignes || '<tr><td colspan="3" class="vide">Aucun stagiaire.</td></tr>'}</tbody></table>`
-      : '<p class="aide">Ajoute au moins un jour de test pour répartir les épreuves.</p>'}`, { large: true });
+      : '<p class="aide">Ajoute au moins un jour de test pour répartir les épreuves.</p>'}
+    <div id="zone-presences"></div>`, { large: true });
+  afficherPresences();
   if (testeursSession(s).length) afficherChargeJours(s, jours.test.length ? jours.test : [s.date_debut].filter(Boolean));
 }
 
@@ -109,4 +111,44 @@ async function planifierEpreuve(stagiaireId, ref, cat, epreuve, jour) {
   if (error) return erreurSupabase('Planification', error);
   const jours = await joursSession(S.session.id);
   if (testeursSession(S.session).length) afficherChargeJours(S.session, jours.test.length ? jours.test : [S.session.date_debut].filter(Boolean));
+}
+
+
+/* ---------- Présence des stagiaires par demi-journée (jours de formation et de test du planning) ---------- */
+async function afficherPresences() {
+  const zone = $('#zone-presences'); if (!zone) return;
+  const s = S.session, d = droitsSession(s), peut = (d.formateur || d.testeur) && s.statut !== 'cloturee';
+  const jours = await joursSession(s.id);
+  const tous = [...new Set([...jours.formation, ...jours.test])].sort();
+  if (!tous.length) { zone.innerHTML = '<div class="carte"><b>Présence des stagiaires</b><p class="aide">Renseigne d\'abord des jours de formation ou de test.</p></div>'; return; }
+  const { data: stags } = await sb.from('stagiaires').select('id, nom, prenom').eq('session_id', s.id).order('nom');
+  const ids = (stags || []).map(x => x.id);
+  const { data: pres } = ids.length ? await sb.from('presences_stagiaires').select('stagiaire_id, jour, demi').in('stagiaire_id', ids) : { data: [] };
+  const set = new Set((pres || []).map(p => `${p.stagiaire_id}|${p.jour}|${p.demi}`));
+  const nbJ = j => (stags || []).filter(st => set.has(`${st.id}|${j}|matin`)).length + (stags || []).filter(st => set.has(`${st.id}|${j}|apres_midi`)).length;
+  zone.innerHTML = `<div class="carte"><b>Présence des stagiaires</b> <span class="aide">(coche les demi-journées de présence)</span>
+    <div class="tableau-defilant"><table class="tableau"><thead>
+      <tr><th rowspan="2">Stagiaire</th>${tous.map(j => `<th colspan="2" style="text-align:center">${esc(dateFr(j))}<br><small>${jours.test.includes(j) ? 'test' : 'formation'}</small>
+        ${peut ? `<br><button class="icone" title="Tout cocher / décocher" onclick="cocherJourPresence('${j}')">☑</button>` : ''}</th>`).join('')}</tr>
+      <tr>${tous.map(() => '<th style="text-align:center">Matin</th><th style="text-align:center">Après-midi</th>').join('')}</tr></thead>
+      <tbody>${(stags || []).map(st => `<tr><td>${esc(st.nom)} ${esc(st.prenom || '')}</td>${tous.map(j => ['matin', 'apres_midi'].map(m =>
+        `<td style="text-align:center"><input type="checkbox" ${set.has(`${st.id}|${j}|${m}`) ? 'checked' : ''} ${peut ? '' : 'disabled'}
+          onchange="basculerPresence('${st.id}','${j}','${m}',this.checked)"></td>`).join('')).join('')}</tr>`).join('') || '<tr><td class="vide">Aucun stagiaire.</td></tr>'}</tbody></table></div></div>`;
+}
+
+async function basculerPresence(stagiaireId, jour, demi, present) {
+  const cle = { stagiaire_id: stagiaireId, jour, demi };
+  const { error } = present ? await sb.from('presences_stagiaires').upsert(cle) : await sb.from('presences_stagiaires').delete().match(cle);
+  if (error) { erreurSupabase('Présence', error); afficherPresences(); }
+}
+
+async function cocherJourPresence(jour) {
+  const { data: stags } = await sb.from('stagiaires').select('id').eq('session_id', S.session.id);
+  const ids = (stags || []).map(x => x.id); if (!ids.length) return;
+  const { data: pres } = await sb.from('presences_stagiaires').select('stagiaire_id, demi').eq('jour', jour).in('stagiaire_id', ids);
+  const toutCoche = (pres || []).length >= ids.length * 2;
+  const { error } = toutCoche ? await sb.from('presences_stagiaires').delete().eq('jour', jour).in('stagiaire_id', ids)
+    : await sb.from('presences_stagiaires').upsert(ids.flatMap(stagiaire_id => ['matin', 'apres_midi'].map(demi => ({ stagiaire_id, jour, demi }))));
+  if (error) return erreurSupabase('Présence', error);
+  afficherPresences();
 }

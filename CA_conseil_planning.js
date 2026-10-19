@@ -106,46 +106,58 @@ function calculerConseil(c) {
   };
   const sansTesteur = b => { if (testeurs.some(t => c.peut(b.st, t))) return false; b.items.forEach(i => NON(b, i, 'aucun testeur autorisé (formateur = testeur ?)')); return true; };
 
-  // a) stressés : la 1re épreuve (la plus légère) un jour avant, le reste groupé plus tard
-  for (const b of blocs.filter(x => x.profil === 'stresse')) {
-    if (sansTesteur(b)) continue;
+  /* a) Remplissage exact, du DERNIER jour vers le premier : pour chaque créneau (jour × testeur) on choisit,
+        parmi les épreuves restantes (hors « à l'aise »), la combinaison qui approche le plus le plafond de pratique. */
+  const reste = [];
+  blocs.filter(x => x.profil !== 'aise').forEach(b => {
+    if (sansTesteur(b)) return;
     const its = b.items.slice().sort((x, y) => x.ut - y.ut);
-    if (its.length < 2 || jours.length < 2) { placerBloc(b, its, scoreFin) || placerItems(b, its, scoreFin); continue; }
-    const reste = its.slice(1);
-    let m = placerBloc(b, reste, scoreFin);
-    if (m) {
-      const avant = jours.filter(j => jours.indexOf(j) < jours.indexOf(m.j));
-      const essai = placerBloc(b, [its[0]], scoreFin, avant);
-      if (!essai) placerItems(b, [its[0]], scoreFin);
-    } else placerItems(b, its, scoreFin);
-  }
-  // b) standard : bloc entier, derniers jours d'abord
-  for (const b of blocs.filter(x => x.profil === 'standard')) {
-    if (sansTesteur(b)) continue;
-    placerBloc(b, b.items, scoreFin) || placerItems(b, b.items, scoreFin);
-  }
-
-  // c) compactage : on remplit le dernier jour (6 UT de pratique max) en décalant des épreuves, sans casser les « stressés » (≥ 2 jours)
-  const retirer = (o) => {
-    const ch = lit(o.testeur, o.jour); ch.tot -= o.utCharge; ch.prat -= o.utCharge; ch.items.splice(ch.items.indexOf(o), 1); aff.splice(aff.indexOf(o), 1);
-    parStagJour[o.st.id + '|' + o.jour] -= o.utStag; parCatJour[o.ref + ' ' + o.cat + '|' + o.jour] -= o.utCharge;
+    its.forEach((i, k) => reste.push({ b, i, legere: b.profil === 'stresse' && k === 0 && its.length > 1 && jours.length > 1 }));
+  });
+  const u100 = x => Math.round(x * 100);
+  const meilleureCombinaison = (unites, cap) => {            // sous-ensemble dont la somme approche cap (en centièmes d'UT)
+    let reach = new Map([[0, []]]);
+    unites.forEach((u, idx) => {
+      const nxt = new Map(reach);
+      reach.forEach((sel, s) => { const n = s + u; if (n <= cap && !nxt.has(n)) nxt.set(n, sel.concat(idx)); });
+      reach = nxt;
+    });
+    let best = 0; reach.forEach((_, s) => { if (s > best) best = s; });
+    return { somme: best, sel: reach.get(best) };
   };
-  const joursDe = (st, sauf) => new Set(aff.filter(a => a.st.id === st.id && a.epreuve === 'pratique' && a !== sauf).map(a => a.jour));
-  for (let ji = 0; ji < jours.length - 1; ji++) {
-    for (const o of aff.filter(a => a.epreuve === 'pratique' && a.jour === jours[ji]).sort((a, b) => b.utCharge - a.utCharge)) {
-      let bouge = false;
-      for (let jt = jours.length - 1; jt > ji && !bouge; jt--) {
-        if (profil(o.st) === 'stresse') { const js = joursDe(o.st, o); js.add(jours[jt]); if (js.size < 2) continue; }
-        const cs = testeurs.filter(x => c.peut(o.st, x)).sort((a, b) => lit(b, jours[jt]).tot - lit(a, jours[jt]).tot);
-        for (const x of cs) {
-          if (ok(x, jours[jt], o.utCharge, o.utCharge, o.st.id, o.utStag, o.ref, o.cat)) {
-            const it = { st: o.st, epreuve: o.epreuve, ref: o.ref, cat: o.cat, ut: o.ut, utCharge: o.utCharge, utStag: o.utStag };
-            retirer(o); poser(x, jours[jt], it); bouge = true; break;
-          }
-        }
+  for (let ji = jours.length - 1; ji >= 0 && reste.length; ji--) {
+    const j = jours[ji];
+    for (const tst of testeurs.slice().sort((x, y) => lit(y, j).tot - lit(x, j).tot)) {
+      const ch = lit(tst, j), cap = u100(Math.min(q.prat - ch.prat, q.jour - ch.tot));
+      if (cap <= 0) continue;
+      const cand = reste.filter(r => c.peut(r.b.st, tst) && !(r.legere && ji === jours.length - 1));
+      if (!cand.length) continue;
+      // 1) stagiaires entiers ; 2) épreuves isolées si cela remplit mieux
+      const parSt = {}; cand.forEach(r => (parSt[r.b.st.id] ||= []).push(r));
+      const groupes = Object.values(parSt).filter(g => !g.some(r => r.legere)).map(g => ({ g, u: g.reduce((a, r) => a + u100(r.i.ut), 0) }));
+      const c1 = meilleureCombinaison(groupes.map(x => x.u), cap);
+      const c2 = meilleureCombinaison(cand.map(r => u100(r.i.ut)), cap);
+      const choisis = c2.somme > c1.somme ? c2.sel.map(k => cand[k]) : c1.sel.flatMap(k => groupes[k].g);
+      for (const r of choisis) {
+        if (!ok(tst, j, r.i.ut, r.i.ut, r.b.st.id, r.i.ut, r.i.ref, r.i.cat)) continue;
+        poser(tst, j, mk(r.b, r.i)); reste.splice(reste.indexOf(r), 1);
       }
     }
   }
+  reste.forEach(r => NON(r.b, r.i, 'plus de capacité'));
+  // « stressés » : si toutes leurs épreuves tombent le même jour, on décale la plus légère sur un jour antérieur libre
+  blocs.filter(x => x.profil === 'stresse').forEach(b => {
+    const mes = aff.filter(a => a.st.id === b.st.id && a.epreuve === 'pratique');
+    if (mes.length < 2 || new Set(mes.map(a => a.jour)).size > 1) return;
+    const o = mes.slice().sort((x, y) => x.utCharge - y.utCharge)[0];
+    for (let ji = jours.indexOf(o.jour) - 1; ji >= 0; ji--) {
+      const x = testeurs.find(tt => c.peut(o.st, tt) && ok(tt, jours[ji], o.utCharge, o.utCharge, o.st.id, o.utStag, o.ref, o.cat));
+      if (x) { const it = { st: o.st, epreuve: o.epreuve, ref: o.ref, cat: o.cat, ut: o.ut, utCharge: o.utCharge, utStag: o.utStag };
+        const ch = lit(o.testeur, o.jour); ch.tot -= o.utCharge; ch.prat -= o.utCharge; ch.items.splice(ch.items.indexOf(o), 1); aff.splice(aff.indexOf(o), 1);
+        parStagJour[o.st.id + '|' + o.jour] -= o.utStag; parCatJour[o.ref + ' ' + o.cat + '|' + o.jour] -= o.utCharge;
+        poser(x, jours[ji], it); break; }
+    }
+  });
 
   // d) à l'aise : dans ce qui reste, le plus tôt possible
   for (const b of blocs.filter(x => x.profil === 'aise')) {
