@@ -35,7 +35,7 @@ async function ouvrirPlanning() {
     .in('stagiaire_id', (stags || []).map(x => x.id).concat(['00000000-0000-0000-0000-000000000000']));
   const stagParId = Object.fromEntries((stags || []).map(x => [x.id, x]));
   const cle = (id, ref, cat, ep) => `${id}|${ref}|${cat}|${ep}`;
-  const choix = {}; (plan || []).forEach(p => { choix[cle(p.stagiaire_id, p.referentiel_code, p.categorie_code, p.epreuve)] = p.jour; });
+  const prevu = {}, choix = {}; (plan || []).forEach(p => { choix[cle(p.stagiaire_id, p.referentiel_code, p.categorie_code, p.epreuve)] = p.jour; if (p.testeur_id) prevu[cle(p.stagiaire_id, p.referentiel_code, p.categorie_code, p.epreuve)] = p.testeur_id; });
 
   const chips = (liste, type, peut) => liste.map(j => `<span class="puce">${esc(dateFr(j))}
       ${peut ? `<button class="icone" title="Retirer ce jour" onclick="retirerJourSession('${type}','${j}')">✕</button>` : ''}</span>`).join(' ')
@@ -46,7 +46,7 @@ async function ouvrirPlanning() {
   const optionsJours = valeur => `<option value="">— jour de début —</option>` +
     jours.test.map(j => `<option value="${j}" ${valeur === j ? 'selected' : ''}>${esc(dateFr(j))}</option>`).join('');
   const sel = (id, ref, cat, ep) => `<select ${peutTesterStagiaire(stagParId[id]) && !cloturee ? '' : 'disabled'}
-      onchange="planifierEpreuve('${id}','${ref}','${cat}','${ep}',this.value)">${optionsJours(choix[cle(id, ref, cat, ep)])}</select>`;
+      onchange="planifierEpreuve('${id}','${ref}','${cat}','${ep}',this.value)">${optionsJours(choix[cle(id, ref, cat, ep)])}</select>${prevu[cle(id, ref, cat, ep)] ? ` <small>→ ${esc(nomFormateur(prevu[cle(id, ref, cat, ep)]))}</small>` : ''}`;
 
   const lignes = (stags || []).map(st => {
     const cats = st.stagiaire_categories || [], refs = [...new Set(cats.map(c => c.referentiel_code))];
@@ -64,6 +64,7 @@ async function ouvrirPlanning() {
       ${chips(jours.formation, 'formation', d.formateur && !cloturee)} ${ajout('formation', d.formateur && !cloturee)}</div>
     <div class="carte"><b>Jours de test</b> ${d.testeur && !cloturee ? '(testeur)' : ''}<br>
       ${chips(jours.test, 'test', d.testeur && !cloturee)} ${ajout('test', d.testeur && !cloturee)}
+      ${d.testeur && !cloturee ? '<button class="principal" onclick="ouvrirConseilPlanning()">💡 Conseil de charge</button>' : ''}
       <div id="charge-jours"></div></div>
     ${jours.test.length ? `<table class="tableau"><thead><tr><th>Stagiaire</th><th>Théorie (QCM)</th><th>Pratique</th></tr></thead>
       <tbody>${lignes || '<tr><td colspan="3" class="vide">Aucun stagiaire.</td></tr>'}</tbody></table>`
@@ -103,7 +104,7 @@ async function retirerJourSession(type, jour) {
 
 async function planifierEpreuve(stagiaireId, ref, cat, epreuve, jour) {
   const cle = { stagiaire_id: stagiaireId, referentiel_code: ref, categorie_code: cat, epreuve };
-  const { error } = jour ? await sb.from('planning_tests').upsert({ ...cle, jour })
+  const { error } = jour ? await sb.from('planning_tests').upsert({ ...cle, jour, testeur_id: null })
     : await sb.from('planning_tests').delete().match(cle);
   if (error) return erreurSupabase('Planification', error);
   const jours = await joursSession(S.session.id);
