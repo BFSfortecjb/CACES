@@ -8,7 +8,7 @@ const QG = { seance: null, questions: [], participants: [], idx: 0, timer: null,
              police: 1, voixActive: false, vitesse: 1, derniereLue: -1, courantServeur: 1 };
 
 /* ---------- préparation ---------- */
-async function ouvrirQcmGeneral() {
+async function ouvrirQcmGeneral(modePrereglage) {
   const s = S.session;
   if (!(await exigerCodeTesteur(s.id))) return;
   const [{ data: stags }, { data: seances }] = await Promise.all([
@@ -44,6 +44,7 @@ async function ouvrirQcmGeneral() {
         <button class="principal" type="submit">Démarrer la séance</button></div>
     </form>`, { large: true });
   const f = $('#form-qg');
+  if (modePrereglage) f.mode.value = modePrereglage;
   const maj = () => {
     const quizbox = f.mode.value === 'quizbox';
     $$('.qg-col-box', f).forEach(e => e.style.display = quizbox ? '' : 'none');
@@ -160,6 +161,7 @@ function dessinerEcranProjete() {
       <label class="qg-voix"><input type="checkbox" ${QG.voixActive ? 'checked' : ''} onchange="basculerVoixQg(this.checked)"> 🔊 Voix</label>
       <input type="range" min="0.5" max="2" step="0.1" value="${QG.vitesse}" title="Vitesse de la voix" onchange="vitesseVoixQg(this.value)">
       <button onclick="lireQuestionQg(true)">↻ Relire</button>
+      ${quiz ? '' : '<button onclick="afficherQrQg()">📱 QR code</button>'}
       ${quiz ? `<button onclick="questionPrecedenteQg()" ${QG.idx === 0 ? 'disabled' : ''}>◀ Précédente</button>` : ''}
       ${quiz ? `<button onclick="telechargerQuestionnaireQg()">⬇ Questionnaire</button>` : ''}
       ${derniere
@@ -301,4 +303,43 @@ function proposerCorrespondanceQuizbox(lignes) {
       fermerEcranProjete(); fermerModale(); await afficherResultatsQg();
     } catch (e) { toast(e.message, 'erreur'); ev.target.disabled = false; }
   });
+}
+
+
+/* ---------- accès stagiaires (QR code + code de salle) ---------- */
+function lienStagiaires() { return location.origin + location.pathname + '#stagiaire?code=' + encodeURIComponent(S.session.code_acces); }
+function blocAccesStagiaires() {
+  return `<div class="acces-qr"><div id="qr-test"></div>
+    <div><div class="etiquette">Code à dicter en salle</div><div class="code-geant">${esc(S.session.code_acces)}</div>
+    <code>${esc(lienStagiaires())}</code>
+    ${S.session.statut !== 'ouverte' ? '<p class="erreur-discrete">⚠ L\'accès stagiaires est fermé : ouvre-le depuis le bouton « Ouvrir l\'accès stagiaires ».</p>' : ''}</div></div>`;
+}
+function dessinerQrTest() {
+  try { if (typeof QRCode === 'undefined') throw 0; $('#qr-test').innerHTML = ''; new QRCode($('#qr-test'), { text: lienStagiaires(), width: 200, height: 200 }); }
+  catch (e) { $('#qr-test').textContent = 'QR code indisponible'; }
+}
+function afficherQrQg() {
+  ouvrirModale('Connexion des stagiaires', blocAccesStagiaires(), { large: true }); dessinerQrTest();
+}
+
+/* ---------- choix du type de test théorique ---------- */
+function ouvrirTestTheorique() {
+  const s = S.session, d = droitsSession(s);
+  const peutGeneral = d.testeur && s.statut !== 'cloturee';
+  const opt = (titre, texte, action, actif, raison) => `<button class="option-test" ${actif ? `onclick="${action}"` : 'disabled'}>
+    <b>${titre}</b><span>${texte}</span>${actif ? '' : `<em>${raison}</em>`}</button>`;
+  ouvrirModale('Test théorique', `<p>Quel type de passage ?</p><div class="options-test">
+    ${opt('📱 QCM individuel sur téléphone', 'Chaque stagiaire passe le QCM à son rythme. Affiche le QR code et le code de la salle.', "choisirTestTheorique('individuel')", true)}
+    ${opt('📺 QCM général — téléphones en télécommande', 'Questions projetées, chacun répond Vrai/Faux sur son téléphone puis valide.', "choisirTestTheorique('telephone')", peutGeneral, 'Réservé au testeur de la session (à affecter dans « Équipe »)')}
+    ${opt('🎛 QCM général — boîtiers Quizbox', 'Questions projetées, réponses avec les boîtiers, import de l\'export Excel.', "choisirTestTheorique('quizbox')", peutGeneral, 'Réservé au testeur de la session (à affecter dans « Équipe »)')}
+  </div>`);
+}
+function choisirTestTheorique(type) {
+  if (type === 'individuel') {
+    ouvrirModale('QCM individuel sur téléphone', `${blocAccesStagiaires()}
+      <p class="aide">Les stagiaires scannent le QR code (ou saisissent le code), touchent leur nom puis passent le QCM.</p>`, { large: true });
+    dessinerQrTest();
+    return;
+  }
+  fermerModale(); ouvrirQcmGeneral(type);
 }

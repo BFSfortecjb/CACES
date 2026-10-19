@@ -705,3 +705,10 @@ details.repliable > div { padding-bottom: 12px; }
 .tc-btn.sel { background: var(--jaune, #ffd400); border-color: #000; }
 .tc-btn:disabled { opacity: .6; }
 .tc-valider { width: 100%; padding: 18px; font-size: 1.2rem; }
+
+.options-test { display: grid; gap: 10px; }
+.option-test { text-align: left; padding: 14px; border-radius: 10px; border: 1px solid var(--gris-bord, #ccc); background: #fff; display: grid; gap: 4px; }
+.option-test span { font-size: .9em; color: #555; }
+.option-test em { font-size: .85em; color: #b00020; }
+.option-test:disabled { opacity: .55; }
+.acces-qr { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }

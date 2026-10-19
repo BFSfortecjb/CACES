@@ -404,11 +404,8 @@ async function rendreDetailSession(zone) {
           <div class="champ"><span class="etiquette">Code à dicter en salle</span><div class="code-geant">${esc(s.code_acces)}</div></div>
           <div class="champ champ-large"><span class="etiquette">Adresse de connexion</span><div><code>${esc(lien)}</code></div>
             <button class="lien" onclick="navigator.clipboard.writeText('${esc(lien)}');toast('Lien copié')">Copier le lien</button></div>
-          <details class="qr-repliable">
-            <summary><b>QR code examen</b></summary>
-            <div id="qr-passation"></div>
-            <p id="qr-erreur" class="erreur-discrete" hidden></p>
-          </details>
+          <div class="champ"><span class="etiquette">Test théorique</span>
+            <button class="principal" onclick="appelModule('ouvrirTestTheorique')">📝 Test théorique</button></div>
         </div>
       </section>
 
@@ -462,7 +459,6 @@ async function rendreDetailSession(zone) {
       ${d.formateur ? `<button onclick="appelModule('ouvrirHorometreSession')">⏱ Horomètre (pointage)</button>` : ''}
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
       <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
-      ${d.testeur && !cloturee && s.type_session !== 'autorisation' ? `<button onclick="appelModule('ouvrirQcmGeneral')" title="Questions projetées pour tout le groupe, avec téléphones ou boîtiers Quizbox">📺 QCM général</button>` : ''}
       ${d.ecriture ? `<button onclick="appelModule('envoyerSecretariat')">✉️ Envoi au secrétariat</button>` : ''}
     </div>
     <div class="barre-actions">
@@ -484,11 +480,8 @@ async function rendreDetailSession(zone) {
     </table>`;
 
   try {
-    if (typeof QRCode === 'undefined') throw new Error('bibliothèque QRCode non chargée');
     if (s.lieu_type === 'client') statutVisiteHtml(s).then(h => { const z = $('#visite-statut'); if (z) z.innerHTML = h; });
-    $('#qr-passation').innerHTML = '';
-    new QRCode($('#qr-passation'), { text: lien, width: 140, height: 140 });
-  } catch (e) { const p = $('#qr-erreur'); if (p) { p.hidden = false; p.textContent = 'QR code indisponible : ' + e.message; } }
+  } catch (e) { /* statut de visite non critique */ }
 }
 
 /** Ligne stagiaire : les boutons réservés à l'autre rôle sont grisés (la base les refuserait de toute façon). */
