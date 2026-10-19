@@ -747,3 +747,5 @@ details.repliable > div { padding-bottom: 12px; }
 .qg-corps.qg-portrait { grid-template-columns: 1fr 1fr; padding-top: 1vh; padding-bottom: 1vh; overflow: hidden; }
 .qg-portrait .qg-illustration { justify-self: center; height: calc(100vh - 230px); max-height: none; width: auto; max-width: 46vw; object-fit: contain; }
 .qg-portrait .qg-enonce { font-size: 2.2em; }
+.note-faible { color: var(--rouge, #b00020); font-weight: 700; }
+.tableau-defilant { overflow-x: auto; }

@@ -219,7 +219,7 @@ function dessinerEcranProjete() {
       ${quiz ? `<button onclick="telechargerQuestionnaireQg()">⬇ Questionnaire</button>` : ''}
       ${derniere
         ? (quiz ? '<button class="principal" onclick="importerQuizbox()">📥 Importer les résultats Quizbox</button>'
-                : '<button class="principal pret" id="qg-suivante" onclick="terminerQcmGeneral()">✔ Terminer et corriger</button>')
+                : '<button class="principal pret" id="qg-suivante" onclick="terminerQcmGeneral()">✔ Terminer</button>')
         : `<button class="principal" id="qg-suivante" onclick="questionSuivanteQg()">Question suivante ▶</button>`}
       ${derniere && !quiz ? '' : ''}
       <button onclick="quitterEcranQg()">Quitter l'écran</button>
@@ -271,7 +271,7 @@ function questionPrecedenteQg() { QG.idx = Math.max(0, QG.idx - 1); dessinerEcra
 
 async function terminerQcmGeneral() {
   const attente = QG.participants.filter(p => !p.valide).length;
-  if (!confirm(attente ? `${attente} participant(s) n'ont pas validé la dernière question. Terminer et corriger tout le monde ?` : 'Terminer la séance et corriger tout le monde ?')) return;
+  if (!confirm(attente ? `${attente} participant(s) n'ont pas validé la dernière question. Terminer la séance pour tout le monde ?` : 'Terminer la séance et corriger tout le monde ?')) return;
   try {
     await rpc('caces_seance_terminer', { p_seance: QG.seance.id });
     fermerEcranProjete(); await afficherResultatsQg();
@@ -285,13 +285,18 @@ async function annulerQcmGeneral() {
 }
 
 async function afficherResultatsQg() {
-  const { data, error } = await sb.from('qcm_tirages').select('score_global_pct, reussi, stagiaires(nom, prenom)').eq('seance_id', QG.seance.id).eq('statut', 'termine');
-  if (error) return erreurSupabase('Résultats du QCM général', error);
-  const l = (data || []).sort((a, b) => (a.stagiaires?.nom || '').localeCompare(b.stagiaires?.nom || ''));
-  ouvrirModale('Résultats du QCM général', `<table class="tableau"><thead><tr><th>Stagiaire</th><th>Note</th><th>Résultat</th></tr></thead><tbody>
-    ${l.map(r => `<tr><td>${esc(r.stagiaires?.nom)} ${esc(r.stagiaires?.prenom)}</td><td>${esc(r.score_global_pct)} %</td>
-      <td>${r.reussi ? '<span class="etat">✔ Admis</span>' : '<span class="etat erreur">Non admis</span>'}</td></tr>`).join('')}</tbody></table>
-    <p class="aide">La théorie est reportée sur la fiche de chaque stagiaire.</p>
+  let l;
+  try { l = (await rpc('caces_seance_resultats', { p_seance: QG.seance.id })) || []; }
+  catch (e) { return toast(e.message, 'erreur'); }
+  const themes = [...new Set(l.flatMap(r => (r.detail_themes || []).map(d => d.theme)))];
+  const cel = (r, th) => { const d = (r.detail_themes || []).find(x => x.theme === th);
+    return d ? `<td class="${d.note_pct < 50 ? 'note-faible' : ''}">${esc(d.note_pct)} % <small>(${esc(d.nb_correct)}/${esc(d.nb_questions)})</small></td>` : '<td>—</td>'; };
+  ouvrirModale('Résultats du QCM général', `<div class="tableau-defilant"><table class="tableau"><thead><tr><th>Stagiaire</th>
+    ${themes.map(t => `<th>${esc(t)}</th>`).join('')}<th>Note globale</th><th>Résultat</th></tr></thead><tbody>
+    ${l.map(r => `<tr><td>${esc(r.nom)} ${esc(r.prenom)}</td>${themes.map(t => cel(r, t)).join('')}
+      <td><b>${esc(r.score_global_pct)} %</b></td>
+      <td>${r.reussi ? '<span class="etat">✔ Admis</span>' : '<span class="etat erreur">Non admis</span>'}</td></tr>`).join('')}</tbody></table></div>
+    <p class="aide">Admis : note globale au seuil du référentiel et au moins 50 % dans chaque thème (en rouge : sous 50 %). La théorie est reportée sur la fiche de chaque stagiaire.</p>
     <div class="pied-modale"><button class="principal" onclick="fermerModale();rendreDetailSession($('#contenu'))">Fermer</button></div>`, { large: true });
 }
 
@@ -332,7 +337,7 @@ function proposerCorrespondanceQuizbox(lignes) {
     <p class="aide">${n} questions attendues. Valeurs reconnues : V / Vrai / A / 1 = vrai ; F / Faux / B / 0 = faux ; autre = sans réponse.</p>
     <div id="qg-apercu"></div>
     <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button>
-      <button class="principal" id="qg-go-import">Importer et corriger</button></div>`;
+      <button class="principal" id="qg-go-import">Importer et terminer</button></div>`;
   const construire = () => {
     const cn = Number($('#qg-c-num').value), cr = Number($('#qg-c-rep').value);
     return lignes.slice(1).map(r => ({ numero: parseInt(r[cn], 10),
@@ -351,7 +356,7 @@ function proposerCorrespondanceQuizbox(lignes) {
     try {
       const r = await rpc('caces_seance_importer', { p_seance: QG.seance.id, p_lignes: d });
       const inc = (r.numeros_inconnus || []);
-      if (inc.length && !confirm(`Numéros de boîtier inconnus ignorés : ${inc.join(', ')}. Continuer et corriger les ${r.importes} autres ?`)) { ev.target.disabled = false; return; }
+      if (inc.length && !confirm(`Numéros de boîtier inconnus ignorés : ${inc.join(', ')}. Continuer et terminer avec les ${r.importes} autres ?`)) { ev.target.disabled = false; return; }
       await rpc('caces_seance_terminer', { p_seance: QG.seance.id });
       fermerEcranProjete(); fermerModale(); await afficherResultatsQg();
     } catch (e) { toast(e.message, 'erreur'); ev.target.disabled = false; }
@@ -412,7 +417,7 @@ function verifierAvanceAuto() {
   if (!QG.participants.every(p => p.valide) || QG.avance === QG.idx) return;
   QG.avance = QG.idx;
   const idx = QG.idx;
-  if (idx >= QG.questions.length - 1) { toast('Tout le monde a validé : tu peux terminer et corriger.'); return; }
+  if (idx >= QG.questions.length - 1) { toast('Tout le monde a validé : tu peux terminer.'); return; }
   setTimeout(() => { if (QG.enCours && QG.idx === idx) questionSuivanteQg(true); }, 900);
 }
 
