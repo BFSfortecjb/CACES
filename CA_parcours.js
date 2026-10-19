@@ -46,9 +46,13 @@ async function ouvrirParcours(stagiaireId) {
         <label>N° de l'ancien CACES <input name="numero" value="${esc(c.ancien_caces_numero || '')}"></label>
         <label class="lbl-theorie">Date de validation de la théorie (ancien CACES)
           <input type="date" name="date_theorie" value="${esc(c.ancien_caces_date_theorie || '')}" max="${new Date().toISOString().slice(0, 10)}"></label>
+        <label class="lbl-echeance">Date d'échéance de l'ancien CACES (reprise pour la nouvelle catégorie)
+          <input type="date" name="date_echeance" value="${esc(c.ancien_caces_date_echeance || '')}"></label>
         <div class="doc-ancien">${c.ancien_caces_path ? '✔ Photo de l\'ancien CACES enregistrée' : '<i>Aucune photo</i>'}</div>
-        ${peut ? `<div class="photo-actions"><label class="bouton-fichier">📷 Photographier / choisir
-          <input type="file" accept="image/*" capture="environment" hidden name="fichier"></label></div>` : ''}
+        ${peut ? `<div class="photo-actions">
+          <label class="bouton-fichier">📁 Choisir un fichier / une photo<input type="file" accept="image/*,.heic" hidden name="fichier"></label>
+          <label class="bouton-fichier">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" hidden name="camera"></label></div>
+          <div class="photo-choisie" aria-live="polite"></div>` : ''}
       </div>
       ${peut ? '<button class="principal" type="submit">Enregistrer</button>' : ''}
     </form>`).join('') || '<p>Aucune catégorie.</p>'}`, { large: true });
@@ -56,13 +60,20 @@ async function ouvrirParcours(stagiaireId) {
   $$('.parcours-form').forEach(form => {
     const c = cats[Number(form.dataset.i)];
     const zone = $('.zone-ancien', form);
-    const lbl = $('.lbl-theorie', form);
-    const maj = () => { zone.hidden = form.parcours.value === 'initial'; lbl.hidden = form.parcours.value !== 'autre_categorie'; };
+    const lbl = $('.lbl-theorie', form), lblE = $('.lbl-echeance', form);
+    const maj = () => { zone.hidden = form.parcours.value === 'initial'; lbl.hidden = form.parcours.value !== 'autre_categorie'; lblE.hidden = lbl.hidden; };
     form.parcours.addEventListener('change', maj); maj();
+    ['fichier', 'camera'].forEach(n => form[n]?.addEventListener('change', () => {
+      const f = form[n].files[0]; if (!f) return;
+      form._photo = f;
+      const z = $('.photo-choisie', form);
+      z.innerHTML = `<b>✔ ${esc(f.name)}</b> (${Math.round(f.size / 1024)} Ko) — sera enregistrée avec « Enregistrer »<br><img alt="Aperçu" style="max-height:160px;margin-top:6px;border:1px solid #ccc;border-radius:6px">`;
+      $('img', z).src = URL.createObjectURL(f);
+    }));
     form.addEventListener('submit', async ev => {
       ev.preventDefault();
       const parcours = form.parcours.value;
-      const fichier = form.fichier && form.fichier.files[0];
+      const fichier = form._photo || null;
       const maj_ = { parcours, dispense_theorie: false };
       try {
         if (parcours !== 'initial') {
@@ -80,10 +91,14 @@ async function ouvrirParcours(stagiaireId) {
           const d = form.date_theorie.value;
           if (!d) return toast('Indique la date de validation de la théorie de l\'ancien CACES.', 'erreur');
           if (d < dateIlYaUnAn()) return toast('La théorie date de plus d\'un an : elle doit être repassée (parcours Initial ou Recyclage).', 'erreur', 8000);
+          const ech = form.date_echeance.value;
+          if (!ech) return toast('Indique la date d\'échéance de l\'ancien CACES : la nouvelle catégorie aura la même échéance.', 'erreur', 8000);
+          if (ech < new Date().toISOString().slice(0, 10)) return toast('L\'ancien CACES est expiré : ce n\'est plus une extension (parcours Initial ou Recyclage).', 'erreur', 8000);
+          maj_.ancien_caces_date_echeance = ech;
           Object.assign(maj_, { ancien_caces_date_theorie: d, dispense_theorie: true,
             theorie_validee: true, date_validation_theorie: d });
         } else if (c.dispense_theorie) {
-          Object.assign(maj_, { theorie_validee: null, date_validation_theorie: null });   // dispense retirée
+          Object.assign(maj_, { theorie_validee: null, date_validation_theorie: null, ancien_caces_date_echeance: null });   // dispense retirée
         }
         const { error: e2 } = await sb.from('stagiaire_categories').update(maj_)
           .eq('stagiaire_id', st.id).eq('referentiel_code', c.referentiel_code).eq('categorie_code', c.categorie_code);
