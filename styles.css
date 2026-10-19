@@ -724,3 +724,16 @@ details.repliable > div { padding-bottom: 12px; }
 .qg-bandeau-centre { justify-content: center; }
 .qg-bandeau-centre .qg-puce { font-size: 1.4rem; padding: 8px 16px; }
 .telecommande .tc-attente { font-size: 1.3rem; }
+
+.qg-intro { gap: 4vh; }
+.qg-consigne { font-size: 1.9em; max-width: 1200px; background: #1d3557; border-left: 8px solid #f6a800; padding: 18px 26px; border-radius: 10px; text-align: left; line-height: 1.4; }
+.qg-ecran button.gros { font-size: 1.8rem; padding: 16px 40px; }
+.qg-avec-image { justify-content: flex-start; padding-top: 2vh; gap: 1.5vh; }
+.qg-avec-image .qg-enonce { font-size: 1.7em; }
+.qg-avec-image .qg-illustration { max-height: 66vh; max-width: 94vw; cursor: zoom-in; }
+.qg-avec-image .qg-vf { font-size: 1.2em; }
+.qg-illustration.zoom { position: fixed; inset: 0; z-index: 980; width: 100vw; height: 100vh; max-width: none; max-height: none; object-fit: contain; border-radius: 0; cursor: zoom-out; }
+.tc-doc { display: block; width: 100%; margin: 10px 0; padding: 14px; font-size: 1.1rem; }
+.tc-zoom { position: fixed; inset: 0; z-index: 999; background: #fff; overflow: auto; touch-action: pan-x pan-y pinch-zoom; }
+.tc-zoom img { width: 100%; height: auto; display: block; }
+.tc-zoom .tc-fermer { position: sticky; top: 0; width: 100%; padding: 12px; font-size: 1.1rem; background: #222; color: #fff; border: 0; }

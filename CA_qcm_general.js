@@ -84,8 +84,10 @@ async function reprendreQcmGeneral(seanceId) {
   try {
     const { data: se, error } = await sb.from('qcm_seances').select('*').eq('id', seanceId).single();
     if (error) throw error;
-    const { data: qs, error: e2 } = await sb.from('questions_qcm').select('id, enonce, illustration').in('id', se.question_ids);
+    const { data: qs, error: e2 } = await sb.from('questions_qcm').select('id, code, enonce, illustration, theme_id').in('id', se.question_ids);
     if (e2) throw e2;
+    const { data: ths } = await sb.from('themes_referentiel').select('id, libelle, consigne').eq('referentiel_code', se.referentiel_code);
+    QG.themes = Object.fromEntries((ths || []).map(t => [t.id, t])); QG.introVus = new Set();
     const parId = Object.fromEntries((qs || []).map(q => [q.id, q]));
     QG.seance = se; QG.questions = se.question_ids.map(id => parId[id]);
     QG.idx = se.mode === 'quizbox' ? 0 : se.question_courante - 1;
@@ -152,19 +154,58 @@ function majBandeauParticipants() {
   if (btn && !quiz) btn.classList.toggle('pret', !!tous);
 }
 
+const themeDe = i => QG.themes?.[QG.questions[i]?.theme_id] || null;
+const themeDebut = i => i === 0 || QG.questions[i]?.theme_id !== QG.questions[i - 1]?.theme_id;
+function nbQuestionsTheme(i) { let n = 0; while (QG.questions[i + n] && QG.questions[i + n].theme_id === QG.questions[i].theme_id) n++; return n; }
+
+/** Écran d'intertitre au début de chaque thème (avec la consigne éventuelle). */
+function dessinerIntroTheme() {
+  const el = document.getElementById('qg-ecran'), th = themeDe(QG.idx), n = nbQuestionsTheme(QG.idx);
+  const quiz = QG.seance.mode === 'quizbox';
+  el.innerHTML = `
+    <div class="qg-haut"><div id="qg-bandeau" class="qg-bandeau"></div>
+      <div class="qg-infos"><span id="qg-compte"></span><span id="qg-chrono" class="qg-chrono"></span></div></div>
+    <div class="qg-corps qg-intro" style="font-size:${QG.police}em">
+      <div class="qg-compteur">Nouveau thème — ${n} question${n > 1 ? 's' : ''}</div>
+      <div class="qg-enonce">${esc(th?.libelle || '')}</div>
+      ${th?.consigne ? `<div class="qg-consigne">${esc(th.consigne)}</div>` : ''}
+      <button class="principal gros" onclick="commencerThemeQg()">Commencer ▶</button>
+    </div>
+    <div class="qg-pied">
+      <button onclick="changerPoliceQg(-0.15)">A−</button><button onclick="changerPoliceQg(0.15)">A+</button>
+      <label class="qg-voix"><input type="checkbox" ${QG.voixActive ? 'checked' : ''} onchange="basculerVoixQg(this.checked)"> 🔊 Voix</label>
+      <button onclick="lireIntroQg()">↻ Relire</button>
+      ${quiz ? `<button onclick="questionPrecedenteQg()" ${QG.idx === 0 ? 'disabled' : ''}>◀ Précédente</button>` : ''}
+      <button onclick="quitterEcranQg()">Quitter l'écran</button>
+      <button class="danger" onclick="annulerQcmGeneral()">Annuler la séance</button>
+    </div>`;
+  majBandeauParticipants(); majChrono(); lireIntroQg();
+}
+function commencerThemeQg() { QG.introVus.add(QG.idx); QG.idxChrono = -1; dessinerEcranProjete(); }
+function lireIntroQg() {
+  if (!QG.voixActive || !('speechSynthesis' in window)) return;
+  const th = themeDe(QG.idx); if (!th) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(`Thème : ${th.libelle}. ${th.consigne || ''}`);
+  u.lang = 'fr-FR'; u.rate = QG.vitesse;
+  const v = (speechSynthesis.getVoices() || []).find(x => /^fr/i.test(x.lang)); if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+
 function dessinerEcranProjete() {
   const el = document.getElementById('qg-ecran'); if (!el) return;
   if (QG.seance.etat === 'attente') return dessinerAccueilQg();
+  if (themeDebut(QG.idx) && !QG.introVus.has(QG.idx)) return dessinerIntroTheme();
   if (QG.idxChrono !== QG.idx) { QG.idxChrono = QG.idx; QG.debutQ = Date.now(); }
   const se = QG.seance, q = QG.questions[QG.idx], n = QG.questions.length, quiz = se.mode === 'quizbox';
   const derniere = QG.idx >= n - 1;
   el.innerHTML = `
     <div class="qg-haut"><div id="qg-bandeau" class="qg-bandeau"></div>
       <div class="qg-infos"><span id="qg-compte"></span><span id="qg-chrono" class="qg-chrono"></span></div></div>
-    <div class="qg-corps" style="font-size:${QG.police}em">
-      <div class="qg-compteur">${esc(libelleReferentiel(se.referentiel_code))} — Question ${QG.idx + 1} / ${n}</div>
+    <div class="qg-corps ${q?.illustration ? 'qg-avec-image' : ''}" style="font-size:${QG.police}em">
+      <div class="qg-compteur">${esc(themeDe(QG.idx)?.libelle || libelleReferentiel(se.referentiel_code))} — Question ${QG.idx + 1} / ${n} <small style="opacity:.5">(${esc(q?.code || '')}${q?.illustration ? '' : ' · sans illustration'})</small></div>
       <div class="qg-enonce">${esc(q?.enonce || '')}</div>
-      ${q?.illustration ? `<img class="qg-illustration" src="${esc(q.illustration)}" alt="Illustration de la question" onerror="this.outerHTML='<p class=aide>⚠ Image introuvable : '+this.getAttribute('src')+' (fichier non publié sur GitHub ?)</p>'">` : ''}
+      ${q?.illustration ? `<img class="qg-illustration" title="Toucher pour agrandir" onclick="this.classList.toggle('zoom')" src="${esc(q.illustration)}" alt="Illustration de la question" onerror="this.outerHTML='<p class=aide>⚠ Image introuvable : '+this.getAttribute('src')+' (fichier non publié sur GitHub ?)</p>'">` : ''}
       <div class="qg-vf"><span>VRAI</span><span>FAUX</span></div>
     </div>
     <div class="qg-pied">

@@ -202,12 +202,19 @@ function ecranTelecommande(cible, lignes) {
     cible.innerHTML = `<div class="stagiaire-accueil telecommande">
       <p class="aide">${esc(libelleReferentiel(etat.referentiel_code))} — Question ${etat.question_courante} / ${etat.nb_questions}</p>
       <p><b>Regarde la question à l'écran, puis réponds.</b></p>
+      ${etat.illustration ? '<button class="tc-doc" id="tc-doc">🔍 Voir le document en grand (zoom)</button>' : ''}
       <div class="tc-vf"><button class="tc-btn ${sel === true ? 'sel' : ''}" data-v="1" ${verrou ? 'disabled' : ''}>VRAI</button>
         <button class="tc-btn ${sel === false ? 'sel' : ''}" data-v="0" ${verrou ? 'disabled' : ''}>FAUX</button></div>
       ${verrou ? '<div class="carte succes"><b>✔ Réponse validée</b><br>Attends la question suivante.</div>'
         : `<button class="principal tc-valider" ${sel === null || sel === undefined ? 'disabled' : ''}>Valider ma réponse</button>
            <p class="aide">Tu peux changer ton choix tant que tu n'as pas validé.</p>`}
     </div>`;
+    $('#tc-doc', cible)?.addEventListener('click', () => {
+      const z = document.createElement('div'); z.className = 'tc-zoom';
+      z.innerHTML = `<button class="tc-fermer">✕ Fermer</button><img src="${esc(etat.illustration)}" alt="Document de la question">`;
+      z.querySelector('button').addEventListener('click', () => z.remove());
+      document.body.appendChild(z);
+    });
     $$('.tc-btn', cible).forEach(b => b.addEventListener('click', async () => {
       choix = b.dataset.v === '1'; dessiner();
       try { await rpc('caces_seance_repondre', { p_code: PS.code, p_seance: etat.seance_id, p_ordre: etat.question_courante, p_reponse: choix, p_valider: false }); }
@@ -234,7 +241,7 @@ function ecranTelecommande(cible, lignes) {
       }
       rpc('caces_seance_presence', { p_code: PS.code, p_seance: e.seance_id }).catch(() => {});
       const change = !etat || e.etat !== etat.etat || e.question_courante !== ordreAffiche || e.valide !== etat.valide
-        || (choix === null && e.ma_reponse !== etat.ma_reponse);
+        || e.illustration !== etat.illustration || (choix === null && e.ma_reponse !== etat.ma_reponse);
       if (e.question_courante !== ordreAffiche) { choix = null; ordreAffiche = e.question_courante; }
       etat = e;
       if (change) dessiner();
