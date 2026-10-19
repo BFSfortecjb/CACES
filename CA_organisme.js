@@ -8,12 +8,14 @@ async function rendreOrganisme(zone) {
     <div class="carte"><h3>Parc d'engins du centre</h3>
       <p class="aide">Engins du centre, sélectionnables directement dans les sessions. Les engins de location y sont aussi mémorisés (même marque + n° de série = même engin : on ne remet à jour que les documents).</p>
       <div id="zone-parc"></div></div>
-    <div class="carte"><h3>Agences (cachet, signataire, secrétariat)</h3><div id="zone-carton"><p class="chargement">Chargement…</p></div></div>
+    <div class="carte"><h3>Secrétariat (envois et exports)</h3><div id="zone-secr"></div></div>
+    <div class="carte"><h3>Agences (cachet, signataire)</h3><div id="zone-carton"><p class="chargement">Chargement…</p></div></div>
     <div class="carte"><h3>Données personnelles (RGPD)</h3><div id="zone-rgpd"><p class="chargement">Chargement…</p></div></div>
     <div class="carte"><h3>Google Drive</h3><div id="zone-drive"><p class="chargement">Chargement…</p></div></div>`;
   await chargerTypesDocEngin();
   rendreParcEngins($('#zone-parc'));
   rendreEtatDrive();
+  rendreSecretariatOrganisme($('#zone-secr'));
   rendreParametresCarton();
   rendreRgpd();
 }
