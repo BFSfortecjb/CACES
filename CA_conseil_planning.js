@@ -51,13 +51,15 @@ function calculerConseil(c) {
     for (const st of aFaire.slice().sort((a, b) => c.nbTesteurs(a) - c.nbTesteurs(b))) {
       const elig = testeurs.filter(t => c.peut(st, t));
       if (!elig.length) { non.push({ st, epreuve: 'theorie', ref, raison: 'aucun testeur autorisé (formateur = testeur ?)' }); continue; }
-      const t = elig.sort((a, b) => eff[a] - eff[b])[0]; eff[t]++; (groupes[t] ||= []).push(st);
+      const t = elig.filter(x => eff[x] < q.maxTh).sort((a, b) => eff[b] - eff[a])[0] || elig.sort((a, b) => eff[a] - eff[b])[0]; eff[t]++; (groupes[t] ||= []).push(st);
     }
     for (const [t, liste] of Object.entries(groupes)) {
       for (let i = 0; i < liste.length; i += q.maxTh) {
         const lot = liste.slice(i, i + q.maxTh), ut = c.utTh(ref);
         let place = false;
-        for (let ji = 0; ji < jours.length && !place; ji++) {
+        const ordre = jours.map((_, i) => i).sort((a, b) => (a === Math.min(1, jours.length - 1) ? -1 : b === Math.min(1, jours.length - 1) ? 1 : a - b));
+        for (const ji of ordre) {
+          if (place) break;
           if (!ok(t, jours[ji], ut, 0, null, 0)) continue;
           lot.forEach((st, k) => poser(t, jours[ji], { st, epreuve: 'theorie', ref, cat: '', ut, utCharge: k === 0 ? ut : 0, utStag: ut }));
           place = true;
@@ -73,7 +75,7 @@ function calculerConseil(c) {
     .filter(b => b.items.length).map(b => ({ ...b, ut: b.items.reduce((a, i) => a + i.ut, 0) }))
     .sort((a, b) => b.ut - a.ut || a.st.nom.localeCompare(b.st.nom));
 
-  const score = (t, j, ut) => { const ch = lit(t, j); return Math.max((ch.tot + ut) / q.jour, (ch.prat + ut) / q.prat); };
+  const score = (t, j) => -jours.indexOf(j) * 100 - lit(t, j).tot; // pédagogie : on concentre la pratique sur les derniers jours, créneaux remplis un par un
   for (const b of blocs) {
     const elig = testeurs.filter(t => c.peut(b.st, t));
     if (!elig.length) { b.items.forEach(i => non.push({ st: b.st, epreuve: 'pratique', ref: i.ref, cat: i.cat, raison: 'aucun testeur autorisé (formateur = testeur ?)' })); continue; }
@@ -168,7 +170,7 @@ function dessinerConseil(r, ctx, n, nouveaux) {
     const theo = Object.values(parSt).filter(x => x.epreuve === 'theorie');
     const prat = Object.values(parSt).filter(x => x.epreuve === 'pratique');
     const lignes = [];
-    if (theo.length) lignes.push(`<li>📝 Théorie ${esc(theo[0].ref)} — ${theo.length} stagiaire(s)</li>`);
+    if (theo.length) lignes.push(`<li>📝 Théorie ${esc(theo[0].ref)} (début d'après-midi) — ${theo.length} stagiaire(s)</li>`);
     prat.forEach(x => lignes.push(`<li>${esc(x.st.nom)} ${esc((x.st.prenom || '').charAt(0))}. — ${esc(x.cats.join(', '))} <small>(${fmt(x.ut)} UT)</small></li>`));
     const trop = ch.tot > q.jour + 1e-9 || ch.prat > q.prat + 1e-9;
     return `<td><div class="${trop ? 'note-faible' : ''}"><b>${fmt(ch.tot)} / ${q.jour} UT</b> <small>(pratique ${fmt(ch.prat)} / ${q.prat}${ch.base ? ` · dont ${fmt(ch.base)} déjà prévues ailleurs` : ''})</small></div>
@@ -188,7 +190,7 @@ function dessinerConseil(r, ctx, n, nouveaux) {
       ${jours.map(j => `<tr><td>${esc(dateFr(j))}</td>${testeurs.map(t => cellule(t, j)).join('')}</tr>`).join('')}</tbody></table></div>
     ${r.non.length ? `<div class="carte"><b>Non placé :</b><ul>${r.non.slice(0, 20).map(x => `<li>${esc(x.st.nom)} ${esc(x.st.prenom)} — ${x.epreuve === 'theorie' ? 'théorie' : esc(x.ref + ' ' + x.cat)} : ${esc(x.raison)}</li>`).join('')}</ul></div>` : ''}
     ${r.alertes.length ? `<div class="carte"><b>Points d'attention</b><ul>${r.alertes.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
-    <p class="aide">Hypothèses : une épreuve de pratique = UT de la catégorie ; une séance de théorie (12 candidats max) = UT du référentiel ; un testeur ne teste pas ses propres stagiaires ;
+    <p class="aide">Principe : théorie le 2<sup>e</sup> jour en début d'après-midi, pratique concentrée sur les derniers jours. Hypothèses : une épreuve de pratique = UT de la catégorie ; une séance de théorie (12 candidats max) = UT du référentiel ; un testeur ne teste pas ses propres stagiaires ;
       la charge déjà prévue sur d'autres sessions est déduite ; un engin = ${q.jour} UT par jour. Le Planning reste modifiable à la main.</p>
     <div class="pied-modale"><button onclick="fermerModale();ouvrirPlanning()">Retour au Planning</button>
       ${d.testeur && S.session.statut !== 'cloturee' ? '<button class="principal" onclick="appliquerConseil()">✔ Appliquer au Planning</button>' : ''}</div>`, { large: true });
