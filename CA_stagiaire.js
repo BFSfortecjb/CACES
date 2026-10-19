@@ -182,7 +182,7 @@ function surveillerSeanceStagiaire(cible, lignes) {
     if (!document.body.contains(cible)) return arreterSurveillanceSeance();
     try {
       const e = ((await rpc('caces_seance_etat', { p_code: PS.code })) || [])[0];
-      if (e && e.etat === 'en_cours') { arreterSurveillanceSeance(); ecranTelecommande(cible, lignes); }
+      if (e && (e.etat === 'en_cours' || e.etat === 'attente')) { arreterSurveillanceSeance(); ecranTelecommande(cible, lignes); }
     } catch (err) { /* hors ligne : on réessaie */ }
   };
   tick(); _seanceTimer = setInterval(tick, 3000);
@@ -191,6 +191,12 @@ function surveillerSeanceStagiaire(cible, lignes) {
 function ecranTelecommande(cible, lignes) {
   let etat = null, choix = null, ordreAffiche = 0, occupe = false;
   const dessiner = () => {
+    if (etat.etat === 'attente') {
+      cible.innerHTML = `<div class="stagiaire-accueil telecommande"><div class="carte succes"><b>✔ Tu es connecté</b></div>
+        <p class="tc-attente">${esc(libelleReferentiel(etat.referentiel_code))}<br>En attente du démarrage par le testeur…</p>
+        <p class="aide">Ne ferme pas cette page.</p></div>`;
+      return;
+    }
     const verrou = etat.valide;
     const sel = choix !== null ? choix : etat.ma_reponse;
     cible.innerHTML = `<div class="stagiaire-accueil telecommande">
@@ -226,7 +232,8 @@ function ecranTelecommande(cible, lignes) {
         const r = ((await rpc('caces_seance_resultat', { p_code: PS.code, p_seance: e.seance_id })) || [])[0];
         return r ? resultatQcmStagiaire(cible, r) : ecranCategoriesStagiaire(cible, lignes);
       }
-      const change = !etat || e.question_courante !== ordreAffiche || e.valide !== etat.valide
+      rpc('caces_seance_presence', { p_code: PS.code, p_seance: e.seance_id }).catch(() => {});
+      const change = !etat || e.etat !== etat.etat || e.question_courante !== ordreAffiche || e.valide !== etat.valide
         || (choix === null && e.ma_reponse !== etat.ma_reponse);
       if (e.question_courante !== ordreAffiche) { choix = null; ordreAffiche = e.question_courante; }
       etat = e;

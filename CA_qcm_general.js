@@ -13,7 +13,7 @@ async function ouvrirQcmGeneral(modePrereglage) {
   if (!(await exigerCodeTesteur(s.id))) return;
   const [{ data: stags }, { data: seances }] = await Promise.all([
     sb.from('stagiaires').select('*, stagiaire_categories(referentiel_code, theorie_validee)').eq('session_id', s.id).order('nom'),
-    sb.from('qcm_seances').select('*').eq('session_id', s.id).eq('etat', 'en_cours').order('created_at', { ascending: false }),
+    sb.from('qcm_seances').select('*').eq('session_id', s.id).in('etat', ['attente', 'en_cours']).order('created_at', { ascending: false }),
   ]);
   const refs = [...new Set((s._categories || []).map(c => c.referentiel_code))];
   if (!refs.length) return toast('Aucune catégorie sur cette session.', 'erreur');
@@ -26,7 +26,7 @@ async function ouvrirQcmGeneral(modePrereglage) {
       <td class="qg-col-box"><input type="number" min="1" max="999" class="qg-num" data-id="${st.id}" value="${st.numero_telecommande || ''}" style="width:70px"></td></tr>`;
   }).join('');
   ouvrirModale('QCM général', `
-    ${reprise ? `<div class="carte"><b>Une séance est déjà en cours</b> (${esc(libelleReferentiel(reprise.referentiel_code))}, ${reprise.mode === 'quizbox' ? 'Quizbox' : 'téléphones'}).
+    ${reprise ? `<div class="carte"><b>Une séance est déjà en cours</b> (${esc(libelleReferentiel(reprise.referentiel_code))}, ${reprise.etat === 'attente' ? 'salle d\'attente, ' : ''}${reprise.mode === 'quizbox' ? 'Quizbox' : 'téléphones'}).
       <button class="principal" onclick="reprendreQcmGeneral('${reprise.id}')">▶ Reprendre</button></div>` : ''}
     <form id="form-qg" class="formulaire">
       <label>Référentiel <select name="ref">${refs.map(r => `<option value="${esc(r)}">${esc(libelleReferentiel(r))}</option>`).join('')}</select></label>
@@ -90,7 +90,8 @@ async function reprendreQcmGeneral(seanceId) {
     QG.seance = se; QG.questions = se.question_ids.map(id => parId[id]);
     QG.idx = se.mode === 'quizbox' ? 0 : se.question_courante - 1;
     QG.voixActive = !!se.voix; QG.vitesse = Number(se.vitesse_voix) || 1; QG.derniereLue = -1; QG.enCours = true;
-    QG.participants = [];
+    QG.participants = []; QG.idxChrono = -1; QG.avance = -1;
+    QG.debutSeance = se.date_debut ? new Date(se.date_debut).getTime() : Date.now();
     ouvrirEcranProjete();
   } catch (e) { toast(e.message, 'erreur'); }
 }
@@ -106,9 +107,10 @@ function ouvrirEcranProjete() {
     interrogerSeance();
     QG.timer = setInterval(interrogerSeance, 1500);
   } else interrogerSeance();
+  QG.chrono = setInterval(majChrono, 1000);
 }
 function fermerEcranProjete(silencieux) {
-  clearInterval(QG.timer); QG.timer = null;
+  clearInterval(QG.timer); QG.timer = null; clearInterval(QG.chrono); QG.chrono = null;
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   document.getElementById('qg-ecran')?.remove();
   document.body.classList.remove('qg-actif');
@@ -124,6 +126,7 @@ async function interrogerSeance() {
     QG.participants = p || [];
     if (QG.seance.mode === 'telephone') QG.courantServeur = QG.idx + 1;
     majBandeauParticipants();
+    verifierAvanceAuto();
   } catch (e) { /* réseau instable : on réessaie au tick suivant */ }
   _qgOccupe = false;
 }
@@ -134,10 +137,15 @@ function majBandeauParticipants() {
   const b = document.getElementById('qg-bandeau'); if (!b) return;
   const quiz = QG.seance.mode === 'quizbox';
   b.innerHTML = QG.participants.map(p => {
-    const cls = quiz ? '' : (p.valide ? 'ok' : (p.a_repondu ? 'attente' : ''));
+    const cls = quiz ? '' : (QG.seance.etat === 'attente' ? (p.connecte ? 'ok' : '') : (p.valide ? 'ok' : (p.a_repondu ? 'attente' : '')));
     const lib = quiz ? `${p.numero_telecommande != null ? 'n° ' + p.numero_telecommande + ' — ' : ''}${esc(nomCourt(p))}` : esc(nomCourt(p));
-    return `<span class="qg-puce ${cls}">${lib}</span>`;
+    return `<span class="qg-puce ${cls}">${QG.seance.etat === 'attente' && p.connecte ? '✔ ' : ''}${lib}</span>`;
   }).join('');
+  const nb = QG.participants.length;
+  const cc = document.getElementById('qg-compte');
+  if (cc) cc.textContent = QG.seance.etat === 'attente'
+    ? `${QG.participants.filter(p => p.connecte).length} / ${nb} téléphones connectés`
+    : `${QG.participants.filter(p => p.valide).length} / ${nb} ont validé`;
   const tous = QG.participants.length && QG.participants.every(p => p.valide);
   const btn = document.getElementById('qg-suivante');
   if (btn && !quiz) btn.classList.toggle('pret', !!tous);
@@ -145,14 +153,17 @@ function majBandeauParticipants() {
 
 function dessinerEcranProjete() {
   const el = document.getElementById('qg-ecran'); if (!el) return;
+  if (QG.seance.etat === 'attente') return dessinerAccueilQg();
+  if (QG.idxChrono !== QG.idx) { QG.idxChrono = QG.idx; QG.debutQ = Date.now(); }
   const se = QG.seance, q = QG.questions[QG.idx], n = QG.questions.length, quiz = se.mode === 'quizbox';
   const derniere = QG.idx >= n - 1;
   el.innerHTML = `
-    <div class="qg-haut"><div id="qg-bandeau" class="qg-bandeau"></div></div>
+    <div class="qg-haut"><div id="qg-bandeau" class="qg-bandeau"></div>
+      <div class="qg-infos"><span id="qg-compte"></span><span id="qg-chrono" class="qg-chrono"></span></div></div>
     <div class="qg-corps" style="font-size:${QG.police}em">
       <div class="qg-compteur">${esc(libelleReferentiel(se.referentiel_code))} — Question ${QG.idx + 1} / ${n}</div>
       <div class="qg-enonce">${esc(q?.enonce || '')}</div>
-      ${q?.illustration ? `<img class="qg-illustration" src="${esc(q.illustration)}" alt="Illustration de la question">` : ''}
+      ${q?.illustration ? `<img class="qg-illustration" src="${esc(q.illustration)}" alt="Illustration de la question" onerror="this.outerHTML='<p class=aide>⚠ Image introuvable : '+this.getAttribute('src')+' (fichier non publié sur GitHub ?)</p>'">` : ''}
       <div class="qg-vf"><span>VRAI</span><span>FAUX</span></div>
     </div>
     <div class="qg-pied">
@@ -172,7 +183,7 @@ function dessinerEcranProjete() {
       <button onclick="quitterEcranQg()">Quitter l'écran</button>
       <button class="danger" onclick="annulerQcmGeneral()">Annuler la séance</button>
     </div>`;
-  majBandeauParticipants();
+  majBandeauParticipants(); majChrono();
   lireQuestionQg(false);
 }
 
@@ -204,11 +215,11 @@ async function vitesseVoixQg(v) {
 }
 
 /* ---------- navigation ---------- */
-async function questionSuivanteQg() {
+async function questionSuivanteQg(auto) {
   const quiz = QG.seance.mode === 'quizbox';
   if (!quiz) {
     const attente = QG.participants.filter(p => !p.valide).length;
-    if (attente && !confirm(`${attente} participant(s) n'ont pas validé leur réponse (elle sera comptée telle quelle, ou fausse si vide). Passer à la question suivante ?`)) return;
+    if (!auto && attente && !confirm(`${attente} participant(s) n'ont pas validé leur réponse (elle sera comptée telle quelle, ou fausse si vide). Passer à la question suivante ?`)) return;
     try { await rpc('caces_seance_avancer', { p_seance: QG.seance.id }); } catch (e) { return toast(e.message, 'erreur'); }
   }
   QG.idx = Math.min(QG.idx + 1, QG.questions.length - 1);
@@ -342,4 +353,63 @@ function choisirTestTheorique(type) {
     return;
   }
   fermerModale(); ouvrirQcmGeneral(type);
+}
+
+
+/* ---------- chrono ---------- */
+const _mmss = ms => { const t = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+function majChrono() {
+  const c = document.getElementById('qg-chrono'); if (!c || QG.seance?.etat === 'attente') return;
+  c.textContent = `⏱ question ${_mmss(Date.now() - (QG.debutQ || Date.now()))} · total ${_mmss(Date.now() - (QG.debutSeance || Date.now()))}`;
+}
+
+/* ---------- passage automatique quand tout le monde a validé ---------- */
+function verifierAvanceAuto() {
+  const se = QG.seance;
+  if (!se || se.mode !== 'telephone' || se.etat !== 'en_cours' || !QG.participants.length) return;
+  if (!QG.participants.every(p => p.valide) || QG.avance === QG.idx) return;
+  QG.avance = QG.idx;
+  const idx = QG.idx;
+  if (idx >= QG.questions.length - 1) { toast('Tout le monde a validé : tu peux terminer et corriger.'); return; }
+  setTimeout(() => { if (QG.enCours && QG.idx === idx) questionSuivanteQg(true); }, 900);
+}
+
+/* ---------- écran d'accueil (salle d'attente) ---------- */
+function dessinerAccueilQg() {
+  const el = document.getElementById('qg-ecran'); if (!el) return;
+  const se = QG.seance, ouverte = S.session.statut === 'ouverte';
+  el.innerHTML = `
+    <div class="qg-haut"><div class="qg-infos"><span>${esc(libelleReferentiel(se.referentiel_code))} — salle d'attente</span><span id="qg-compte"></span></div></div>
+    <div class="qg-corps qg-accueil">
+      <div class="qg-accueil-acces">
+        <div id="qr-accueil" class="qg-qr"></div>
+        <div><div class="qg-etiquette">Code de la salle</div><div class="qg-code">${esc(S.session.code_acces)}</div>
+          <div class="qg-etiquette">Scanne le QR code, touche ton nom et attends le démarrage.</div></div>
+      </div>
+      ${ouverte ? '' : `<div class="qg-alerte">⚠ L'accès stagiaires est fermé : personne ne peut se connecter.
+        <button class="principal" onclick="ouvrirAccesQg()">▶ Ouvrir l'accès stagiaires</button></div>`}
+      <div id="qg-bandeau" class="qg-bandeau qg-bandeau-centre"></div>
+    </div>
+    <div class="qg-pied">
+      <button class="principal pret" onclick="lancerQcmGeneral()">▶ Démarrer le test</button>
+      <button onclick="quitterEcranQg()">Quitter l'écran</button>
+      <button class="danger" onclick="annulerQcmGeneral()">Annuler la séance</button>
+    </div>`;
+  try { new QRCode(document.getElementById('qr-accueil'), { text: lienStagiaires(), width: 380, height: 380 }); }
+  catch (e) { document.getElementById('qr-accueil').textContent = 'QR code indisponible'; }
+  majBandeauParticipants();
+}
+async function ouvrirAccesQg() {
+  const { error } = await sb.from('sessions_formation').update({ statut: 'ouverte' }).eq('id', S.session.id);
+  if (error) return erreurSupabase('Ouverture de l\'accès stagiaires', error);
+  S.session.statut = 'ouverte'; toast('Accès stagiaires ouvert'); dessinerEcranProjete();
+}
+async function lancerQcmGeneral() {
+  const absents = QG.participants.filter(p => !p.connecte).length;
+  if (absents && !confirm(`${absents} téléphone(s) ne sont pas connectés. Démarrer quand même ?`)) return;
+  try {
+    await rpc('caces_seance_lancer', { p_seance: QG.seance.id });
+    QG.seance.etat = 'en_cours'; QG.debutSeance = Date.now(); QG.idxChrono = -1; QG.avance = -1;
+    dessinerEcranProjete();
+  } catch (e) { toast(e.message, 'erreur'); }
 }

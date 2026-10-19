@@ -712,3 +712,15 @@ details.repliable > div { padding-bottom: 12px; }
 .option-test em { font-size: .85em; color: #b00020; }
 .option-test:disabled { opacity: .55; }
 .acces-qr { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+
+.qg-infos { display: flex; gap: 24px; justify-content: space-between; margin-top: 6px; font-weight: 600; }
+.qg-chrono { font-variant-numeric: tabular-nums; font-size: 1.2em; }
+.qg-accueil { gap: 3vh; }
+.qg-accueil-acces { display: flex; gap: 5vw; align-items: center; justify-content: center; flex-wrap: wrap; }
+.qg-qr { background: #fff; padding: 16px; border-radius: 14px; }
+.qg-code { font-family: monospace; font-size: 6em; font-weight: 800; letter-spacing: .08em; }
+.qg-etiquette { opacity: .8; font-size: 1.3em; }
+.qg-alerte { background: #b00020; padding: 12px 18px; border-radius: 10px; font-size: 1.3em; display: flex; gap: 16px; align-items: center; }
+.qg-bandeau-centre { justify-content: center; }
+.qg-bandeau-centre .qg-puce { font-size: 1.4rem; padding: 8px 16px; }
+.telecommande .tc-attente { font-size: 1.3rem; }
