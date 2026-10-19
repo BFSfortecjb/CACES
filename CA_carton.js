@@ -30,6 +30,26 @@ const NUMERO_INRS = 'D-609-03';        // « Inscrit dans la base INRS sous le n
 const SITE_WEB_BFS = 'www.bfs-prevention.fr';
 const LIBELLE_OPTION = { telecommande: 'Télécommande', porte_engins: 'Porte-engins' };
 
+/** Mention de famille imposée par l'annexe A6 de chaque recommandation (R482B, R485A, R486B, R489A). */
+const MENTION_FAMILLE = { R482: 'R.482 – Engins de chantier', R485: 'R.485 – Gerbeurs à conducteur accompagnant',
+  R486: 'R.486 – Plates-formes élévatrices mobiles de personnel', R489: 'R.489 – Chariots à conducteur porté' };
+const mentionFamille = ref => MENTION_FAMILLE[String(ref).slice(0, 4)] || ref;
+
+/** Options à imprimer (annexe A6/3). « OUI/NON » obligatoire pour chaque option prévue ; certaines catégories sont toujours « OUI ». */
+function optionsCarton(ref, cat, ce) {
+  const a = (ce && ce.options) || [], f = String(ref).slice(0, 4), oui = b => (b ? 'OUI' : 'NON');
+  if (f === 'R482') {
+    const lignes = [];
+    if (/^[A-G]/.test(cat)) lignes.push(`Télécommande : ${oui(a.includes('telecommande'))}`);
+    if (cat === 'A' || cat === 'G') lignes.push('Porte-engins : OUI');
+    else if (/^[B-F]/.test(cat)) lignes.push(`Porte-engins : ${oui(a.includes('porte_engins'))}`);
+    return lignes;
+  }
+  if (f === 'R486') return [cat === 'C' ? 'Porte-engins : OUI' : `Porte-engins : ${oui(a.includes('porte_engins'))}`];
+  return [];
+}
+const MENTION_AIPR = 'Ce(s) CACES® ne permet(tent) pas la délivrance d\'une AIPR';
+
 /** QR code → data URL PNG (bibliothèque qrcodejs). */
 function qrDataUrl(texte) {
   return new Promise(resolve => {
@@ -126,7 +146,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
         // tableau
         const X0 = 50, W = 148, cols = [10, 36, 44, 30, 28];           // CAT, Type, N°+options, testeur, dates
         boite(X0, 10, W, 7); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-        doc.text(`CACES® ${ref.replace(/^R(\d{3}).*/, 'R.$1')} - ${libelleReferentiel(ref)}`.slice(0, 80), X0 + W / 2, 14.8, { align: 'center' });
+        doc.text(`CACES® ${mentionFamille(ref)}`.slice(0, 80), X0 + W / 2, 14.8, { align: 'center' });
         let y = 19; const xs = cols.reduce((a, w, i) => (a.push((a[i] || X0) + w), a), [X0]);
         doc.setFontSize(7); ['CAT', 'Type', 'N° du CACES® + Options', 'Testeur des épreuves pratiques', 'Obtention / échéance']
           .forEach((t, i) => doc.text(doc.splitTextToSize(t, cols[i] - 2), xs[i] + cols[i] / 2, y + 3, { align: 'center' }));
@@ -136,13 +156,13 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
           boite(X0, y, W, 11); xs.slice(1, -1).forEach(x => doc.line(x, y, x, y + 11));
           doc.setFontSize(8); doc.text(c.categorie_code, xs[0] + cols[0] / 2, y + 6.5, { align: 'center' });
           doc.setFontSize(7); doc.text(doc.splitTextToSize(libelleCategorie(ref, c.categorie_code), cols[1] - 2), xs[1] + cols[1] / 2, y + 4.5, { align: 'center' });
-          const opts = ref.startsWith('R482') ? ['telecommande', 'porte_engins'].map(o =>
-            `${LIBELLE_OPTION[o]} ${(ce.options || []).includes(o) ? 'OUI' : 'NON'}`) : [];
+          const opts = optionsCarton(ref, c.categorie_code, ce);
           doc.setFontSize(7.5); bleu(); doc.text([ce.numero || '', ...opts], xs[2] + cols[2] / 2, y + 3.2, { align: 'center', lineHeightFactor: 1.1 });
           doc.text(nomFormateur(ce.testeur_id) || '', xs[3] + cols[3] / 2, y + 6.5, { align: 'center' });
           doc.text([dateFr(ce.date_delivrance), dateFr(ce.date_expiration)], xs[4] + cols[4] / 2, y + 4.5, { align: 'center' }); noir();
           y += 11;
         });
+        doc.setFontSize(6.5); doc.text(MENTION_AIPR, X0, 90); doc.setFontSize(7);
         if (qr) {
           doc.addImage(qr, 'PNG', 179, 84, 19, 19);
           doc.setFontSize(6); doc.text('Vérifier ce titre', 188.5, 83, { align: 'center' });

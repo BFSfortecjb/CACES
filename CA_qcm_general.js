@@ -59,6 +59,10 @@ async function ouvrirQcmGeneral(modePrereglage) {
     if (!ids.length) return toast('Choisis au moins un participant.', 'erreur');
     const mode = f.mode.value;
     try {
+      // Référentiel : 12 candidats maximum par testeur présent dans la salle pour les épreuves théoriques
+      const { data: prm } = await sb.from('parametres_application').select('max_candidats_theorie').eq('id', 1).single();
+      const nbTesteurs = Math.max(1, testeursSession(s).length), max = (prm?.max_candidats_theorie || 12) * nbTesteurs;
+      if (ids.length > max) return toast(`Limite : ${max} candidats maximum pour ${nbTesteurs} testeur(s) (${prm?.max_candidats_theorie || 12} par testeur). Retire des participants ou ajoute un testeur à la session.`, 'erreur', 8000);
       if (mode === 'quizbox') {
         const nums = $$('.qg-num', f).map(i => ({ stagiaire_id: i.dataset.id, numero: i.value }));
         const vus = nums.filter(n => n.numero).map(n => n.numero);
