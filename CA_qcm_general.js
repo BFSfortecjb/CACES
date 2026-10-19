@@ -98,6 +98,7 @@ async function reprendreQcmGeneral(seanceId) {
 
 function ouvrirEcranProjete() {
   fermerEcranProjete(true);
+  QG.enCours = true;   // fermerEcranProjete le remet à faux : sans cela le passage automatique ne se déclenche jamais
   const d = document.createElement('div');
   d.id = 'qg-ecran'; d.className = 'qg-ecran';
   document.body.appendChild(d);
