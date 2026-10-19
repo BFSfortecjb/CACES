@@ -5,7 +5,8 @@
    Calcul 100 % navigateur (aucune écriture tant qu'on n'a pas cliqué « Appliquer au Planning »).
    Le contrôle bloquant reste celui de la base, sur la date réelle de l'épreuve.
    ===================================================================== */
-const CONSEIL = { dernier: null, profils: {} };
+const CONSEIL = { dernier: null, profils: {}, jourTheorie: 'deuxieme' };
+function changerJourTheorieConseil(v) { CONSEIL.jourTheorie = v; ouvrirConseilPlanning(CONSEIL.dernier?.n); }
 function changerProfilConseil(id, v) { CONSEIL.profils[id] = v; ouvrirConseilPlanning(CONSEIL.dernier?.n); }
 
 /** n jours ouvrés (lun–ven) après une date de départ (exclue). */
@@ -58,7 +59,8 @@ function calculerConseil(c) {
       for (let i = 0; i < liste.length; i += q.maxTh) {
         const lot = liste.slice(i, i + q.maxTh), ut = c.utTh(ref);
         let place = false;
-        const ordre = jours.map((_, i) => i).sort((a, b) => (a === Math.min(1, jours.length - 1) ? -1 : b === Math.min(1, jours.length - 1) ? 1 : a - b));
+        const pref = c.jourTheorie === 'dernier' ? jours.length - 1 : c.jourTheorie === 'premier' ? 0 : Math.min(1, jours.length - 1);
+        const ordre = jours.map((_, i) => i).sort((a, b) => (a === pref ? -1 : b === pref ? 1 : a - b));
         for (const ji of ordre) {
           if (place) break;
           if (!ok(t, jours[ji], ut, 0, null, 0)) continue;
@@ -211,6 +213,7 @@ async function ouvrirConseilPlanning(nbJoursDemande) {
     q: { jour: Number(prm?.quota_ut_jour ?? 7), prat: Number(prm?.quota_ut_pratique_jour ?? 6), stag: Number(prm?.quota_ut_stagiaire_jour ?? 7), maxTh: Number(prm?.max_candidats_theorie ?? 12) },
     utCat: (ref, cat) => Number((S.referentiel.categories.find(c => c.referentiel_code === ref && c.code === cat) || {}).ut_pratique || 0),
     utTh: ref => Number((S.referentiel.referentiels.find(r => r.code === ref) || {}).ut_theorique || 0),
+    jourTheorie: CONSEIL.jourTheorie,
     profil: st => CONSEIL.profils[st.id] || 'standard',
     deja: (t, j) => deja[t + '|' + j] || { tot: 0, prat: 0 },
     peut: (st, t) => peutTesterStagiaire(st, s, t),
@@ -232,7 +235,7 @@ function dessinerConseil(r, ctx, n, nouveaux) {
     const rang = x => ({ aise: 0, standard: 1, stresse: 2 }[ctx.profil(x.st)] ?? 1);
     const prat = Object.values(parSt).filter(x => x.epreuve === 'pratique').sort((a, b) => rang(a) - rang(b));
     const lignes = [];
-    if (theo.length) lignes.push(`<li>📝 Théorie ${esc(theo[0].ref)} (début d'après-midi) — ${theo.length} stagiaire(s)</li>`);
+    if (theo.length) lignes.push(`<li>📝 Théorie ${esc(theo[0].ref)} ${CONSEIL.jourTheorie === 'deuxieme' ? "(début d'après-midi) " : ''}— ${theo.length} stagiaire(s)</li>`);
     prat.forEach(x => lignes.push(`<li>${{ aise: '🟢 ', stresse: '🟠 ' }[ctx.profil(x.st)] || ''}${esc(x.st.nom)} ${esc((x.st.prenom || '').charAt(0))}. — ${esc(x.cats.join(', '))} <small>(${fmt(x.ut)} UT)</small></li>`));
     const trop = ch.tot > q.jour + 1e-9 || ch.prat > q.prat + 1e-9;
     return `<td><div class="${trop ? 'note-faible' : ''}"><b>${fmt(ch.tot)} / ${q.jour} UT</b> <small>(pratique ${fmt(ch.prat)} / ${q.prat}${ch.base ? ` · dont ${fmt(ch.base)} déjà prévues ailleurs` : ''})</small></div>
@@ -246,6 +249,8 @@ function dessinerConseil(r, ctx, n, nouveaux) {
   ouvrirModale('💡 Conseil de charge', `
     <div class="carte"><label>Nombre de jours de test
       <select id="conseil-nb" onchange="ouvrirConseilPlanning(this.value)">${[1, 2, 3, 4, 5, 6].map(k => `<option ${k === n ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+      <label>Théorie le <select onchange="changerJourTheorieConseil(this.value)">${[['premier', '1er jour'], ['deuxieme', '2e jour (début d\'après-midi)'], ['dernier', 'dernier jour (complète le 7e UT)']]
+        .map(([v, l]) => `<option value="${v}" ${CONSEIL.jourTheorie === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${nouveaux.length ? `<span class="aide">Jours à créer : ${nouveaux.map(dateFr).join(', ')}</span>` : ''}
       <p>${diag.join('<br>')}</p></div>
     <details class="carte"><summary><b>Profil des stagiaires</b> <small>(🟢 à l'aise : passent en premier · 🟠 stressé : réparti sur 2 jours)</small></summary>
