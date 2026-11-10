@@ -14,6 +14,7 @@
 function ecranConnexion(cible) {
   cible.innerHTML = `
     <div class="connexion">
+      ${logoImg('logo-grand')}
       <h1>${esc(CONFIG.NOM_APPLICATION)}</h1>
       <p class="sous-titre">Évaluation et suivi — CACES®</p>
       ${S.accesRefuse ? `
@@ -31,10 +32,23 @@ function ecranConnexion(cible) {
           <input type="password" name="mdp" required autocomplete="current-password">
         </label>
         <button class="principal" type="submit">Se connecter</button>
+        <p class="aide"><a href="#" id="mdp-oublie">Mot de passe oublié ?</a></p>
         <p class="aide">Les stagiaires n'ont pas de compte : ils utilisent le
            <a href="#stagiaire">lien de connexion stagiaire</a> et le code affiché en salle.</p>
       </form>
     </div>`;
+
+  $('#mdp-oublie').addEventListener('click', async ev => {
+    ev.preventDefault();
+    const email = ($('#form-connexion').email.value || '').trim() || (window.prompt('Adresse e-mail de ton compte :') || '').trim();
+    if (!email) return;
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+      if (error) throw error;
+    } catch (e) { DEBUG.erreur('Mot de passe oublié', e.message || e); }
+    // Même message dans tous les cas : on ne révèle pas si l'adresse existe.
+    toast('Si cette adresse correspond à un compte, un lien de réinitialisation vient d\'être envoyé (pense à regarder les courriers indésirables).', 'ok', 9000);
+  });
 
   $('#form-connexion').addEventListener('submit', async ev => {
     ev.preventDefault();
@@ -51,6 +65,7 @@ function ecranConnexion(cible) {
 /* ====================== 2. Coquille ================================= */
 const ONGLETS = {
   sessions:     'Sessions',
+  statistiques: 'Statistiques',
   banque:       'Banque de questions',
   grilles:      'Grilles pratiques',
   fise:         'Catalogue FISE',
@@ -88,6 +103,7 @@ function rendreAVenir(libelle) {
 // on résout à l'affichage (typeof) pour que l'ordre de chargement n'importe pas.
 const RENDU = {
   sessions:     z => (typeof rendreSessions === 'function' ? rendreSessions : rendreAVenir('Sessions'))(z),
+  statistiques: z => (typeof rendreStatistiques === 'function' ? rendreStatistiques : rendreAVenir('Statistiques'))(z),
   session:      z => (typeof rendreDetailSession === 'function' ? rendreDetailSession : rendreAVenir('Session'))(z),
   banque:       z => (typeof rendreBanque === 'function' ? rendreBanque : rendreAVenir('Banque de questions'))(z),
   grilles:      z => (typeof rendreGrilles === 'function' ? rendreGrilles : rendreAVenir('Grilles pratiques'))(z),
@@ -104,7 +120,7 @@ const RENDU = {
 function ecranFormateur(cible) {
   cible.innerHTML = `
     <header class="entete">
-      <div class="titre">${esc(CONFIG.NOM_APPLICATION)}
+      <div class="titre">${logoImg('logo-entete')}${esc(CONFIG.NOM_APPLICATION)}
         ${S.organisme?.raison_sociale ? `<span class="badge">${esc(S.organisme.raison_sociale)}</span>` : ''}</div>
       <nav class="onglets">
         ${ongletsVisibles().map(([id, lib]) =>
@@ -140,3 +156,32 @@ function ouvrirModale(titre, contenuHtml, opts = {}) {
   document.body.appendChild(d);
 }
 function fermerModale() { document.getElementById('modale')?.remove(); }
+
+
+/* ====================== 3. Nouveau mot de passe (lien « mot de passe oublié ») ====================== */
+function ecranNouveauMotDePasse(cible) {
+  cible.innerHTML = `
+    <div class="connexion">
+      ${logoImg('logo-grand')}
+      <h1>${esc(CONFIG.NOM_APPLICATION)}</h1>
+      <p class="sous-titre">Choisis ton nouveau mot de passe</p>
+      <form id="form-nouveau-mdp" class="carte">
+        <label>Nouveau mot de passe (8 caractères minimum)
+          <input type="password" name="m1" minlength="8" required autocomplete="new-password"></label>
+        <label>Confirmer
+          <input type="password" name="m2" minlength="8" required autocomplete="new-password"></label>
+        <button class="principal" type="submit">Enregistrer et continuer</button>
+      </form>
+    </div>`;
+  $('#form-nouveau-mdp').addEventListener('submit', async ev => {
+    ev.preventDefault(); const f = ev.target;
+    if (f.m1.value !== f.m2.value) return toast('Les deux mots de passe sont différents.', 'erreur');
+    const { error } = await sb.auth.updateUser({ password: f.m1.value });
+    if (error) return erreurSupabase('Nouveau mot de passe', error);
+    S.recuperationMdp = false;
+    toast('Mot de passe modifié.');
+    try { const etat = await chargerProfil(); if (etat === 'ok') await chargerReferentiel(); else if (etat === 'non_autorise') S.accesRefuse = true; }
+    catch (e) { erreurSupabase('Chargement', e); }
+    router();
+  });
+}

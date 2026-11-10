@@ -752,3 +752,69 @@ details.repliable > div { padding-bottom: 12px; }
 
 .ligne-profil { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border-bottom: 1px solid #eee; }
 .ligne-profil select { max-width: 60%; }
+
+/* Logo de l'organisme (configurable dans Organisme) */
+.logo-bfs { display: block; object-fit: contain; }
+.logo-grand { max-height: 90px; max-width: 70%; margin: 0 auto 10px; }
+.logo-moyen { max-height: 60px; max-width: 60%; margin: 0 auto 10px; }
+.logo-entete { max-height: 34px; max-width: 120px; display: inline-block; vertical-align: middle; margin-right: 10px; }
+.logo-projection { max-height: 44px; max-width: 160px; background: #fff; border-radius: 6px; padding: 3px 6px; margin-right: 12px; display: inline-block; vertical-align: middle; }
+.apercu-logo { background: #fff; border: 1px dashed #bbb; border-radius: 8px; padding: 10px; display: inline-block; }
+.apercu-logo img { max-height: 90px; max-width: 260px; display: block; }
+.detail-journal { font-size: 12px; color: #555; max-width: 360px; word-break: break-word; }
+
+/* Test théorique : pilotage du testeur (double affichage), explication, couleurs de résultats */
+.qg-pilote { z-index: 900; }
+.qg-pilote-corps { flex: 1; display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; padding: 16px; overflow: auto; }
+.qg-pilote-question, .qg-pilote-resultats { background: #16263f; border-radius: 12px; padding: 16px; }
+.qg-pilote-enonce { font-size: 1.5rem; margin: 10px 0; line-height: 1.35; }
+.qg-pilote-attendue { font-size: 1.2rem; margin: 10px 0 18px; color: #9be3b4; }
+.qg-pilote-actions button { font-size: 1.2rem; padding: 12px 26px; }
+.qg-pilote .tableau { background: #fff; color: #222; }
+.qg-pilote .tableau td, .qg-pilote .tableau th { padding: 6px 10px; }
+.qg-pilote .aide { color: #b8c4d6; }
+body.qg-projection .qg-pied { display: none; }
+.qg-explication { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; padding: 28px 40px; text-align: left; }
+.qg-explication h2 { margin: 0 0 12px; }
+.qg-explication li { margin: 8px 0; line-height: 1.4; font-size: 1.25em; }
+.qg-explication-themes li { font-size: 1em; margin: 4px 0; }
+.qg-explication-go { grid-column: 1 / -1; justify-self: center; margin-top: 12px; }
+.tc-consignes { text-align: left; padding-left: 20px; }
+.note-bonne { background: #d9f2e1; color: #11632f; font-weight: 600; }
+.note-moyenne { background: #ffe9c7; color: #8a4b00; font-weight: 600; }
+.note-faible { background: #fbd5d5; color: #9b1c1c; font-weight: 600; }
+.pastille-bonne, .pastille-moyenne, .pastille-faible { display: inline-block; padding: 2px 10px; border-radius: 12px; font-weight: 600; }
+.pastille-bonne { background: #d9f2e1; color: #11632f; } .pastille-moyenne { background: #ffe9c7; color: #8a4b00; } .pastille-faible { background: #fbd5d5; color: #9b1c1c; }
+.resume-resultats { font-size: 1.1rem; margin-bottom: 10px; }
+.ligne-refus td:first-child { border-left: 4px solid #c62828; } .ligne-admis td:first-child { border-left: 4px solid #1f9d55; }
+
+/* Évaluation pratique : pénalités, justification d'échec */
+.feuille-pen { margin: 8px 0 12px; padding: 8px 10px; background: #fff7e6; border: 1px solid #f0d9a6; border-radius: 8px; }
+.feuille-pen .case { display: block; margin: 6px 0; }
+.feuille-bande button:disabled { opacity: .3; }
+.prat-justif { margin-top: 12px; padding: 12px; border: 2px solid #c62828; border-radius: 10px; background: #fff5f5; }
+.prat-justif textarea { width: 100%; font-size: 1rem; }
+.prat-justif .obligatoire { font-size: 12px; color: #c62828; text-transform: uppercase; margin-left: 6px; }
+.prat-justif-outils { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+
+/* ---------- Statistiques (chantier 27) ---------- */
+.stat-filtres { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
+.stat-onglets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.stat-onglets button { padding: 6px 14px; border-radius: 18px; border: 1px solid #c9ced6; background: #fff; cursor: pointer; }
+.stat-onglets button.actif { background: #f3ab12; border-color: #f3ab12; font-weight: 700; color: #080808; }
+.stat-barre-outils { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.stat-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 10px 0; }
+.stat-kpi { background: #fff; border-radius: 10px; border-top: 4px solid #2c6fbb; padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; flex-direction: column; }
+.stat-kpi b { font-size: 1.7rem; } .stat-kpi span { color: #555; font-size: .85rem; }
+.stat-ligne { margin: 14px 0 20px; }
+.stat-nom { font-weight: 700; margin-bottom: 4px; }
+.stat-piste { position: relative; height: 26px; background: #e8eaee; border-radius: 6px; overflow: visible; }
+.stat-barre { height: 100%; border-radius: 6px 0 0 6px; transition: width .4s; }
+.stat-pct { position: absolute; right: 8px; top: 3px; font-weight: 700; color: #333; }
+.stat-objectif { position: absolute; top: -8px; bottom: -4px; border-left: 2px dashed #333; }
+.stat-objectif i { position: absolute; top: -12px; left: -14px; font-size: .7rem; font-style: normal; background: #fff; padding: 0 2px; }
+.stat-detail { font-size: .8rem; color: #555; margin-top: 4px; }
+.tableau-defile { overflow-x: auto; }
+.stat-matrice th, .stat-matrice td { min-width: 38px; }
+.stat-matrice td:first-child, .stat-matrice th:first-child { min-width: 160px; text-align: left; }
+.stat-total td { font-weight: 700; background: #f4f4f3; }

@@ -47,7 +47,7 @@ function formulaireVerification(cible, zoneRes, valeur = '') {
 
 /** Page publique, sans compte. */
 async function ecranVerificationPublique(cible) {
-  cible.innerHTML = `<div class="stagiaire-accueil"><h1>${esc(CONFIG.NOM_APPLICATION)}</h1>
+  cible.innerHTML = `<div class="stagiaire-accueil">${logoImg('logo-grand')}<h1>${esc(CONFIG.NOM_APPLICATION)}</h1>
     <p class="sous-titre">Vérification d'un titre CACES®</p><div id="verif-form"></div><div id="verif-res"></div></div>`;
   const n = numeroDuLien();
   formulaireVerification($('#verif-form', cible), $('#verif-res', cible), n);

@@ -42,7 +42,8 @@ async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
             <div class="adeq-aide" id="aide-${k}" hidden>${esc(aide || '')}</div></div>`).join('')}`).join('')}
         ${manque.length ? `<div class="adeq-nc"><b>En cas de non-conformité :</b> appeler immédiatement votre référent technique et responsable de site.
           <label><input type="checkbox" data-nc="traitee" ${nc.traitee ? 'checked' : ''}> Non-conformité traitée immédiatement</label>
-          <label><input type="checkbox" data-nc="fiche" ${nc.fiche ? 'checked' : ''}> Édition d'une fiche de non-conformité (annexe 1, procédure n° 4)</label></div>` : ''}
+          <label><input type="checkbox" data-nc="fiche" ${nc.fiche ? 'checked' : ''}> Édition d'une fiche de non-conformité (annexe 1, procédure n° 4)</label>
+          <button type="button" id="adeq-fiche-nc">📄 Générer la fiche de non-conformité (PDF)</button></div>` : ''}
         <div class="pied-modale">
           <button type="button" id="adeq-annuler">Retour</button>
           <button type="button" class="principal" id="adeq-valider">${manque.length ? 'Enregistrer (test bloqué)' : 'Valider : examen d\'adéquation OUI'}</button></div>
@@ -50,6 +51,10 @@ async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
     $$('[data-k]', cible).forEach(i => i.addEventListener('change', () => { pts[i.dataset.k] = i.checked; dessiner(); }));
     $$('[data-nc]', cible).forEach(i => i.addEventListener('change', () => { nc[i.dataset.nc] = i.checked; }));
     $$('[data-aide]', cible).forEach(b => b.addEventListener('click', () => { const e = $('#aide-' + b.dataset.aide, cible); e.hidden = !e.hidden; }));
+    $('#adeq-fiche-nc', cible)?.addEventListener('click', async () => {
+      try { await genererFicheNonConformite(engin, pts, nc); toast('Fiche de non-conformité générée (téléchargement).'); }
+      catch (e) { toast('Génération impossible : ' + e.message, 'erreur', 7000); }
+    });
     $('#adeq-annuler', cible).addEventListener('click', () => onFini(false));
     $('#adeq-valider', cible).addEventListener('click', async () => {
       const conforme = !TOUS_POINTS_ADEQUATION.some(k => !pts[k]);

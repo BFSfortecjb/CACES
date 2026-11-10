@@ -8,6 +8,7 @@ async function rendreOrganisme(zone) {
     <div class="carte"><h3>Parc d'engins du centre</h3>
       <p class="aide">Engins du centre, sélectionnables directement dans les sessions. Les engins de location y sont aussi mémorisés (même marque + n° de série = même engin : on ne remet à jour que les documents).</p>
       <div id="zone-parc"></div></div>
+    <div class="carte"><h3>Logo de l'organisme</h3><div id="zone-logo"></div></div>
     <div class="carte"><h3>Secrétariat (envois et exports)</h3><div id="zone-secr"></div></div>
     <div class="carte"><h3>Agences (cachet, signataire)</h3><div id="zone-carton"><p class="chargement">Chargement…</p></div></div>
     <div class="carte"><h3>Données personnelles (RGPD)</h3><div id="zone-rgpd"><p class="chargement">Chargement…</p></div></div>
@@ -15,6 +16,7 @@ async function rendreOrganisme(zone) {
   await chargerTypesDocEngin();
   rendreParcEngins($('#zone-parc'));
   rendreEtatDrive();
+  rendreLogoOrganisme();
   rendreSecretariatOrganisme($('#zone-secr'));
   rendreParametresCarton();
   rendreRgpd();
@@ -111,7 +113,7 @@ async function rendreRgpd() {
   const z = $('#zone-rgpd'); if (!z) return;
   const { data: p, error } = await sb.from('parametres_application').select('purge_active, purge_delai_jours').eq('id', 1).single();
   if (error) { z.innerHTML = ''; return erreurSupabase('Lecture des paramètres RGPD', error); }
-  z.innerHTML = `<p class="aide">Après clôture d'une session, les données personnelles des stagiaires (nom, prénom, date de naissance, entreprise, fonction, e-mail, photo)
+  z.innerHTML = `<p class="aide">Après clôture d'une session, les données personnelles des stagiaires (nom, prénom, date de naissance, entreprise, civilité, e-mail, photo)
       peuvent être anonymisées automatiquement. Les stagiaires ayant un <b>titre délivré</b> sont conservés (vérification du titre par QR code, traçabilité) ;
       l'archivage réglementaire des dossiers (10 ans) se fait hors application (Galaxy). Les fichiers de photos déjà envoyés sur le Drive ne sont pas supprimés par cette purge.</p>
     <form class="formulaire" id="form-rgpd"><div class="grille-2">
@@ -136,4 +138,56 @@ async function rendreRgpd() {
       }
       const n = await rpc('caces_purger_sessions_cloturees'); toast(n + ' stagiaire(s) traité(s), ' + liste.length + ' photo(s) supprimée(s)'); } catch (e) { erreurSupabase('Purge', e); }
   });
+}
+
+
+/* ---------- Logo de l'organisme : affiché sur les écrans (connexion, en-tête, test théorique, stagiaires) et sur les PDF ---------- */
+function rendreLogoOrganisme() {
+  const z = $('#zone-logo'); if (!z) return;
+  const perso = !!LOGO.data;
+  z.innerHTML = `<p class="aide">Image PNG, JPG ou SVG (fond transparent de préférence). Elle est redimensionnée automatiquement (largeur max. 600 px).
+      ${perso ? 'Logo personnalisé en place.' : 'Logo BFS par défaut.'}</p>
+    <div class="apercu-logo">${logoImg()}</div>
+    <div class="barre-actions">
+      <label class="bouton-fichier">📁 Choisir un logo <input type="file" id="fichier-logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+      ${perso ? '<button class="danger" id="retirer-logo">Revenir au logo BFS par défaut</button>' : ''}</div>`;
+  $('#fichier-logo', z).addEventListener('change', async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    try { await enregistrerLogoOrganisme(await fichierEnLogoPng(f)); } catch (e) { toast('Logo refusé : ' + e.message, 'erreur', 7000); }
+  });
+  $('#retirer-logo', z)?.addEventListener('click', async () => {
+    if (!confirmer('Revenir au logo BFS par défaut ?')) return;
+    await enregistrerLogoOrganisme(null);
+  });
+}
+
+/** Lit l'image choisie, la ramène à 600 px de large maximum et la convertit en PNG (data URL). */
+function fichierEnLogoPng(fichier) {
+  return new Promise((resolve, reject) => {
+    const lecteur = new FileReader();
+    lecteur.onerror = () => reject(new Error('lecture impossible'));
+    lecteur.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('ce fichier n\'est pas une image lisible'));
+      img.onload = () => {
+        const l = Math.min(600, img.naturalWidth || 600), h = Math.round(l * (img.naturalHeight || l) / (img.naturalWidth || l));
+        const c = document.createElement('canvas'); c.width = l; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, l, h);
+        const png = c.toDataURL('image/png');
+        if (png.length > 650000) return reject(new Error('image trop lourde même après réduction'));
+        resolve(png);
+      };
+      img.src = lecteur.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  });
+}
+
+async function enregistrerLogoOrganisme(dataUrl) {
+  const { error } = await sb.from('parametres_application').update({ logo_data: dataUrl }).eq('id', 1);
+  if (error) return erreurSupabase('Enregistrement du logo', error);
+  await chargerLogo();
+  toast(dataUrl ? 'Logo enregistré.' : 'Logo BFS par défaut rétabli.');
+  rendreLogoOrganisme();
+  $$('.logo-entete').forEach(i => { i.src = logoSrc(); });
 }

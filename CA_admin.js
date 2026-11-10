@@ -116,10 +116,45 @@ async function rendreGrilles(zone) {
         <td>${c.point_numero ?? '—'}</td><td>${c.eliminatoire ? 'Oui' : ''}</td><td>${c.en_continu ? 'Oui' : ''}</td><td>${esc(c.variante || '')}</td>
         <td><button class="lien" onclick="modifierCritere(${c.id})">Modifier</button></td></tr>`).join('')}</tbody></table>`).join('')
       || '<p class="vide">Aucun critère pour cette catégorie : à saisir d\'après le référentiel (+ Critère).</p>'}
+    <div class="carte"><h3>Pénalités — ${esc(g.ref)} ${esc(g.cat)}</h3>
+      <p class="aide">Pénalités prédéfinies que le testeur coche pendant l'évaluation : chacune retire des points au critère choisi (la note est plafonnée), ce qui justifie la note de façon objective. Ex. : « Déplacement avec charge haute » −2.</p>
+      ${(S.referentiel.penalites || []).filter(p => p.referentiel_code === g.ref && p.categorie_code === g.cat).map(p => {
+        const cr = crit.find(c => c.id === p.critere_id);
+        return `<div>${esc(p.libelle)} <b>−${esc(p.points_retires)}</b> — critère : <i>${esc(cr ? cr.libelle.slice(0, 70) : '(critère supprimé)')}</i> ${p.actif ? '' : '<i>(inactive)</i>'}
+          <button class="lien" onclick="modifierPenalite(${p.id})">Modifier</button></div>`; }).join('') || '<i>Aucune pénalité pour cette catégorie.</i>'}
+      <button onclick="modifierPenalite(null)">+ Pénalité</button></div>
     <div class="carte"><h3>Opérations éliminatoires — ${esc(g.ref)}</h3>
       ${S._elim.map(e => `<div>${esc(e.libelle)} ${e.actif ? '' : '<i>(inactive)</i>'}
         <button class="lien" onclick="basculerElim(${e.id},${!e.actif})">${e.actif ? 'Désactiver' : 'Réactiver'}</button></div>`).join('') || '<i>Aucune.</i>'}
       <button onclick="ajouterElim()">+ Ajouter</button></div>`;
+}
+
+function modifierPenalite(id) {
+  const g = AD.grilles;
+  const crit = S.referentiel.criteres.filter(c => c.referentiel_code === g.ref && c.categorie_code === g.cat && !/^opt_/.test(c.theme_code || ''));
+  const p = id ? S.referentiel.penalites.find(x => x.id === id) : { libelle: '', points_retires: 1, critere_id: crit[0]?.id, ordre: 0, actif: true };
+  ouvrirModale(id ? 'Modifier la pénalité' : 'Nouvelle pénalité', `<form class="formulaire" id="form-pen">
+    <label>Pénalité (comportement observé) <input name="lib" required value="${esc(p.libelle)}" placeholder="Ex. : Déplacement avec la charge haute"></label>
+    <label>Critère concerné <select name="crit" required>${crit.map(c => `<option value="${c.id}" ${c.id === p.critere_id ? 'selected' : ''}>${esc((c.point_numero != null ? 'Pt ' + c.point_numero + ' · ' : '') + c.libelle.slice(0, 90))} (${c.bareme_points} pts)</option>`).join('')}</select></label>
+    <div class="grille-2"><label>Points retirés <input type="number" name="pts" min="0.5" step="0.5" required value="${esc(p.points_retires)}"></label>
+      <label>Ordre <input type="number" name="ordre" value="${esc(p.ordre || 0)}"></label></div>
+    <label><input type="checkbox" name="actif" ${p.actif === false ? '' : 'checked'}> Active</label>
+    <button class="principal" type="submit">Enregistrer</button>
+    ${id ? '<button type="button" class="danger" id="suppr-pen">Supprimer</button>' : ''}</form>`);
+  $('#form-pen').addEventListener('submit', async ev => {
+    ev.preventDefault(); const f = ev.target;
+    const ligne = { referentiel_code: g.ref, categorie_code: g.cat, critere_id: Number(f.crit.value), libelle: f.lib.value.trim(),
+      points_retires: Number(f.pts.value), ordre: Number(f.ordre.value) || 0, actif: f.actif.checked };
+    const { error } = id ? await sb.from('penalites_pratique').update(ligne).eq('id', id) : await sb.from('penalites_pratique').insert(ligne);
+    if (error) return erreurSupabase('Enregistrement de la pénalité', error);
+    await chargerReferentiel(); toast('Pénalité enregistrée'); fermerModale(); rendreGrilles(zoneAdmin());
+  });
+  const s = $('#suppr-pen'); if (s) s.onclick = async () => {
+    if (!confirmer('Supprimer cette pénalité ? (les évaluations déjà enregistrées conservent leur trace)')) return;
+    const { error } = await sb.from('penalites_pratique').delete().eq('id', id);
+    if (error) return erreurSupabase('Suppression', error);
+    await chargerReferentiel(); fermerModale(); rendreGrilles(zoneAdmin());
+  };
 }
 
 function modifierCritere(id) {
@@ -234,7 +269,33 @@ function rendreCategories(zone) {
       <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th>UT pratique</th><th>Temps de référence</th><th></th></tr></thead><tbody>
       ${cats.filter(c => c.referentiel_code === r.code).map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.libelle)}</td><td>${c.ut_pratique}</td><td>${c.temps_reference_min ? c.temps_reference_min + ' min' : '<i>non défini</i>'}</td>
         <td><button class="lien" onclick="modifierCategorie('${esc(r.code)}','${esc(c.code)}')">Modifier</button></td></tr>`).join('')}</tbody></table>
-      <button onclick="modifierCategorie('${esc(r.code)}',null)">+ Catégorie</button></div>`).join('')}`;
+      <button onclick="modifierCategorie('${esc(r.code)}',null)">+ Catégorie</button></div>`).join('')}
+    <div class="carte"><h3>Options (porte-engins, télécommande…)</h3>
+      <p class="aide">Une option est évaluée à part (+ UT dans la charge du testeur) et s'imprime sur le carton selon l'annexe de la recommandation.
+        Pour qu'une catégorie la propose, ajoute dans <b>Grilles pratiques</b> des critères dont le code de thème est <code>opt_</code> + le code de l'option (ex. <code>opt_porte_engins</code>).</p>
+      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th>UT</th><th></th></tr></thead><tbody>
+      ${(S.referentiel.options || []).map(o => `<tr><td>${esc(o.code)}</td><td>${esc(o.libelle)} ${o.actif === false ? '<i>(inactive)</i>' : ''}</td><td>${esc(o.ut)}</td>
+        <td><button class="lien" onclick="modifierOption('${esc(o.code)}')">Modifier</button></td></tr>`).join('')}</tbody></table>
+      <button onclick="modifierOption(null)">+ Option</button></div>`;
+}
+
+function modifierOption(code) {
+  const o = code ? S.referentiel.options.find(x => x.code === code) : { code: '', libelle: '', ut: 0.5, ordre: (S.referentiel.options || []).length + 1, actif: true };
+  ouvrirModale(code ? 'Option ' + code : 'Nouvelle option', `<form class="formulaire" id="form-opt">
+    <label>Code (minuscules, chiffres, _) <input name="code" required pattern="[a-z0-9_]+" value="${esc(o.code)}" ${code ? 'readonly' : ''} placeholder="ex. grue_auxiliaire"></label>
+    <label>Libellé <input name="lib" required value="${esc(o.libelle)}"></label>
+    <div class="grille-2"><label>UT (charge du testeur) <input type="number" name="ut" step="0.1" min="0" value="${esc(o.ut)}"></label>
+      <label>Ordre <input type="number" name="ordre" value="${esc(o.ordre || 0)}"></label></div>
+    <label><input type="checkbox" name="actif" ${o.actif === false ? '' : 'checked'}> Option active</label>
+    <button class="principal" type="submit">Enregistrer</button></form>`);
+  $('#form-opt').addEventListener('submit', async ev => {
+    ev.preventDefault(); const f = ev.target;
+    const ligne = { libelle: f.lib.value.trim(), ut: Number(f.ut.value), ordre: Number(f.ordre.value) || 0, actif: f.actif.checked };
+    const { error } = code ? await sb.from('options_pratique').update(ligne).eq('code', code)
+      : await sb.from('options_pratique').insert({ code: f.code.value.trim(), ...ligne });
+    if (error) return erreurSupabase('Enregistrement de l\'option', error);
+    await chargerReferentiel(); fermerModale(); rendreCategories(zoneAdmin());
+  });
 }
 
 function modifierReferentiel(code) {

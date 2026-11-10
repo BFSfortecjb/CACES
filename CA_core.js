@@ -172,6 +172,7 @@ async function recupererSessionDepuisUrl() {
   const access_token = p.get('access_token');
   const refresh_token = p.get('refresh_token');
   const route = p.get('route') || '';
+  const lienRecuperation = p.get('type') === 'recovery';
   let installee = false;
 
   if (!access_token || !refresh_token) {
@@ -183,6 +184,7 @@ async function recupererSessionDepuisUrl() {
       const { error } = await sb.auth.setSession({ access_token, refresh_token });
       if (error) throw new Error(error.message);
       installee = true;
+      if (lienRecuperation) S.recuperationMdp = true;   // lien « mot de passe oublié » : on demande un nouveau mot de passe
       DEBUG.info('Session installée depuis le portail Univers BFS');
     } catch (e) {
       DEBUG.erreur('Session du portail refusée', e.message);
@@ -259,7 +261,7 @@ async function chargerProfil() {
 /** Liste des comptes autorisés (formateurs/testeurs/admin), pour les listes déroulantes. */
 async function chargerFormateurs() {
   let { data, error } = await sb.from('formateurs')
-    .select('id, nom, prenom, email, role, actif, cumul_formateur_testeur, est_testeur').order('nom');
+    .select('id, nom, prenom, email, role, actif, cumul_formateur_testeur, est_testeur, date_echeance_testeur').order('nom');
   if (error) ({ data } = await sb.from('formateurs').select('id, nom, prenom, email, role, actif').order('nom'));
   S.formateurs = (data || []).filter(f => f.actif !== false);
   const { data: hab } = await sb.from('formateur_habilitations').select('formateur_id, fonction, referentiel_code, categorie_code');
@@ -290,17 +292,21 @@ async function lireToutesLesLignes(fabrique) {
 }
 
 async function chargerReferentiel() {
-  const [refs, cats, themes, criteres, centres] = await Promise.all([
+  const [refs, cats, themes, criteres, centres, opts, pens] = await Promise.all([
     sb.from('referentiels').select('*').order('code'),
     sb.from('categories_referentiel').select('*').order('referentiel_code').order('code'),
     sb.from('themes_referentiel').select('*').order('referentiel_code').order('id'),
     lireToutesLesLignes(() => sb.from('criteres_pratique').select('*').order('referentiel_code').order('categorie_code').order('ordre').order('id')),
     sb.from('centres_examen').select('*').eq('actif', true).order('nom'),
+    sb.from('options_pratique').select('*').order('ordre').order('code'),
+    sb.from('penalites_pratique').select('*').order('ordre').order('id'),
   ]);
   S.referentiel = {
     referentiels: refs.data || [], categories: cats.data || [],
     themes: themes.data || [], criteres: criteres.data || [], centres: centres.data || [],
+    options: opts.data || [], penalites: pens.data || [],
   };
+  if (typeof rafraichirOptionsPratique === 'function') rafraichirOptionsPratique();
   DEBUG.info('Référentiel chargé', {
     referentiels: S.referentiel.referentiels.length,
     categories: S.referentiel.categories.length,
@@ -328,6 +334,7 @@ async function router() {
     S.vision = 'verification';
     return ecranVerificationPublique(cible);
   }
+  if (location.hash.startsWith('#tablette')) return ecranTablette(cible);
   if (location.hash.startsWith('#stagiaire')) {
     S.vision = 'stagiaire';
     return ecranStagiaire(cible);
@@ -339,8 +346,42 @@ async function router() {
     S.vision = 'entrainement';
     return ecranEntrainement(cible);
   }
+  if (S.recuperationMdp) return ecranNouveauMotDePasse(cible);
   if (!S.utilisateur) return ecranConnexion(cible);
   return ecranFormateur(cible);
+}
+
+/* ------------------------ écran toujours allumé (Screen Wake Lock) ------------------------ */
+const VEILLE = { verrou: null, actif: false };
+async function veilleBloquer() {
+  VEILLE.actif = true;
+  if (!('wakeLock' in navigator) || VEILLE.verrou) return;
+  try {
+    VEILLE.verrou = await navigator.wakeLock.request('screen');
+    VEILLE.verrou.addEventListener('release', () => { VEILLE.verrou = null; });
+  } catch (_e) { /* refusé (économie d'énergie, navigateur ancien) : sans conséquence */ }
+}
+function veilleLiberer() {
+  VEILLE.actif = false;
+  try { VEILLE.verrou?.release(); } catch (_e) { /* déjà libéré */ }
+  VEILLE.verrou = null;
+}
+// Le navigateur libère le verrou quand l'onglet est masqué : on le reprend au retour.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && VEILLE.actif) veilleBloquer(); });
+
+/* ------------------------ logo de l'organisme ------------------------ */
+const LOGO = { data: null };
+function logoSrc() { return LOGO.data || 'assets/logo_bfs.png'; }
+function logoImg(classe = '') { return `<img class="logo-bfs ${classe}" src="${logoSrc()}" alt="Logo">`; }
+async function chargerLogo() {
+  try { LOGO.data = localStorage.getItem('caces_logo') || null; } catch (_e) { /* stockage indisponible */ }
+  try {
+    const { data, error } = await sb.rpc('caces_logo_organisme');
+    if (!error) {
+      LOGO.data = data || null;
+      try { data ? localStorage.setItem('caces_logo', data) : localStorage.removeItem('caces_logo'); } catch (_e) { /* ignoré */ }
+    }
+  } catch (_e) { /* logo par défaut */ }
 }
 
 async function demarrer() {
@@ -351,8 +392,9 @@ async function demarrer() {
   await recupererSessionDepuisUrl();
 
   window.addEventListener('hashchange', router);
+  await chargerLogo();
   try {
-    if (!location.hash.startsWith('#stagiaire') && !location.hash.startsWith('#entrainement')) {
+    if (!location.hash.startsWith('#stagiaire') && !location.hash.startsWith('#entrainement') && !location.hash.startsWith('#tablette')) {
       const etat = await chargerProfil();
       if (etat === 'ok') await chargerReferentiel();
       else if (etat === 'non_autorise') {
@@ -367,4 +409,5 @@ async function demarrer() {
     erreurSupabase('Chargement initial', e);
   }
   router();
+  if (typeof surveillerFinTablette === 'function') surveillerFinTablette();
 }

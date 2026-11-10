@@ -13,10 +13,10 @@ async function rendreComptes(zone) {
       <button class="principal" onclick="ajouterCompte()">+ Rattacher un compte</button></div>
     <p class="aide">Chaque application BFS gère ses comptes : un compte de l'Univers BFS n'accède à BFS CACES
       que s'il est listé ici.</p>
-    <table class="tableau"><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Testeur</th><th>Catégories (formateur / testeur)</th><th>Actif</th><th></th></tr></thead><tbody>
+    <table class="tableau"><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Testeur</th><th>Échéance testeur</th><th>Catégories (formateur / testeur)</th><th>Actif</th><th></th></tr></thead><tbody>
     ${liste.map(f => `<tr class="${f.actif === false ? 'termine' : ''}">
       <td>${esc(((f.nom || '') + ' ' + (f.prenom || '')).trim())}</td><td>${esc(f.email)}</td>
-      <td>${esc(LIBELLE_ROLE[f.role] || f.role)}</td><td>${f.role === 'secretariat' ? '—' : (f.est_testeur === false ? 'Non' : 'Oui')}</td><td>${f.role === 'secretariat' ? '—' : esc(resume(f.id, 'formateur') + ' / ' + (f.est_testeur === false ? '—' : resume(f.id, 'testeur')))}</td><td>${f.actif === false ? 'Non' : 'Oui'}</td>
+      <td>${esc(LIBELLE_ROLE[f.role] || f.role)}</td><td>${f.role === 'secretariat' ? '—' : (f.est_testeur === false ? 'Non' : 'Oui')}</td><td>${(() => { const e = f.est_testeur === false ? null : etatEcheanceTesteur(f); return f.date_echeance_testeur && f.est_testeur !== false ? `<span style="color:${e.niveau === 'echu' ? '#c0392b' : e.niveau === 'bientot' ? '#e67e22' : 'inherit'}">${dateFr(f.date_echeance_testeur)}${e.niveau === 'echu' ? ' (échu)' : ''}</span>` : '—'; })()}</td><td>${f.role === 'secretariat' ? '—' : esc(resume(f.id, 'formateur') + ' / ' + (f.est_testeur === false ? '—' : resume(f.id, 'testeur')))}</td><td>${f.actif === false ? 'Non' : 'Oui'}</td>
       <td><button class="lien" onclick="modifierCompte('${esc(f.id)}')">Modifier</button></td></tr>`).join('')}
     </tbody></table>`;
   S._comptes = liste;
@@ -71,6 +71,8 @@ function modifierCompte(id) {
       <label>Prénom <input name="prenom" value="${esc(c.prenom || '')}" required></label>
       <label>Rôle <select name="role">${Object.entries(LIBELLE_ROLE).map(([k, v]) => `<option value="${k}" ${k === c.role ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label class="case"><input type="checkbox" name="testeur" ${c.est_testeur === false ? '' : 'checked'}> Habilité testeur CACES®</label>
+      <label>Fin de validité testeur <input type="date" name="echeance" value="${esc(c.date_echeance_testeur || '')}"></label>
+      <p class="aide">Alerte 6 mois avant. Testeur échu = bloqué (affectation et évaluation). Vide = sans limite.</p>
       <fieldset><legend>Catégories pour lesquelles il est habilité formateur</legend>
         <p class="aide">Aucune case cochée = toutes les catégories.</p>${casesHabilitations('formateur', id)}</fieldset>
       <fieldset id="fs-hab-testeur"><legend>Catégories pour lesquelles il est habilité testeur</legend>
@@ -84,7 +86,7 @@ function modifierCompte(id) {
     if (id === S.profil.id && (f.role.value !== 'admin' || !f.actif.checked))
       return toast('Tu ne peux pas retirer tes propres droits d\'administrateur.');
     const { error } = await sb.from('formateurs').update({ nom: f.nom.value.trim(),
-      prenom: f.prenom.value.trim(), role: f.role.value, actif: f.actif.checked, est_testeur: f.testeur.checked }).eq('id', id);
+      prenom: f.prenom.value.trim(), role: f.role.value, actif: f.actif.checked, est_testeur: f.testeur.checked, date_echeance_testeur: f.echeance.value || null }).eq('id', id);
     if (error) return erreurSupabase('Modification', error);
     try { await enregistrerHabilitations(id, f); } catch (e) { return erreurSupabase('Enregistrement des habilitations', e); }
     toast('Enregistré'); fermerModale(); router();

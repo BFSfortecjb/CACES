@@ -11,7 +11,7 @@ function codeDuLien() {
 }
 
 function pageStagiaire(cible, html) {
-  cible.innerHTML = `<div class="stagiaire-accueil"><h1>${esc(CONFIG.NOM_APPLICATION)}</h1>${html}</div>`;
+  cible.innerHTML = `<div class="stagiaire-accueil">${logoImg('logo-grand')}<h1>${esc(CONFIG.NOM_APPLICATION)}</h1>${html}</div>`;
 }
 
 async function ecranStagiaire(cible) {
@@ -189,12 +189,23 @@ function surveillerSeanceStagiaire(cible, lignes) {
 }
 
 function ecranTelecommande(cible, lignes) {
+  veilleBloquer();   // le téléphone ne doit pas s'éteindre pendant le test
   let etat = null, choix = null, ordreAffiche = 0, occupe = false;
   const dessiner = () => {
     if (etat.etat === 'attente') {
-      cible.innerHTML = `<div class="stagiaire-accueil telecommande"><div class="carte succes"><b>✔ Tu es connecté</b></div>
+      cible.innerHTML = `<div class="stagiaire-accueil telecommande">${logoImg('logo-moyen')}<div class="carte succes"><b>✔ Tu es connecté</b></div>
         <p class="tc-attente">${esc(libelleReferentiel(etat.referentiel_code))}<br>En attente du démarrage par le testeur…</p>
         <p class="aide">Ne ferme pas cette page.</p></div>`;
+      return;
+    }
+    if (etat.en_pause) {   // introduction d'un nouveau thème projetée : on ne montre ni la question ni les boutons
+      cible.innerHTML = `<div class="stagiaire-accueil telecommande">${logoImg('logo-moyen')}
+        <p class="aide">${esc(libelleReferentiel(etat.referentiel_code))}</p>
+        <div class="carte"><b>Nouveau thème</b>${etat.theme_libelle ? `<br>${esc(etat.theme_libelle)}` : ''}</div>
+        <p class="tc-attente">Regarde l'écran : le testeur présente le thème.<br>La question apparaîtra ici dès qu'il la lance.</p>
+        ${etat.question_courante === 1 ? `<div class="carte"><b>Comment répondre</b><ol class="tc-consignes"><li>Lis la question projetée à l'écran.</li>
+          <li>Touche <b>VRAI</b> ou <b>FAUX</b>.</li><li>Touche <b>« Valider ma réponse »</b> : ensuite, plus de modification.</li>
+          <li>Attends la question suivante.</li></ol></div>` : ''}</div>`;
       return;
     }
     const verrou = etat.valide;
@@ -233,14 +244,14 @@ function ecranTelecommande(cible, lignes) {
     occupe = true;
     try {
       const e = ((await rpc('caces_seance_etat', { p_code: PS.code })) || [])[0];
-      if (!e) { clearInterval(minuteur); return ecranCategoriesStagiaire(cible, lignes); }
+      if (!e) { clearInterval(minuteur); veilleLiberer(); return ecranCategoriesStagiaire(cible, lignes); }
       if (e.etat === 'terminee') {
-        clearInterval(minuteur);
+        clearInterval(minuteur); veilleLiberer();
         const r = ((await rpc('caces_seance_resultat', { p_code: PS.code, p_seance: e.seance_id })) || [])[0];
         return r ? resultatQcmStagiaire(cible, r) : ecranCategoriesStagiaire(cible, lignes);
       }
       rpc('caces_seance_presence', { p_code: PS.code, p_seance: e.seance_id }).catch(() => {});
-      const change = !etat || e.etat !== etat.etat || e.question_courante !== ordreAffiche || e.valide !== etat.valide
+      const change = !etat || e.etat !== etat.etat || !!e.en_pause !== !!etat.en_pause || e.question_courante !== ordreAffiche || e.valide !== etat.valide
         || e.illustration !== etat.illustration || (choix === null && e.ma_reponse !== etat.ma_reponse);
       if (e.question_courante !== ordreAffiche) { choix = null; ordreAffiche = e.question_courante; }
       etat = e;

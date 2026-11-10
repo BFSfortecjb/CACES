@@ -3510,3 +3510,1152 @@ drop policy if exists caces_illustrations_suppr on storage.objects;
 create policy caces_illustrations_suppr on storage.objects for delete to authenticated
   using (bucket_id = 'caces-illustrations-qcm' and coalesce(__SCHEMA__.caces_role(), '') = 'admin');
 
+
+-- ===== QCM général (patch ac) =====
+-- Patch 19/10/2026 ac : QCM GENERAL (une seance pour tout le groupe) en plus du QCM individuel sur telephone.
+--  - mode « telephone » : le testeur projette les questions, les telephones des stagiaires servent de telecommande (Vrai / Faux puis Valider) ;
+--  - mode « quizbox » : les questions sont projetees, les reponses sont saisies avec les boitiers Quizbox puis importees (export Excel).
+--  Option voix : la lecture vocale des questions est geree par le navigateur du poste qui projette (aucune donnee cote base, sauf les reglages).
+-- Idempotent. Le QCM individuel (caces_demarrer_qcm / caces_repondre / caces_finaliser_qcm) n'est pas modifie.
+
+alter table __SCHEMA__.stagiaires add column if not exists numero_telecommande smallint;
+create unique index if not exists stagiaires_telecommande_uniq on __SCHEMA__.stagiaires (session_id, numero_telecommande) where numero_telecommande is not null;
+
+create table if not exists __SCHEMA__.qcm_seances (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references __SCHEMA__.sessions_formation(id) on delete cascade,
+  referentiel_code text not null,
+  mode text not null check (mode in ('telephone','quizbox')),
+  voix boolean not null default false,
+  vitesse_voix numeric not null default 1 check (vitesse_voix between 0.5 and 2),
+  etat text not null default 'en_cours' check (etat in ('en_cours','terminee','annulee')),
+  question_ids integer[] not null,
+  question_courante integer not null default 1,
+  testeur_id uuid references __SCHEMA__.formateurs(id),
+  created_at timestamptz not null default now(),
+  date_fin timestamptz
+);
+alter table __SCHEMA__.qcm_seances enable row level security;
+drop policy if exists qcm_seances_lecture on __SCHEMA__.qcm_seances;
+create policy qcm_seances_lecture on __SCHEMA__.qcm_seances for select to authenticated using (__SCHEMA__.caces_role() is not null);
+revoke all on __SCHEMA__.qcm_seances from public, anon;
+grant select on __SCHEMA__.qcm_seances to authenticated;       -- ecriture uniquement par les fonctions ci-dessous
+
+alter table __SCHEMA__.qcm_tirages add column if not exists seance_id uuid references __SCHEMA__.qcm_seances(id) on delete set null;
+alter table __SCHEMA__.qcm_tirage_questions add column if not exists valide boolean not null default false;   -- reponse verrouillee (QCM general)
+
+-- Resultat d'un tirage (sans rien ecrire) : meme regle que caces_finaliser_qcm (seuil global + 50 % par theme).
+create or replace function __SCHEMA__.caces_resultat_tirage(p_tirage uuid)
+returns table(score_global_pct numeric, reussi boolean, detail_themes jsonb)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+declare v_ref text; v_seuil int; v_global numeric; v_ok boolean := true; v_detail jsonb := '[]'::jsonb; r record;
+begin
+  select referentiel_code into v_ref from __SCHEMA__.qcm_tirages where id = p_tirage;
+  select seuil_reussite_global_pct into v_seuil from __SCHEMA__.referentiels where code = v_ref;
+  select round(100.0 * count(*) filter (where qtq.reponse_stagiaire is not distinct from q.reponse) / nullif(count(*), 0), 1)
+    into v_global
+  from __SCHEMA__.qcm_tirage_questions qtq join __SCHEMA__.questions_qcm q on q.id = qtq.question_id where qtq.tirage_id = p_tirage;
+  if v_global is null or v_global < v_seuil then v_ok := false; end if;
+  for r in (
+    select th.libelle as theme_libelle,
+           count(*) filter (where qtq.reponse_stagiaire is not distinct from q.reponse) as nb_correct,
+           count(*) as nb_questions,
+           round(100.0 * count(*) filter (where qtq.reponse_stagiaire is not distinct from q.reponse) / nullif(count(*), 0), 1) as note_pct
+    from __SCHEMA__.qcm_tirage_questions qtq
+    join __SCHEMA__.questions_qcm q on q.id = qtq.question_id
+    join __SCHEMA__.themes_referentiel th on th.id = q.theme_id
+    where qtq.tirage_id = p_tirage group by th.id, th.libelle) loop
+    if r.note_pct is null or r.note_pct < 50 then v_ok := false; end if;
+    v_detail := v_detail || jsonb_build_object('theme', r.theme_libelle, 'note_pct', r.note_pct,
+                                               'nb_correct', r.nb_correct, 'nb_questions', r.nb_questions);
+  end loop;
+  return query select v_global, v_ok, v_detail;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_resultat_tirage(uuid) from public, anon, authenticated;
+
+-- Cloture d'un tirage (QCM general) : corrige, note, reporte la theorie sur le suivi du stagiaire.
+create or replace function __SCHEMA__.caces_finaliser_tirage_interne(p_tirage uuid) returns void
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_stag uuid; v_ref text; r record;
+begin
+  select stagiaire_id, referentiel_code into v_stag, v_ref from __SCHEMA__.qcm_tirages where id = p_tirage and statut = 'en_cours';
+  if v_stag is null then return; end if;
+  update __SCHEMA__.qcm_tirage_questions qtq set correcte = (qtq.reponse_stagiaire is not distinct from q.reponse)
+    from __SCHEMA__.questions_qcm q where qtq.question_id = q.id and qtq.tirage_id = p_tirage;
+  select * into r from __SCHEMA__.caces_resultat_tirage(p_tirage);
+  update __SCHEMA__.qcm_tirages set statut = 'termine', date_fin = now(), score_global_pct = r.score_global_pct, reussi = r.reussi where id = p_tirage;
+  update __SCHEMA__.stagiaire_categories
+     set theorie_validee = r.reussi, date_validation_theorie = case when r.reussi then current_date else null end
+   where stagiaire_id = v_stag and referentiel_code = v_ref;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_finaliser_tirage_interne(uuid) from public, anon, authenticated;
+
+-- Le testeur de la seance (ou l'admin) ?
+create or replace function __SCHEMA__.caces_seance_droit(p_seance uuid) returns uuid
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_session uuid;
+begin
+  select session_id into v_session from __SCHEMA__.qcm_seances where id = p_seance;
+  if v_session is null then raise exception 'Seance introuvable'; end if;
+  if __SCHEMA__.caces_role() is null or not __SCHEMA__.caces_est_testeur_de(v_session) then
+    raise exception 'Reserve au testeur de la session';
+  end if;
+  return v_session;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_droit(uuid) from public, anon, authenticated;
+
+-- Demarre une seance : meme questions, meme ordre pour tous les participants (un tirage par stagiaire, comme le QCM individuel).
+create or replace function __SCHEMA__.caces_seance_demarrer(p_session uuid, p_ref text, p_mode text, p_voix boolean, p_vitesse numeric, p_stagiaires uuid[])
+returns uuid
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_sf __SCHEMA__.sessions_formation; v_seance uuid; v_ids integer[]; v_s uuid; v_t uuid; v_graine bigint;
+begin
+  if __SCHEMA__.caces_role() is null or not __SCHEMA__.caces_est_testeur_de(p_session) then raise exception 'Reserve au testeur de la session'; end if;
+  select * into v_sf from __SCHEMA__.sessions_formation where id = p_session;
+  if v_sf.statut = 'cloturee' then raise exception 'Session cloturee'; end if;
+  if p_mode not in ('telephone','quizbox') then raise exception 'Mode invalide'; end if;
+  if coalesce(array_length(p_stagiaires, 1), 0) = 0 then raise exception 'Aucun participant'; end if;
+  if p_mode = 'quizbox' and exists (select 1 from __SCHEMA__.stagiaires s where s.id = any (p_stagiaires) and s.numero_telecommande is null) then
+    raise exception 'Chaque participant doit avoir un numero de telecommande Quizbox';
+  end if;
+  if exists (select 1 from __SCHEMA__.stagiaires s where s.id = any (p_stagiaires) and s.session_id <> p_session) then
+    raise exception 'Participant hors session';
+  end if;
+  -- une seule seance en cours par session et referentiel
+  update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now()
+   where statut = 'en_cours' and seance_id in (select id from __SCHEMA__.qcm_seances where session_id = p_session and referentiel_code = p_ref and etat = 'en_cours');
+  update __SCHEMA__.qcm_seances set etat = 'annulee', date_fin = now() where session_id = p_session and referentiel_code = p_ref and etat = 'en_cours';
+  select array_agg(q.id order by random()) into v_ids
+    from __SCHEMA__.questions_qcm q join __SCHEMA__.themes_referentiel t on t.id = q.theme_id
+   where t.referentiel_code = p_ref and q.actif = true;
+  if v_ids is null then raise exception 'Aucune question active pour ce referentiel'; end if;
+  insert into __SCHEMA__.qcm_seances (session_id, referentiel_code, mode, voix, vitesse_voix, question_ids, testeur_id)
+    values (p_session, p_ref, p_mode, coalesce(p_voix, false), coalesce(p_vitesse, 1), v_ids, auth.uid()) returning id into v_seance;
+  v_graine := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  foreach v_s in array p_stagiaires loop
+    if not __SCHEMA__.caces_peut_tester(auth.uid(), v_s) and coalesce(__SCHEMA__.caces_role(), '') <> 'admin' then
+      raise exception 'Vous ne pouvez pas tester ce stagiaire (vous etes son formateur)';
+    end if;
+    update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now() where stagiaire_id = v_s and referentiel_code = p_ref and statut = 'en_cours';
+    insert into __SCHEMA__.qcm_tirages (stagiaire_id, referentiel_code, graine, testeur_id, seance_id)
+      values (v_s, p_ref, v_graine, case when __SCHEMA__.caces_peut_tester(auth.uid(), v_s) then auth.uid() else __SCHEMA__.caces_testeur_du_stagiaire(v_s) end, v_seance) returning id into v_t;
+    insert into __SCHEMA__.qcm_tirage_questions (tirage_id, question_id, ordre)
+      select v_t, x.qid, x.n from unnest(v_ids) with ordinality as x(qid, n);
+  end loop;
+  return v_seance;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_demarrer(uuid, text, text, boolean, numeric, uuid[]) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_demarrer(uuid, text, text, boolean, numeric, uuid[]) to authenticated;
+
+-- Avancement des participants pour la question courante (bandeau vert / gris de l'ecran projete).
+create or replace function __SCHEMA__.caces_seance_progression(p_seance uuid)
+returns table(stagiaire_id uuid, nom text, prenom text, numero_telecommande smallint, a_repondu boolean, valide boolean)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  return query
+    select s.id, s.nom, s.prenom, s.numero_telecommande,
+           coalesce(qtq.reponse_stagiaire is not null, false), coalesce(qtq.valide, false)
+    from __SCHEMA__.qcm_seances se
+    join __SCHEMA__.qcm_tirages t on t.seance_id = se.id and t.statut <> 'abandonne'
+    join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+    left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+    where se.id = p_seance
+    order by s.nom, s.prenom;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_progression(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_progression(uuid) to authenticated;
+
+-- Question suivante : les choix non valides sont figes tels quels ; un participant sans choix reste sans reponse (compte faux).
+create or replace function __SCHEMA__.caces_seance_avancer(p_seance uuid) returns integer
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_se __SCHEMA__.qcm_seances;
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  select * into v_se from __SCHEMA__.qcm_seances where id = p_seance for update;
+  if v_se.etat <> 'en_cours' then raise exception 'Seance terminee'; end if;
+  update __SCHEMA__.qcm_tirage_questions qtq set valide = true
+    from __SCHEMA__.qcm_tirages t where qtq.tirage_id = t.id and t.seance_id = p_seance and qtq.ordre = v_se.question_courante;
+  if v_se.question_courante < array_length(v_se.question_ids, 1) then
+    update __SCHEMA__.qcm_seances set question_courante = question_courante + 1 where id = p_seance;
+    return v_se.question_courante + 1;
+  end if;
+  return v_se.question_courante;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_avancer(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_avancer(uuid) to authenticated;
+
+create or replace function __SCHEMA__.caces_seance_reglages(p_seance uuid, p_voix boolean, p_vitesse numeric) returns void
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_seances set voix = coalesce(p_voix, voix), vitesse_voix = least(2, greatest(0.5, coalesce(p_vitesse, vitesse_voix))) where id = p_seance;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_reglages(uuid, boolean, numeric) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_reglages(uuid, boolean, numeric) to authenticated;
+
+-- Fin de seance : correction de tous les tirages de la seance.
+create or replace function __SCHEMA__.caces_seance_terminer(p_seance uuid) returns integer
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_t uuid; v_n integer := 0;
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_tirage_questions qtq set valide = true from __SCHEMA__.qcm_tirages t where qtq.tirage_id = t.id and t.seance_id = p_seance;
+  for v_t in select id from __SCHEMA__.qcm_tirages where seance_id = p_seance and statut = 'en_cours' loop
+    perform __SCHEMA__.caces_finaliser_tirage_interne(v_t); v_n := v_n + 1;
+  end loop;
+  update __SCHEMA__.qcm_seances set etat = 'terminee', date_fin = now() where id = p_seance and etat = 'en_cours';
+  return v_n;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_terminer(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_terminer(uuid) to authenticated;
+
+create or replace function __SCHEMA__.caces_seance_annuler(p_seance uuid) returns void
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now() where seance_id = p_seance and statut = 'en_cours';
+  update __SCHEMA__.qcm_seances set etat = 'annulee', date_fin = now() where id = p_seance and etat = 'en_cours';
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_annuler(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_annuler(uuid) to authenticated;
+
+-- Quizbox : import des reponses (numero de telecommande + reponses dans l'ordre des questions de la seance).
+-- p_lignes = [{"numero": 3, "reponses": [true, false, null, ...]}, ...]
+create or replace function __SCHEMA__.caces_seance_importer(p_seance uuid, p_lignes jsonb) returns jsonb
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_se __SCHEMA__.qcm_seances; l jsonb; v_t uuid; v_ok integer := 0; v_inconnus jsonb := '[]'::jsonb; n integer; v_nb integer;
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  select * into v_se from __SCHEMA__.qcm_seances where id = p_seance for update;
+  if v_se.etat <> 'en_cours' or v_se.mode <> 'quizbox' then raise exception 'Import possible uniquement pour une seance Quizbox en cours'; end if;
+  v_nb := array_length(v_se.question_ids, 1);
+  for l in select * from jsonb_array_elements(p_lignes) loop
+    v_t := null;
+    select t.id into v_t from __SCHEMA__.qcm_tirages t join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+     where t.seance_id = p_seance and t.statut = 'en_cours' and s.numero_telecommande = (l->>'numero')::smallint;
+    if v_t is null then v_inconnus := v_inconnus || to_jsonb(l->>'numero'); continue; end if;
+    for n in 1 .. least(v_nb, jsonb_array_length(l->'reponses')) loop
+      update __SCHEMA__.qcm_tirage_questions set
+        reponse_stagiaire = case jsonb_typeof(l->'reponses'->(n-1)) when 'boolean' then (l->'reponses'->>(n-1))::boolean else null end,
+        valide = true
+       where tirage_id = v_t and ordre = n;
+    end loop;
+    v_ok := v_ok + 1;
+  end loop;
+  return jsonb_build_object('importes', v_ok, 'numeros_inconnus', v_inconnus);
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_importer(uuid, jsonb) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_importer(uuid, jsonb) to authenticated;
+
+-- ---- Telephone du stagiaire (anon, par son code individuel) ----
+create or replace function __SCHEMA__.caces_seance_etat(p_code text)
+returns table(seance_id uuid, referentiel_code text, mode text, etat text, question_courante integer, nb_questions integer, ma_reponse boolean, valide boolean)
+language sql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+  select se.id, se.referentiel_code, se.mode, se.etat, se.question_courante, array_length(se.question_ids, 1),
+         qtq.reponse_stagiaire, coalesce(qtq.valide, false)
+  from __SCHEMA__.stagiaires s
+  join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id is not null
+  join __SCHEMA__.qcm_seances se on se.id = t.seance_id
+  left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+  where s.code_acces_individuel = p_code and se.mode = 'telephone'
+    and (se.etat = 'en_cours' and t.statut = 'en_cours'
+         or se.etat = 'terminee' and t.statut = 'termine' and se.date_fin > now() - interval '2 hours')
+  order by se.created_at desc limit 1;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_etat(text) from public;
+grant execute on function __SCHEMA__.caces_seance_etat(text) to anon, authenticated;
+
+create or replace function __SCHEMA__.caces_seance_repondre(p_code text, p_seance uuid, p_ordre integer, p_reponse boolean, p_valider boolean) returns boolean
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare v_t uuid; v_courante integer; v_n integer;
+begin
+  select t.id, se.question_courante into v_t, v_courante
+  from __SCHEMA__.stagiaires s
+  join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id = p_seance and t.statut = 'en_cours'
+  join __SCHEMA__.qcm_seances se on se.id = t.seance_id and se.etat = 'en_cours' and se.mode = 'telephone'
+  where s.code_acces_individuel = p_code;
+  if v_t is null then raise exception 'Seance introuvable ou terminee.'; end if;
+  if p_ordre <> v_courante then return false; end if;      -- la question a change : l'ecran se rafraichit
+  update __SCHEMA__.qcm_tirage_questions set reponse_stagiaire = p_reponse, valide = coalesce(p_valider, false)
+   where tirage_id = v_t and ordre = p_ordre and valide = false;
+  get diagnostics v_n = row_count;
+  return v_n > 0;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_repondre(text, uuid, integer, boolean, boolean) from public;
+grant execute on function __SCHEMA__.caces_seance_repondre(text, uuid, integer, boolean, boolean) to anon, authenticated;
+
+create or replace function __SCHEMA__.caces_seance_resultat(p_code text, p_seance uuid)
+returns table(score_global_pct numeric, reussi boolean, detail_themes jsonb)
+language plpgsql stable security definer set search_path = __SCHEMA__, public, extensions as $f$
+#variable_conflict use_column
+declare v_t uuid;
+begin
+  select t.id into v_t from __SCHEMA__.stagiaires s join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id = p_seance and t.statut = 'termine'
+   where s.code_acces_individuel = p_code;
+  if v_t is null then return; end if;
+  return query select * from __SCHEMA__.caces_resultat_tirage(v_t);
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_resultat(text, uuid) from public;
+grant execute on function __SCHEMA__.caces_seance_resultat(text, uuid) to anon, authenticated;
+
+-- ===== Numéros de télécommande (patch ad) =====
+-- Patch 19/10/2026 ad : attribution des numeros de telecommande Quizbox par le testeur de la session.
+-- p_numeros = [{"stagiaire_id": "...", "numero": 3}, ...]  (numero vide = retire le numero)
+create or replace function __SCHEMA__.caces_numeroter_telecommandes(p_session uuid, p_numeros jsonb) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare l jsonb;
+begin
+  if __SCHEMA__.caces_role() is null or not __SCHEMA__.caces_est_testeur_de(p_session) then raise exception 'Reserve au testeur de la session'; end if;
+  update __SCHEMA__.stagiaires set numero_telecommande = null
+   where session_id = p_session and id in (select (x->>'stagiaire_id')::uuid from jsonb_array_elements(p_numeros) x);
+  for l in select * from jsonb_array_elements(p_numeros) loop
+    update __SCHEMA__.stagiaires set numero_telecommande = nullif(l->>'numero', '')::smallint
+     where id = (l->>'stagiaire_id')::uuid and session_id = p_session;
+  end loop;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_numeroter_telecommandes(uuid, jsonb) from public, anon;
+grant execute on function __SCHEMA__.caces_numeroter_telecommandes(uuid, jsonb) to authenticated;
+
+-- ===== QCM général : salle d'attente (patch ae) =====
+-- Patch 19/10/2026 ae : QCM general (telephones) — salle d'attente, presence des telephones, demarrage par le testeur, chrono.
+alter table __SCHEMA__.qcm_seances add column if not exists date_debut timestamptz;
+alter table __SCHEMA__.qcm_tirages add column if not exists connecte_at timestamptz;
+alter table __SCHEMA__.qcm_seances drop constraint if exists qcm_seances_etat_check;
+alter table __SCHEMA__.qcm_seances add constraint qcm_seances_etat_check check (etat in ('attente','en_cours','terminee','annulee'));
+
+create or replace function __SCHEMA__.caces_seance_demarrer(p_session uuid, p_ref text, p_mode text, p_voix boolean, p_vitesse numeric, p_stagiaires uuid[])
+returns uuid
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare v_sf __SCHEMA__.sessions_formation; v_seance uuid; v_ids integer[]; v_s uuid; v_t uuid; v_graine bigint;
+begin
+  if __SCHEMA__.caces_role() is null or not __SCHEMA__.caces_est_testeur_de(p_session) then raise exception 'Reserve au testeur de la session'; end if;
+  select * into v_sf from __SCHEMA__.sessions_formation where id = p_session;
+  if v_sf.statut = 'cloturee' then raise exception 'Session cloturee'; end if;
+  if p_mode not in ('telephone','quizbox') then raise exception 'Mode invalide'; end if;
+  if coalesce(array_length(p_stagiaires, 1), 0) = 0 then raise exception 'Aucun participant'; end if;
+  if p_mode = 'quizbox' and exists (select 1 from __SCHEMA__.stagiaires s where s.id = any (p_stagiaires) and s.numero_telecommande is null) then
+    raise exception 'Chaque participant doit avoir un numero de telecommande Quizbox';
+  end if;
+  if exists (select 1 from __SCHEMA__.stagiaires s where s.id = any (p_stagiaires) and s.session_id <> p_session) then
+    raise exception 'Participant hors session';
+  end if;
+  -- une seule seance en cours par session et referentiel
+  update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now()
+   where statut = 'en_cours' and seance_id in (select id from __SCHEMA__.qcm_seances where session_id = p_session and referentiel_code = p_ref and etat in ('attente','en_cours'));
+  update __SCHEMA__.qcm_seances set etat = 'annulee', date_fin = now() where session_id = p_session and referentiel_code = p_ref and etat in ('attente','en_cours');
+  select array_agg(q.id order by random()) into v_ids
+    from __SCHEMA__.questions_qcm q join __SCHEMA__.themes_referentiel t on t.id = q.theme_id
+   where t.referentiel_code = p_ref and q.actif = true;
+  if v_ids is null then raise exception 'Aucune question active pour ce referentiel'; end if;
+  insert into __SCHEMA__.qcm_seances (session_id, referentiel_code, mode, voix, vitesse_voix, question_ids, testeur_id, etat, date_debut)
+    values (p_session, p_ref, p_mode, coalesce(p_voix, false), coalesce(p_vitesse, 1), v_ids, auth.uid(), case when p_mode = 'telephone' then 'attente' else 'en_cours' end, case when p_mode = 'telephone' then null else now() end) returning id into v_seance;
+  v_graine := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  foreach v_s in array p_stagiaires loop
+    if not __SCHEMA__.caces_peut_tester(auth.uid(), v_s) and coalesce(__SCHEMA__.caces_role(), '') <> 'admin' then
+      raise exception 'Vous ne pouvez pas tester ce stagiaire (vous etes son formateur)';
+    end if;
+    update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now() where stagiaire_id = v_s and referentiel_code = p_ref and statut = 'en_cours';
+    insert into __SCHEMA__.qcm_tirages (stagiaire_id, referentiel_code, graine, testeur_id, seance_id)
+      values (v_s, p_ref, v_graine, case when __SCHEMA__.caces_peut_tester(auth.uid(), v_s) then auth.uid() else __SCHEMA__.caces_testeur_du_stagiaire(v_s) end, v_seance) returning id into v_t;
+    insert into __SCHEMA__.qcm_tirage_questions (tirage_id, question_id, ordre)
+      select v_t, x.qid, x.n from unnest(v_ids) with ordinality as x(qid, n);
+  end loop;
+  return v_seance;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_demarrer(uuid, text, text, boolean, numeric, uuid[]) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_demarrer(uuid, text, text, boolean, numeric, uuid[]) to authenticated;
+
+drop function if exists __SCHEMA__.caces_seance_progression(uuid);
+create function __SCHEMA__.caces_seance_progression(p_seance uuid)
+returns table(stagiaire_id uuid, nom text, prenom text, numero_telecommande smallint, a_repondu boolean, valide boolean, connecte boolean)
+language plpgsql stable security definer set search_path = caces, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  return query
+    select s.id, s.nom, s.prenom, s.numero_telecommande,
+           coalesce(qtq.reponse_stagiaire is not null, false), coalesce(qtq.valide, false),
+           coalesce(t.connecte_at > now() - interval '12 seconds', false)
+    from __SCHEMA__.qcm_seances se
+    join __SCHEMA__.qcm_tirages t on t.seance_id = se.id and t.statut <> 'abandonne'
+    join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+    left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+    where se.id = p_seance
+    order by s.nom, s.prenom;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_progression(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_progression(uuid) to authenticated;
+
+-- Le testeur lance le test (sortie de la salle d'attente).
+create or replace function __SCHEMA__.caces_seance_lancer(p_seance uuid) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_seances set etat = 'en_cours', date_debut = now() where id = p_seance and etat = 'attente';
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_lancer(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_lancer(uuid) to authenticated;
+
+create or replace function __SCHEMA__.caces_seance_annuler(p_seance uuid) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now() where seance_id = p_seance and statut = 'en_cours';
+  update __SCHEMA__.qcm_seances set etat = 'annulee', date_fin = now() where id = p_seance and etat in ('attente','en_cours');
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_annuler(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_annuler(uuid) to authenticated;
+
+create or replace function __SCHEMA__.caces_seance_etat(p_code text)
+returns table(seance_id uuid, referentiel_code text, mode text, etat text, question_courante integer, nb_questions integer, ma_reponse boolean, valide boolean)
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select se.id, se.referentiel_code, se.mode, se.etat, se.question_courante, array_length(se.question_ids, 1),
+         qtq.reponse_stagiaire, coalesce(qtq.valide, false)
+  from __SCHEMA__.stagiaires s
+  join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id is not null
+  join __SCHEMA__.qcm_seances se on se.id = t.seance_id
+  left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+  where s.code_acces_individuel = p_code and se.mode = 'telephone'
+    and (se.etat in ('attente','en_cours') and t.statut = 'en_cours'
+         or se.etat = 'terminee' and t.statut = 'termine' and se.date_fin > now() - interval '2 hours')
+  order by se.created_at desc limit 1;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_etat(text) from public;
+grant execute on function __SCHEMA__.caces_seance_etat(text) to anon, authenticated;
+
+-- Presence du telephone (appelee toutes les 1,5 s par le telephone du stagiaire).
+create or replace function __SCHEMA__.caces_seance_presence(p_code text, p_seance uuid) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  update __SCHEMA__.qcm_tirages t set connecte_at = now()
+    from __SCHEMA__.stagiaires s
+   where s.id = t.stagiaire_id and s.code_acces_individuel = p_code and t.seance_id = p_seance and t.statut = 'en_cours';
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_presence(text, uuid) from public;
+grant execute on function __SCHEMA__.caces_seance_presence(text, uuid) to anon, authenticated;
+
+-- ===== QCM général : thèmes, consigne, illustration téléphone (patch af) =====
+-- Patch 19/10/2026 af : QCM general — questions regroupees par theme (ordre des themes du referentiel), consigne par theme,
+-- illustration de la question courante transmise au telephone (zoom).
+alter table __SCHEMA__.themes_referentiel add column if not exists consigne text;
+update __SCHEMA__.themes_referentiel set consigne = 'Les questions suivantes s''appuient sur le tableau / l''abaque de charges. Lis attentivement le document affiché : tu peux l''agrandir (zoom) sur ton téléphone avant de répondre.'
+ where code = 'tableau_charges' and consigne is null;
+
+create or replace function __SCHEMA__.caces_seance_demarrer(p_session uuid, p_ref text, p_mode text, p_voix boolean, p_vitesse numeric, p_stagiaires uuid[])
+returns uuid
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare v_sf __SCHEMA__.sessions_formation; v_seance uuid; v_ids integer[]; v_s uuid; v_t uuid; v_graine bigint;
+begin
+  if __SCHEMA__.caces_role() is null or not __SCHEMA__.caces_est_testeur_de(p_session) then raise exception 'Reserve au testeur de la session'; end if;
+  select * into v_sf from __SCHEMA__.sessions_formation where id = p_session;
+  if v_sf.statut = 'cloturee' then raise exception 'Session cloturee'; end if;
+  if p_mode not in ('telephone','quizbox') then raise exception 'Mode invalide'; end if;
+  if coalesce(array_length(p_stagiaires, 1), 0) = 0 then raise exception 'Aucun participant'; end if;
+  if p_mode = 'quizbox' and exists (select 1 from __SCHEMA__.stagiaires s where s.id = any (p_stagiaires) and s.numero_telecommande is null) then
+    raise exception 'Chaque participant doit avoir un numero de telecommande Quizbox';
+  end if;
+  if exists (select 1 from __SCHEMA__.stagiaires s where s.id = any (p_stagiaires) and s.session_id <> p_session) then
+    raise exception 'Participant hors session';
+  end if;
+  -- une seule seance en cours par session et referentiel
+  update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now()
+   where statut = 'en_cours' and seance_id in (select id from __SCHEMA__.qcm_seances where session_id = p_session and referentiel_code = p_ref and etat in ('attente','en_cours'));
+  update __SCHEMA__.qcm_seances set etat = 'annulee', date_fin = now() where session_id = p_session and referentiel_code = p_ref and etat in ('attente','en_cours');
+  select array_agg(q.id order by t.id, random()) into v_ids
+    from __SCHEMA__.questions_qcm q join __SCHEMA__.themes_referentiel t on t.id = q.theme_id
+   where t.referentiel_code = p_ref and q.actif = true;
+  if v_ids is null then raise exception 'Aucune question active pour ce referentiel'; end if;
+  insert into __SCHEMA__.qcm_seances (session_id, referentiel_code, mode, voix, vitesse_voix, question_ids, testeur_id, etat, date_debut)
+    values (p_session, p_ref, p_mode, coalesce(p_voix, false), coalesce(p_vitesse, 1), v_ids, auth.uid(), case when p_mode = 'telephone' then 'attente' else 'en_cours' end, case when p_mode = 'telephone' then null else now() end) returning id into v_seance;
+  v_graine := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  foreach v_s in array p_stagiaires loop
+    if not __SCHEMA__.caces_peut_tester(auth.uid(), v_s) and coalesce(__SCHEMA__.caces_role(), '') <> 'admin' then
+      raise exception 'Vous ne pouvez pas tester ce stagiaire (vous etes son formateur)';
+    end if;
+    update __SCHEMA__.qcm_tirages set statut = 'abandonne', date_fin = now() where stagiaire_id = v_s and referentiel_code = p_ref and statut = 'en_cours';
+    insert into __SCHEMA__.qcm_tirages (stagiaire_id, referentiel_code, graine, testeur_id, seance_id)
+      values (v_s, p_ref, v_graine, case when __SCHEMA__.caces_peut_tester(auth.uid(), v_s) then auth.uid() else __SCHEMA__.caces_testeur_du_stagiaire(v_s) end, v_seance) returning id into v_t;
+    insert into __SCHEMA__.qcm_tirage_questions (tirage_id, question_id, ordre)
+      select v_t, x.qid, x.n from unnest(v_ids) with ordinality as x(qid, n);
+  end loop;
+  return v_seance;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_demarrer(uuid, text, text, boolean, numeric, uuid[]) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_demarrer(uuid, text, text, boolean, numeric, uuid[]) to authenticated;
+
+drop function if exists __SCHEMA__.caces_seance_etat(text);
+create function __SCHEMA__.caces_seance_etat(p_code text)
+returns table(seance_id uuid, referentiel_code text, mode text, etat text, question_courante integer, nb_questions integer, ma_reponse boolean, valide boolean, illustration text)
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select se.id, se.referentiel_code, se.mode, se.etat, se.question_courante, array_length(se.question_ids, 1),
+         qtq.reponse_stagiaire, coalesce(qtq.valide, false),
+         case when se.etat = 'en_cours' then (select q.illustration from __SCHEMA__.questions_qcm q where q.id = qtq.question_id) end
+  from __SCHEMA__.stagiaires s
+  join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id is not null
+  join __SCHEMA__.qcm_seances se on se.id = t.seance_id
+  left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+  where s.code_acces_individuel = p_code and se.mode = 'telephone'
+    and (se.etat in ('attente','en_cours') and t.statut = 'en_cours'
+         or se.etat = 'terminee' and t.statut = 'termine' and se.date_fin > now() - interval '2 hours')
+  order by se.created_at desc limit 1;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_etat(text) from public;
+grant execute on function __SCHEMA__.caces_seance_etat(text) to anon, authenticated;
+
+-- ===== Résultats de séance (patch ag) =====
+-- Patch 19/10/2026 ag : resultats d'une seance de QCM general (note globale + note par theme) pour le testeur.
+create or replace function __SCHEMA__.caces_seance_resultats(p_seance uuid)
+returns table(stagiaire_id uuid, nom text, prenom text, score_global_pct numeric, reussi boolean, detail_themes jsonb)
+language plpgsql stable security definer set search_path = caces, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  return query
+    select s.id, s.nom, s.prenom, t.score_global_pct, t.reussi, (select r.detail_themes from __SCHEMA__.caces_resultat_tirage(t.id) r)
+    from __SCHEMA__.qcm_tirages t join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+    where t.seance_id = p_seance and t.statut = 'termine'
+    order by s.nom, s.prenom;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_resultats(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_resultats(uuid) to authenticated;
+
+-- ===== Échéance d'une extension (patch ah) =====
+-- Patch 19/10/2026 ah : autre categorie = extension du CACES initial ; l'echeance du nouveau CACES est celle du CACES initial.
+alter table __SCHEMA__.stagiaire_categories add column if not exists ancien_caces_date_echeance date;
+
+create or replace function __SCHEMA__.caces_emettre_certificat(p_stagiaire uuid, p_ref text, p_cat text) returns __SCHEMA__.certificats
+language plpgsql security definer set search_path = __SCHEMA__, public, extensions as $f$
+declare
+  v_session uuid; v_sf __SCHEMA__.sessions_formation; v_sc __SCHEMA__.stagiaire_categories;
+  v_ep __SCHEMA__.epreuves_pratique; v_cert __SCHEMA__.certificats; v_n int; v_date date; v_mois int; v_num text; v_exp date;
+begin
+  select session_id into v_session from __SCHEMA__.stagiaires where id = p_stagiaire;
+  if v_session is null then raise exception 'Stagiaire introuvable'; end if;
+  if not __SCHEMA__.caces_est_testeur_du_stagiaire(p_stagiaire) then raise exception 'Réservé au testeur du groupe du stagiaire ou à l''administrateur'; end if;
+  select * into v_sf from __SCHEMA__.sessions_formation where id = v_session;
+  if coalesce(v_sf.type_session, 'caces') <> 'caces' then raise exception 'Pas de numéro CACES pour une autorisation de conduite'; end if;
+  if coalesce(trim(v_sf.numero_session_galaxy), '') = '' then raise exception 'Le n° de session Galaxy est obligatoire pour numéroter un CACES'; end if;
+  select * into v_cert from __SCHEMA__.certificats where stagiaire_id = p_stagiaire and referentiel_code = p_ref and categorie_code = p_cat;
+  if found then return v_cert; end if;
+  select * into v_sc from __SCHEMA__.stagiaire_categories where stagiaire_id = p_stagiaire and referentiel_code = p_ref and categorie_code = p_cat;
+  if not coalesce(v_sc.theorie_validee, false) or not coalesce(v_sc.pratique_validee, false) then
+    raise exception 'Théorie et pratique doivent être validées';
+  end if;
+  select * into v_ep from __SCHEMA__.epreuves_pratique
+    where stagiaire_id = p_stagiaire and referentiel_code = p_ref and categorie_code = p_cat and reussi = true
+    order by date_passage desc limit 1;
+  v_date := coalesce(v_ep.date_passage::date, current_date);
+  select duree_validite_mois into v_mois from __SCHEMA__.referentiels where code = p_ref;
+  -- Autre categorie (extension) : l'echeance est celle du CACES initial (recommandation, 3|3).
+  if v_sc.parcours = 'autre_categorie' then
+    v_exp := coalesce(v_sc.ancien_caces_date_echeance,
+                      (select min(c.date_expiration) from __SCHEMA__.certificats c where c.stagiaire_id = p_stagiaire and c.referentiel_code = p_ref));
+  end if;
+  insert into __SCHEMA__.compteurs_certificat (referentiel_code, categorie_code, dernier) values (p_ref, p_cat, 1)
+    on conflict (referentiel_code, categorie_code) do update set dernier = __SCHEMA__.compteurs_certificat.dernier + 1
+    returning dernier into v_n;
+  v_num := to_char(v_date, 'YYYY.MM') || '.' || left(p_ref, 4) || '.' || p_cat || '.' || trim(v_sf.numero_session_galaxy) || '.' || lpad(v_n::text, 5, '0');
+  insert into __SCHEMA__.certificats (stagiaire_id, referentiel_code, categorie_code, numero, date_delivrance, date_expiration,
+                                 formateur_id, testeur_id, options, session_id)
+  values (p_stagiaire, p_ref, p_cat, v_num, v_date, coalesce(v_exp, (v_date + make_interval(months => coalesce(v_mois, 60)) - interval '1 day')::date),
+          __SCHEMA__.caces_formateur_du_stagiaire(p_stagiaire), coalesce(v_ep.testeur_id, __SCHEMA__.caces_testeur_du_stagiaire(p_stagiaire)), v_ep.options, v_session)
+  returning * into v_cert;
+  return v_cert;
+end;
+$f$;
+
+-- ===== Export / envoi secrétariat (patch ai) =====
+-- Patch 19/10/2026 ai : Export (ZIP + envoi secretariat + Drive) — statut d'envoi sur la session, adresse unique du secretariat,
+-- fonction de journalisation reservee aux comptes CACES.
+alter table __SCHEMA__.sessions_formation add column if not exists envoi_secretariat_statut text;
+alter table __SCHEMA__.sessions_formation add column if not exists envoi_secretariat_le timestamptz;
+alter table __SCHEMA__.sessions_formation add column if not exists envoi_secretariat_detail jsonb;
+alter table __SCHEMA__.parametres_application add column if not exists email_secretariat text;
+
+create or replace function __SCHEMA__.caces_journaliser_export(p_session uuid, p_action text, p_detail jsonb default '{}'::jsonb) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  if __SCHEMA__.caces_role() is null then raise exception 'Reserve aux comptes CACES'; end if;
+  if p_action not in ('export_demande','export_zip_reussi','export_zip_echec',
+                      'envoi_secretariat_demande','envoi_secretariat_reussi','envoi_secretariat_echec') then
+    raise exception 'Action de journal inconnue';
+  end if;
+  if not exists (select 1 from __SCHEMA__.sessions_formation where id = p_session) then raise exception 'Session introuvable'; end if;
+  insert into __SCHEMA__.journal_audit (session_id, formateur_id, action, cible, detail)
+    values (p_session, auth.uid(), p_action, null, coalesce(p_detail, '{}'::jsonb));
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_journaliser_export(uuid, text, jsonb) from public, anon;
+grant execute on function __SCHEMA__.caces_journaliser_export(uuid, text, jsonb) to authenticated;
+
+-- ===== Conseil de planning (patch aj) =====
+-- Patch 19/10/2026 aj : conseil de planning — testeur prevu par epreuve (planning_tests.testeur_id) et charge prevue
+-- calculee sur le testeur PREVU (a defaut : testeur par defaut du stagiaire). Parametre optionnel p_exclure : ignore une session
+-- (permet au conseil de connaitre la charge DEJA prise ailleurs). Idempotent.
+alter table __SCHEMA__.planning_tests add column if not exists testeur_id uuid references __SCHEMA__.formateurs(id) on delete set null;
+
+drop function if exists __SCHEMA__.caces_charge_prevue(uuid, date);
+create or replace function __SCHEMA__.caces_charge_prevue(p_testeur uuid, p_jour date, p_exclure uuid default null)
+returns table(ut_total numeric, ut_pratique numeric)
+language plpgsql stable security definer set search_path = caces, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.exiger_profil_caces();
+  return query
+  with base as (
+    select sf.id as session_id, s.id as stagiaire_id, sc.referentiel_code, sc.categorie_code,
+           sc.theorie_validee, sc.pratique_validee,
+           coalesce(pt.jour, sf.date_debut) as jour_theorie,
+           coalesce(pp.jour, sf.date_debut) as jour_pratique,
+           coalesce(pt.testeur_id, __SCHEMA__.caces_testeur_du_stagiaire(s.id)) as testeur_theorie,
+           coalesce(pp.testeur_id, __SCHEMA__.caces_testeur_du_stagiaire(s.id)) as testeur_pratique
+    from __SCHEMA__.sessions_formation sf
+    join __SCHEMA__.stagiaires s on s.session_id = sf.id
+    join __SCHEMA__.stagiaire_categories sc on sc.stagiaire_id = s.id
+    left join __SCHEMA__.planning_tests pt on pt.stagiaire_id = s.id and pt.referentiel_code = sc.referentiel_code
+         and pt.categorie_code = '' and pt.epreuve = 'theorie'
+    left join __SCHEMA__.planning_tests pp on pp.stagiaire_id = s.id and pp.referentiel_code = sc.referentiel_code
+         and pp.categorie_code = sc.categorie_code and pp.epreuve = 'pratique'
+    where sf.statut <> 'cloturee' and sf.type_session = 'caces' and (p_exclure is null or sf.id <> p_exclure)),
+  th as (
+    select b1.session_id, b1.referentiel_code, count(distinct b1.stagiaire_id) as n from base b1
+    where b1.jour_theorie = p_jour and b1.theorie_validee is not true and b1.testeur_theorie = p_testeur
+    group by b1.session_id, b1.referentiel_code),
+  ut_th as (
+    select coalesce(sum(r.ut_theorique * ceil(th.n::numeric / greatest(p.max_candidats_theorie, 1))), 0) as v
+    from th join __SCHEMA__.referentiels r on r.code = th.referentiel_code
+    cross join __SCHEMA__.parametres_application p where p.id = 1),
+  pr as (
+    select coalesce(sum(c.ut_pratique), 0) as v from base b
+    join __SCHEMA__.categories_referentiel c
+      on c.referentiel_code = b.referentiel_code and c.code = b.categorie_code
+    where b.jour_pratique = p_jour and b.pratique_validee is not true and b.testeur_pratique = p_testeur)
+  select ut_th.v + pr.v, pr.v from ut_th, pr;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_charge_prevue(uuid, date, uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_charge_prevue(uuid, date, uuid) to authenticated;
+
+-- Patch 19/10/2026 ak : presence des stagiaires par demi-journee (jours du planning).
+create table if not exists __SCHEMA__.presences_stagiaires (
+  stagiaire_id uuid not null references __SCHEMA__.stagiaires(id) on delete cascade,
+  jour date not null,
+  demi text not null check (demi in ('matin','apres_midi')),
+  primary key (stagiaire_id, jour, demi)
+);
+alter table __SCHEMA__.presences_stagiaires enable row level security;
+drop policy if exists presences_lecture on __SCHEMA__.presences_stagiaires;
+create policy presences_lecture on __SCHEMA__.presences_stagiaires for select to authenticated using (__SCHEMA__.caces_role() is not null);
+drop policy if exists presences_ecriture on __SCHEMA__.presences_stagiaires;
+create policy presences_ecriture on __SCHEMA__.presences_stagiaires for all to authenticated
+  using (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id) or __SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id))
+  with check (__SCHEMA__.caces_est_formateur_du_stagiaire(stagiaire_id) or __SCHEMA__.caces_est_testeur_du_stagiaire(stagiaire_id));
+revoke all on __SCHEMA__.presences_stagiaires from public, anon;
+grant select, insert, update, delete on __SCHEMA__.presences_stagiaires to authenticated;
+
+-- Patch 10/11/2026 al : la verification d'un titre ne doit pas dependre de la casse du numero
+-- (le code Galaxy de la session peut etre en minuscules, ex. 2026.11.R489.3.test2000.00003).
+create or replace function __SCHEMA__.caces_verifier_titre(p_numero text)
+ returns jsonb
+ language plpgsql
+ security definer
+ set search_path to 'caces', 'public', 'extensions'
+as $f$
+declare c __SCHEMA__.certificats; s __SCHEMA__.stagiaires; r jsonb;
+begin
+  select * into c from __SCHEMA__.certificats where upper(numero) = upper(trim(p_numero));
+  if not found then return jsonb_build_object('trouve', false, 'statut', 'inconnu'); end if;
+  select * into s from __SCHEMA__.stagiaires where id = c.stagiaire_id;
+  select jsonb_agg(jsonb_build_object(
+      'numero', x.numero, 'categorie', x.categorie_code,
+      'categorie_libelle', (select cr.libelle from __SCHEMA__.categories_referentiel cr where cr.referentiel_code = x.referentiel_code and cr.code = x.categorie_code),
+      'options', coalesce(x.options, '{}'),
+      'date_delivrance', x.date_delivrance, 'date_expiration', x.date_expiration,
+      'statut', case when x.date_expiration < current_date then 'expire' else 'valide' end)
+    order by x.categorie_code)
+  into r
+  from __SCHEMA__.certificats x where x.stagiaire_id = c.stagiaire_id and x.referentiel_code = c.referentiel_code;
+  return jsonb_build_object(
+    'trouve', true,
+    'statut', case when c.date_expiration < current_date then 'expire' else 'valide' end,
+    'nom', s.nom, 'prenom', case when coalesce(s.prenom, '') = '' then '' else left(s.prenom, 1) || '.' end,
+    'referentiel', c.referentiel_code,
+    'referentiel_libelle', (select libelle from __SCHEMA__.referentiels where code = c.referentiel_code),
+    'numero', c.numero, 'titres', r);
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_verifier_titre(text) from public;
+grant execute on function __SCHEMA__.caces_verifier_titre(text) to anon, authenticated;
+
+-- Patch 10/11/2026 am : civilite du stagiaire (M. / Mme) a la place de la fonction (la colonne fonction est conservee, plus saisie).
+alter table __SCHEMA__.stagiaires add column if not exists civilite text;
+do $$ begin
+  alter table __SCHEMA__.stagiaires add constraint stagiaires_civilite_check check (civilite is null or civilite in ('M','Mme'));
+exception when duplicate_object then null; end $$;
+
+-- Patch 10/11/2026 an : logo de l'organisme configurable (PNG en data URL, ecran Organisme) + lecture publique du logo.
+alter table __SCHEMA__.parametres_application add column if not exists logo_data text;
+do $$ begin
+  alter table __SCHEMA__.parametres_application add constraint parametres_logo_taille check (logo_data is null or length(logo_data) <= 700000);
+exception when duplicate_object then null; end $$;
+create or replace function __SCHEMA__.caces_logo_organisme() returns text
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select logo_data from __SCHEMA__.parametres_application where id = 1;
+$f$;
+revoke all on function __SCHEMA__.caces_logo_organisme() from public;
+grant execute on function __SCHEMA__.caces_logo_organisme() to anon, authenticated;
+
+-- Patch 10/11/2026 ao : journal de tracabilite par session (qui a modifie / fait quoi), alimente AUTOMATIQUEMENT par des
+-- declencheurs sur les tables de la session ; journal_audit devient non falsifiable (plus d'insertion directe cote client)
+-- et lisible seulement par l'admin et les formateurs/testeurs de la session.
+alter table __SCHEMA__.journal_audit add column if not exists acteur_nom text;
+create index if not exists journal_audit_session_idx on __SCHEMA__.journal_audit (session_id, created_at desc);
+
+create or replace function __SCHEMA__.caces_trace_modif() returns trigger
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare
+  v_mode text := tg_argv[0];            -- 'self' | 'session' | 'stagiaire'
+  v_ligne jsonb; v_ancien jsonb; v_sess uuid; v_uid uuid := auth.uid(); v_act text; v_detail jsonb := '{}'::jsonb;
+  v_bruit text[] := array['updated_at','created_at','connecte_at','code_acces_individuel','envoi_secretariat_detail','envoi_secretariat_statut','envoi_secretariat_le','photo_path','logo_data'];
+  v_cle text; v_repere jsonb;
+begin
+  if tg_op = 'DELETE' then v_ligne := to_jsonb(old); else v_ligne := to_jsonb(new); end if;
+  if tg_op = 'UPDATE' then v_ancien := to_jsonb(old); end if;
+  if v_mode = 'self' then v_sess := (v_ligne ->> 'id')::uuid;
+  elsif v_mode = 'session' then v_sess := (v_ligne ->> 'session_id')::uuid;
+  else v_sess := __SCHEMA__.caces_session_du_stagiaire((v_ligne ->> 'stagiaire_id')::uuid);
+  end if;
+  if v_sess is null then return coalesce(new, old); end if;
+  if tg_op = 'UPDATE' then
+    for v_cle in select jsonb_object_keys(v_ligne) loop
+      if v_cle = any (v_bruit) then continue; end if;
+      if v_ligne -> v_cle is distinct from v_ancien -> v_cle then
+        v_detail := v_detail || jsonb_build_object(v_cle, jsonb_build_array(left(coalesce(v_ancien ->> v_cle, ''), 200), left(coalesce(v_ligne ->> v_cle, ''), 200)));
+      end if;
+    end loop;
+    if v_detail = '{}'::jsonb then return new; end if;   -- seul du « bruit » a change : on ne journalise pas
+  end if;
+  v_repere := jsonb_strip_nulls(jsonb_build_object(
+    'id', v_ligne ->> 'id', 'stagiaire_id', v_ligne ->> 'stagiaire_id', 'nom', v_ligne ->> 'nom', 'prenom', v_ligne ->> 'prenom',
+    'referentiel', v_ligne ->> 'referentiel_code', 'categorie', v_ligne ->> 'categorie_code', 'epreuve', v_ligne ->> 'epreuve',
+    'jour', v_ligne ->> 'jour', 'demi', v_ligne ->> 'demi', 'type', v_ligne ->> 'type', 'numero', v_ligne ->> 'numero'));
+  if tg_op = 'INSERT' then v_detail := jsonb_build_object('valeurs', (v_ligne - v_bruit) - 'id'); end if;
+  begin
+  insert into __SCHEMA__.journal_audit (session_id, formateur_id, acteur_nom, action, cible, detail)
+    values (v_sess, case when exists (select 1 from __SCHEMA__.formateurs f where f.id = v_uid) then v_uid end,
+            case when v_uid is null then 'stagiaire / système' end,
+            case tg_op when 'INSERT' then 'creation' when 'UPDATE' then 'modification' else 'suppression' end,
+            tg_table_name, jsonb_build_object('repere', v_repere) || case when tg_op = 'UPDATE' then jsonb_build_object('changements', v_detail)
+              when tg_op = 'INSERT' then v_detail else '{}'::jsonb end);
+  exception when foreign_key_violation then null;   -- suppression de la session elle-meme (cascade) : rien a journaliser
+  end;
+  return coalesce(new, old);
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_trace_modif() from public, anon, authenticated;
+
+do $$
+declare r record;
+begin
+  for r in select * from (values
+    ('sessions_formation','self'),('stagiaires','session'),('stagiaire_categories','stagiaire'),('certificats','session'),
+    ('epreuves_pratique','session'),('fise_evaluations','stagiaire'),('fise_avis','stagiaire'),('suivi_horometre','session'),
+    ('planning_tests','stagiaire'),('presences_stagiaires','stagiaire'),('session_jours','session'),('session_engins','session'),
+    ('session_groupes','session'),('session_testeurs','session'),('session_categories','session'),('qcm_seances','session'),
+    ('adequations_session','session'),('attestations_testeur','session'),('engin_avis','session'),('engin_documents','session'),
+    ('session_documents','session'),('visites_prealables','session')) as t(nom, mode)
+  loop
+    execute format('drop trigger if exists trace_modif on __SCHEMA__.%I', r.nom);
+    execute format('create trigger trace_modif after insert or update or delete on __SCHEMA__.%I for each row execute function __SCHEMA__.caces_trace_modif(%L)', r.nom, r.mode);
+  end loop;
+end $$;
+
+-- Journal non falsifiable et cloisonne
+drop policy if exists audit_formateur_insert on __SCHEMA__.journal_audit;
+revoke insert on __SCHEMA__.journal_audit from authenticated;
+drop policy if exists audit_formateur_read on __SCHEMA__.journal_audit;
+create policy audit_formateur_read on __SCHEMA__.journal_audit for select to authenticated
+  using (__SCHEMA__.caces_role() = 'admin' or (session_id is not null and (__SCHEMA__.caces_est_formateur_de(session_id) or __SCHEMA__.caces_est_testeur_de(session_id))));
+
+-- Patch 10/11/2026 ap : QCM general (telephones) — pendant l'ecran d'introduction d'un theme (projete), les telephones
+-- restent en attente (« Nouveau theme ») et ne recoivent NI la question NI son illustration ; le testeur lance le theme
+-- avec « Commencer ». Les reponses sont refusees tant que le theme n'est pas lance.
+alter table __SCHEMA__.qcm_seances add column if not exists en_pause_theme boolean not null default false;
+
+create or replace function __SCHEMA__.caces_seance_lancer(p_seance uuid) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_seances set etat = 'en_cours', date_debut = now(), en_pause_theme = true where id = p_seance and etat = 'attente';
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_seance_avancer(p_seance uuid) returns integer
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare v_se __SCHEMA__.qcm_seances; v_th_avant integer; v_th_apres integer;
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  select * into v_se from __SCHEMA__.qcm_seances where id = p_seance for update;
+  if v_se.etat <> 'en_cours' then raise exception 'Seance terminee'; end if;
+  update __SCHEMA__.qcm_tirage_questions qtq set valide = true
+    from __SCHEMA__.qcm_tirages t where qtq.tirage_id = t.id and t.seance_id = p_seance and qtq.ordre = v_se.question_courante;
+  if v_se.question_courante < array_length(v_se.question_ids, 1) then
+    select theme_id into v_th_avant from __SCHEMA__.questions_qcm where id = v_se.question_ids[v_se.question_courante];
+    select theme_id into v_th_apres from __SCHEMA__.questions_qcm where id = v_se.question_ids[v_se.question_courante + 1];
+    update __SCHEMA__.qcm_seances set question_courante = question_courante + 1,
+           en_pause_theme = (v_th_avant is distinct from v_th_apres) where id = p_seance;
+    return v_se.question_courante + 1;
+  end if;
+  return v_se.question_courante;
+end;
+$f$;
+
+create or replace function __SCHEMA__.caces_seance_commencer_theme(p_seance uuid) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  update __SCHEMA__.qcm_seances set en_pause_theme = false where id = p_seance and etat = 'en_cours';
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_commencer_theme(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_commencer_theme(uuid) to authenticated;
+
+drop function if exists __SCHEMA__.caces_seance_etat(text);
+create function __SCHEMA__.caces_seance_etat(p_code text)
+returns table(seance_id uuid, referentiel_code text, mode text, etat text, question_courante integer, nb_questions integer, ma_reponse boolean, valide boolean, illustration text, en_pause boolean, theme_libelle text)
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select se.id, se.referentiel_code, se.mode, se.etat, se.question_courante, array_length(se.question_ids, 1),
+         case when se.en_pause_theme then null else qtq.reponse_stagiaire end,
+         case when se.en_pause_theme then false else coalesce(qtq.valide, false) end,
+         case when se.etat = 'en_cours' and not se.en_pause_theme then (select q.illustration from __SCHEMA__.questions_qcm q where q.id = qtq.question_id) end,
+         (se.etat = 'en_cours' and se.en_pause_theme),
+         case when se.etat = 'en_cours' and se.en_pause_theme then
+           (select th.libelle from __SCHEMA__.questions_qcm q join __SCHEMA__.themes_referentiel th on th.id = q.theme_id where q.id = qtq.question_id) end
+  from __SCHEMA__.stagiaires s
+  join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id is not null
+  join __SCHEMA__.qcm_seances se on se.id = t.seance_id
+  left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+  where s.code_acces_individuel = p_code and se.mode = 'telephone'
+    and (se.etat in ('attente','en_cours') and t.statut = 'en_cours'
+         or se.etat = 'terminee' and t.statut = 'termine' and se.date_fin > now() - interval '2 hours')
+  order by se.created_at desc limit 1;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_etat(text) from public;
+grant execute on function __SCHEMA__.caces_seance_etat(text) to anon, authenticated;
+
+create or replace function __SCHEMA__.caces_seance_repondre(p_code text, p_seance uuid, p_ordre integer, p_reponse boolean, p_valider boolean) returns boolean
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare v_t uuid; v_courante integer; v_n integer; v_pause boolean;
+begin
+  select t.id, se.question_courante, se.en_pause_theme into v_t, v_courante, v_pause
+  from __SCHEMA__.stagiaires s
+  join __SCHEMA__.qcm_tirages t on t.stagiaire_id = s.id and t.seance_id = p_seance and t.statut = 'en_cours'
+  join __SCHEMA__.qcm_seances se on se.id = t.seance_id and se.etat = 'en_cours' and se.mode = 'telephone'
+  where s.code_acces_individuel = p_code;
+  if v_t is null then raise exception 'Seance introuvable ou terminee.'; end if;
+  if v_pause then return false; end if;                    -- theme pas encore lance par le testeur
+  if p_ordre <> v_courante then return false; end if;      -- la question a change : l'ecran se rafraichit
+  update __SCHEMA__.qcm_tirage_questions set reponse_stagiaire = p_reponse, valide = coalesce(p_valider, false)
+   where tirage_id = v_t and ordre = p_ordre and valide = false;
+  get diagnostics v_n = row_count;
+  return v_n > 0;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_repondre(text, uuid, integer, boolean, boolean) from public;
+grant execute on function __SCHEMA__.caces_seance_repondre(text, uuid, integer, boolean, boolean) to anon, authenticated;
+
+-- Patch 10/11/2026 aq : QCM general — le testeur voit sur SON ecran la progression et le score courant de chaque stagiaire
+-- (nb de questions validees et de bonnes reponses jusqu'a la question courante), jamais montres au videoprojecteur.
+drop function if exists __SCHEMA__.caces_seance_progression(uuid);
+create function __SCHEMA__.caces_seance_progression(p_seance uuid)
+returns table(stagiaire_id uuid, nom text, prenom text, numero_telecommande smallint, a_repondu boolean, valide boolean, connecte boolean,
+              nb_validees integer, nb_bonnes integer)
+language plpgsql stable security definer set search_path = caces, public, extensions as $f$
+#variable_conflict use_column
+begin
+  perform __SCHEMA__.caces_seance_droit(p_seance);
+  return query
+    select s.id, s.nom, s.prenom, s.numero_telecommande,
+           coalesce(qtq.reponse_stagiaire is not null, false), coalesce(qtq.valide, false),
+           coalesce(t.connecte_at > now() - interval '12 seconds', false),
+           (select count(*)::integer from __SCHEMA__.qcm_tirage_questions x where x.tirage_id = t.id and x.valide and x.ordre <= se.question_courante),
+           (select count(*)::integer from __SCHEMA__.qcm_tirage_questions x join __SCHEMA__.questions_qcm q on q.id = x.question_id
+             where x.tirage_id = t.id and x.valide and x.ordre <= se.question_courante and x.reponse_stagiaire is not distinct from q.reponse)
+    from __SCHEMA__.qcm_seances se
+    join __SCHEMA__.qcm_tirages t on t.seance_id = se.id and t.statut <> 'abandonne'
+    join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id
+    left join __SCHEMA__.qcm_tirage_questions qtq on qtq.tirage_id = t.id and qtq.ordre = se.question_courante
+    where se.id = p_seance
+    order by s.nom, s.prenom;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_seance_progression(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_seance_progression(uuid) to authenticated;
+
+-- Patch 10/11/2026 ar : evaluation pratique — (1) penalites predefinies par critere (ex. « deplacement charge haute » = -2 pts)
+-- qui orientent la note de facon objective ; (2) justification de l'echec (dictee vocale possible cote appli) ;
+-- (3) options administrables (porte-engins, telecommande, ...) avec leur UT.
+alter table __SCHEMA__.epreuves_pratique add column if not exists justification_echec text;
+alter table __SCHEMA__.epreuves_pratique add column if not exists penalites jsonb;
+
+create table if not exists __SCHEMA__.penalites_pratique (
+  id serial primary key,
+  referentiel_code text not null,
+  categorie_code text not null,
+  critere_id integer references __SCHEMA__.criteres_pratique(id) on delete cascade,
+  libelle text not null,
+  points_retires numeric not null check (points_retires > 0),
+  ordre integer not null default 0,
+  actif boolean not null default true,
+  foreign key (referentiel_code, categorie_code) references __SCHEMA__.categories_referentiel(referentiel_code, code)
+);
+create index if not exists penalites_pratique_critere_idx on __SCHEMA__.penalites_pratique (critere_id);
+alter table __SCHEMA__.penalites_pratique enable row level security;
+drop policy if exists penalites_lecture on __SCHEMA__.penalites_pratique;
+create policy penalites_lecture on __SCHEMA__.penalites_pratique for select to authenticated using (__SCHEMA__.caces_role() is not null);
+drop policy if exists penalites_admin on __SCHEMA__.penalites_pratique;
+create policy penalites_admin on __SCHEMA__.penalites_pratique for all to authenticated
+  using (__SCHEMA__.caces_role() = 'admin') with check (__SCHEMA__.caces_role() = 'admin');
+revoke all on __SCHEMA__.penalites_pratique from public, anon;
+grant select, insert, update, delete on __SCHEMA__.penalites_pratique to authenticated;
+grant usage, select on sequence __SCHEMA__.penalites_pratique_id_seq to authenticated;
+
+create table if not exists __SCHEMA__.options_pratique (
+  code text primary key check (code ~ '^[a-z0-9_]+$'),
+  libelle text not null,
+  ut numeric not null default 0.5 check (ut >= 0),
+  ordre integer not null default 0,
+  actif boolean not null default true
+);
+insert into __SCHEMA__.options_pratique (code, libelle, ut, ordre) values
+  ('porte_engins', 'Porte-engins', 0.5, 1), ('telecommande', 'Télécommande', 0.5, 2)
+on conflict (code) do nothing;
+alter table __SCHEMA__.options_pratique enable row level security;
+drop policy if exists options_lecture on __SCHEMA__.options_pratique;
+create policy options_lecture on __SCHEMA__.options_pratique for select to authenticated using (__SCHEMA__.caces_role() is not null);
+drop policy if exists options_admin on __SCHEMA__.options_pratique;
+create policy options_admin on __SCHEMA__.options_pratique for all to authenticated
+  using (__SCHEMA__.caces_role() = 'admin') with check (__SCHEMA__.caces_role() = 'admin');
+revoke all on __SCHEMA__.options_pratique from public, anon;
+grant select, insert, update, delete on __SCHEMA__.options_pratique to authenticated;
+
+-- Patch 10/11/2026 as : evaluation sur tablette par QR code — le testeur scanne un QR code (jeton secret, 12 h, revocable)
+-- puis VALIDE SON CODE TESTEUR (4 chiffres) : une fonction serveur ouvre alors sa session (aucun mot de passe a ressaisir).
+-- Le jeton n'est stocke que sous forme de hash ; la validation (jeton + code) n'est executable que par le serveur (service_role).
+create table if not exists __SCHEMA__.acces_tablette (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references __SCHEMA__.sessions_formation(id) on delete cascade,
+  testeur_id uuid not null references __SCHEMA__.formateurs(id) on delete cascade,
+  jeton_hash text not null unique,
+  cree_le timestamptz not null default now(),
+  expire_le timestamptz not null,
+  revoque boolean not null default false,
+  derniere_utilisation timestamptz,
+  nb_connexions integer not null default 0
+);
+alter table __SCHEMA__.acces_tablette enable row level security;
+revoke all on __SCHEMA__.acces_tablette from public, anon, authenticated;
+
+create or replace function __SCHEMA__.caces_creer_acces_tablette(p_session uuid)
+returns table(jeton text, expire_le timestamptz)
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare v_jeton text; v_exp timestamptz := now() + interval '12 hours';
+begin
+  if __SCHEMA__.caces_role() is null or not __SCHEMA__.caces_est_testeur_de(p_session) then raise exception 'Reserve au testeur de la session'; end if;
+  if (select statut from __SCHEMA__.sessions_formation where id = p_session) = 'cloturee' then raise exception 'Session cloturee'; end if;
+  if not exists (select 1 from __SCHEMA__.testeur_codes where testeur_id = auth.uid()) then
+    raise exception 'Definis d''abord ton code testeur (Mon compte)'; end if;
+  update __SCHEMA__.acces_tablette set revoque = true where session_id = p_session and testeur_id = auth.uid() and not revoque;
+  v_jeton := encode(extensions.gen_random_bytes(24), 'hex');
+  insert into __SCHEMA__.acces_tablette (session_id, testeur_id, jeton_hash, expire_le)
+    values (p_session, auth.uid(), encode(extensions.digest(v_jeton, 'sha256'), 'hex'), v_exp);
+  insert into __SCHEMA__.journal_audit (session_id, formateur_id, action, cible, detail)
+    values (p_session, auth.uid(), 'acces_tablette_cree', 'acces_tablette', jsonb_build_object('expire_le', v_exp));
+  return query select v_jeton, v_exp;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_creer_acces_tablette(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_creer_acces_tablette(uuid) to authenticated;
+
+create or replace function __SCHEMA__.caces_revoquer_acces_tablette(p_session uuid) returns void
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+begin
+  if __SCHEMA__.caces_role() is null then raise exception 'Non autorise'; end if;
+  update __SCHEMA__.acces_tablette set revoque = true
+   where session_id = p_session and not revoque and (testeur_id = auth.uid() or __SCHEMA__.caces_role() = 'admin');
+  insert into __SCHEMA__.journal_audit (session_id, formateur_id, action, cible, detail)
+    values (p_session, auth.uid(), 'acces_tablette_revoque', 'acces_tablette', '{}'::jsonb);
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_revoquer_acces_tablette(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_revoquer_acces_tablette(uuid) to authenticated;
+
+-- Validation (jeton + code testeur) : appelee UNIQUEMENT par la fonction serveur (service_role).
+create or replace function __SCHEMA__.caces_valider_acces_tablette(p_jeton text, p_code text)
+returns table(ok boolean, email text, session_id uuid, erreur text)
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare a __SCHEMA__.acces_tablette; c __SCHEMA__.testeur_codes; s __SCHEMA__.sessions_formation; v_mail text;
+begin
+  select * into a from __SCHEMA__.acces_tablette
+   where jeton_hash = encode(extensions.digest(coalesce(p_jeton, ''), 'sha256'), 'hex') and not revoque and expire_le > now();
+  if not found then return query select false, null::text, null::uuid, 'Lien expire ou invalide : demande un nouveau QR code au testeur.'::text; return; end if;
+  select * into s from __SCHEMA__.sessions_formation where id = a.session_id;
+  if s.statut = 'cloturee' then return query select false, null::text, null::uuid, 'Session cloturee.'::text; return; end if;
+  select * into c from __SCHEMA__.testeur_codes where testeur_id = a.testeur_id;
+  if not found then return query select false, null::text, null::uuid, 'Aucun code testeur defini pour ce compte.'::text; return; end if;
+  if c.essais_echoues >= 5 then return query select false, null::text, null::uuid, 'Code verrouille : contacte un administrateur.'::text; return; end if;
+  if c.code_hash is distinct from extensions.crypt(coalesce(p_code, ''), c.code_hash) then
+    update __SCHEMA__.testeur_codes set essais_echoues = essais_echoues + 1 where testeur_id = a.testeur_id;
+    insert into __SCHEMA__.journal_audit (session_id, formateur_id, action, cible, detail)
+      values (a.session_id, a.testeur_id, 'acces_tablette_refuse', 'acces_tablette', jsonb_build_object('motif', 'code incorrect'));
+    return query select false, null::text, null::uuid, 'Code incorrect.'::text; return;
+  end if;
+  select f.email into v_mail from __SCHEMA__.formateurs f where f.id = a.testeur_id;
+  if coalesce(v_mail, '') = '' then return query select false, null::text, null::uuid, 'Ce compte n''a pas d''adresse e-mail.'::text; return; end if;
+  update __SCHEMA__.testeur_codes set essais_echoues = 0 where testeur_id = a.testeur_id;
+  update __SCHEMA__.acces_tablette set derniere_utilisation = now(), nb_connexions = nb_connexions + 1 where id = a.id;
+  -- Le code vaut attestation (independance du testeur), comme sur l'ordinateur — pour le testeur principal de la session.
+  if s.testeur_id = a.testeur_id and s.type_session <> 'autorisation'
+     and not (s.formateur_id = s.testeur_id and not coalesce((select cumul_formateur_testeur from __SCHEMA__.formateurs where id = s.formateur_id), false)) then
+    insert into __SCHEMA__.attestations_testeur (session_id, testeur_id) values (a.session_id, a.testeur_id) on conflict (session_id, testeur_id) do nothing;
+  end if;
+  insert into __SCHEMA__.journal_audit (session_id, formateur_id, action, cible, detail)
+    values (a.session_id, a.testeur_id, 'acces_tablette_ouvert', 'acces_tablette', '{}'::jsonb);
+  return query select true, v_mail, a.session_id, null::text;
+end;
+$f$;
+revoke all on function __SCHEMA__.caces_valider_acces_tablette(text, text) from public, anon, authenticated;
+grant execute on function __SCHEMA__.caces_valider_acces_tablette(text, text) to service_role;
+
+-- Patch 10/11/2026 at (vague 5) : #6 echeance des testeurs, #8 repartition des stagiaires entre testeurs, #20 conservation 12 mois.
+-- #6 : date de fin de validite du testeur ; un testeur echu ne peut plus etre affecte ni tester (caces_peut_tester).
+alter table __SCHEMA__.formateurs add column if not exists date_echeance_testeur date;
+
+create or replace function __SCHEMA__.caces_controle_testeur_echeance() returns trigger
+language plpgsql set search_path = caces, public, extensions as $f$
+begin
+  if new.testeur_id is not null and (tg_op = 'INSERT' or new.testeur_id is distinct from old.testeur_id)
+     and exists (select 1 from __SCHEMA__.formateurs f where f.id = new.testeur_id and f.date_echeance_testeur is not null and f.date_echeance_testeur < current_date) then
+    raise exception 'Ce testeur est echu (date de validite depassee) : il ne peut plus etre affecte.';
+  end if;
+  return new;
+end; $f$;
+drop trigger if exists trg_controle_testeur_echeance on __SCHEMA__.sessions_formation;
+create trigger trg_controle_testeur_echeance before insert or update of testeur_id on __SCHEMA__.sessions_formation
+  for each row execute function __SCHEMA__.caces_controle_testeur_echeance();
+drop trigger if exists trg_controle_testeur_echeance on __SCHEMA__.session_testeurs;
+create trigger trg_controle_testeur_echeance before insert or update of testeur_id on __SCHEMA__.session_testeurs
+  for each row execute function __SCHEMA__.caces_controle_testeur_echeance();
+
+create or replace function __SCHEMA__.caces_peut_tester(p_testeur uuid, p_stagiaire uuid) returns boolean
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select coalesce((
+    select (sf.testeur_id = p_testeur or exists (select 1 from __SCHEMA__.session_testeurs x where x.session_id = sf.id and x.testeur_id = p_testeur))
+       and (p_testeur is distinct from __SCHEMA__.caces_formateur_du_stagiaire(s.id)
+            or sf.type_session = 'autorisation'
+            or coalesce((select f.cumul_formateur_testeur from __SCHEMA__.formateurs f where f.id = p_testeur), false))
+       and not exists (select 1 from __SCHEMA__.formateurs f where f.id = p_testeur and f.date_echeance_testeur is not null and f.date_echeance_testeur < current_date)
+    from __SCHEMA__.stagiaires s join __SCHEMA__.sessions_formation sf on sf.id = s.session_id where s.id = p_stagiaire), false);
+$f$;
+
+-- #8 : testeur affecte a chaque stagiaire (repartition automatique ou manuelle d'un groupe entre 2 testeurs)
+alter table __SCHEMA__.stagiaires add column if not exists testeur_id uuid references __SCHEMA__.formateurs(id) on delete set null;
+
+create or replace function __SCHEMA__.caces_testeur_du_stagiaire(p_stagiaire uuid) returns uuid
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select c.t from (
+    select s.testeur_id as t, -1 as o from __SCHEMA__.stagiaires s where s.id = p_stagiaire
+    union all
+    select sf.testeur_id, 0 from __SCHEMA__.stagiaires s join __SCHEMA__.sessions_formation sf on sf.id = s.session_id where s.id = p_stagiaire
+    union all
+    select x.testeur_id, 1 from __SCHEMA__.stagiaires s join __SCHEMA__.session_testeurs x on x.session_id = s.session_id where s.id = p_stagiaire) c
+  where c.t is not null and __SCHEMA__.caces_peut_tester(c.t, p_stagiaire)
+  order by c.o limit 1;
+$f$;
+
+-- #20 : conservation jusqu'a 12 mois apres la 1re epreuve reussie (theorie ou pratique) d'une meme recommandation (referentiel).
+create or replace function __SCHEMA__.caces_fin_conservation(p_stagiaire uuid)
+returns table (referentiel_code text, premiere_reussite date, fin_conservation date)
+language sql stable security definer set search_path = caces, public, extensions as $f$
+  select sc.referentiel_code,
+         min(least(coalesce(sc.date_validation_theorie, sc.date_validation_pratique), coalesce(sc.date_validation_pratique, sc.date_validation_theorie))) as d,
+         (min(least(coalesce(sc.date_validation_theorie, sc.date_validation_pratique), coalesce(sc.date_validation_pratique, sc.date_validation_theorie))) + interval '12 months')::date
+    from __SCHEMA__.stagiaire_categories sc
+   where sc.stagiaire_id = p_stagiaire and __SCHEMA__.caces_role() is not null
+     and (sc.date_validation_theorie is not null or sc.date_validation_pratique is not null)
+   group by sc.referentiel_code;
+$f$;
+revoke all on function __SCHEMA__.caces_fin_conservation(uuid) from public, anon;
+grant execute on function __SCHEMA__.caces_fin_conservation(uuid) to authenticated;
+
+create or replace function __SCHEMA__.caces_purger_sessions_cloturees() returns integer
+language plpgsql security definer set search_path = caces, public, extensions as $f$
+declare v_active boolean; v_delai int; v_nb int := 0;
+begin
+  if coalesce(__SCHEMA__.caces_role(), '') <> 'admin' then raise exception 'Reserve a un administrateur.'; end if;
+  select purge_active, purge_delai_jours into v_active, v_delai from __SCHEMA__.parametres_application where id = 1;
+  if not coalesce(v_active, false) then return 0; end if;
+
+  with cible as (
+    update __SCHEMA__.stagiaires s
+      set nom = case when exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id) then s.nom else 'Anonymisé' end,
+          prenom = case when exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id) then s.prenom else '' end,
+          email = null, date_naissance = null, fonction = null, entreprise = null, photo_path = null
+      from __SCHEMA__.sessions_formation sf
+      where sf.id = s.session_id
+        and sf.statut = 'cloturee' and sf.date_cloture is not null
+        and sf.date_cloture < now() - (v_delai || ' days')::interval
+        -- #20 : on garde le dossier tant que 12 mois ne se sont pas ecoules depuis la 1re epreuve reussie d'une recommandation
+        and not exists (
+          select 1 from __SCHEMA__.stagiaire_categories sc
+           where sc.stagiaire_id = s.id
+             and least(coalesce(sc.date_validation_theorie, sc.date_validation_pratique), coalesce(sc.date_validation_pratique, sc.date_validation_theorie)) is not null
+           group by sc.referentiel_code
+          having min(least(coalesce(sc.date_validation_theorie, sc.date_validation_pratique), coalesce(sc.date_validation_pratique, sc.date_validation_theorie))) + interval '12 months' > current_date)
+        and (   (s.nom <> 'Anonymisé' and not exists (select 1 from __SCHEMA__.certificats c where c.stagiaire_id = s.id))
+             or (s.email is not null or s.date_naissance is not null or s.fonction is not null
+                 or s.entreprise is not null or s.photo_path is not null))
+      returning s.id
+  )
+  select count(*) into v_nb from cible;
+
+  update __SCHEMA__.qcm_tirage_questions qtq set reponse_stagiaire = null, correcte = null
+    from __SCHEMA__.qcm_tirages t join __SCHEMA__.stagiaires s on s.id = t.stagiaire_id join __SCHEMA__.sessions_formation sf on sf.id = s.session_id
+   where qtq.tirage_id = t.id and (qtq.reponse_stagiaire is not null or qtq.correcte is not null)
+     and sf.statut = 'cloturee' and sf.date_cloture is not null and sf.date_cloture < now() - (v_delai || ' days')::interval
+     and not exists (
+          select 1 from __SCHEMA__.stagiaire_categories sc where sc.stagiaire_id = s.id
+           and least(coalesce(sc.date_validation_theorie, sc.date_validation_pratique), coalesce(sc.date_validation_pratique, sc.date_validation_theorie)) is not null
+           group by sc.referentiel_code
+          having min(least(coalesce(sc.date_validation_theorie, sc.date_validation_pratique), coalesce(sc.date_validation_pratique, sc.date_validation_theorie))) + interval '12 months' > current_date);
+
+  if v_nb > 0 then
+    insert into __SCHEMA__.journal_audit (formateur_id, action, cible, detail)
+    values (auth.uid(), 'purge_donnees_personnelles', 'stagiaires', jsonb_build_object('nb_traites', v_nb, 'delai_jours', v_delai, 'regle', '12 mois apres 1re epreuve reussie'));
+  end if;
+  return v_nb;
+end; $f$;
+

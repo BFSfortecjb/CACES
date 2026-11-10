@@ -59,12 +59,17 @@ async function telechargerZipSession() {
       dossier.file(pdf.nom, pdf.base64, { base64: true }); nb++;
     }
     if (!nb) throw new Error('Aucun PDF généré');
+    const preuves = await genererPreuvesTest(eligibles.map(x => x.id)), dp = zip.folder('Preuves_de_test');
+    preuves.forEach(p => dp.file(p.nom, p.base64, { base64: true }));
+    try { const rc = await genererRecapSessionPdf(); if (rc) zip.file(rc.nom, rc.base64, { base64: true }); } catch (e) { console.warn('Récapitulatif', e); }
+    const copies = await genererCopiesQcm(eligibles.map(x => x.id)), dq = zip.folder('Copies_QCM');
+    copies.forEach(p => dq.file(p.nom, p.base64, { base64: true }));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `Export_${(s.numero_session_galaxy || s.nom || 'session').toString().replace(/[^\w.-]+/g, '_')}.zip`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    toast(`ZIP téléchargé (${nb} document(s))`);
-    journaliserExport('export_zip_reussi', { nb });
+    toast(`ZIP téléchargé (${nb} titre(s), ${preuves.length} preuve(s) de test)`);
+    journaliserExport('export_zip_reussi', { nb, preuves: preuves.length });
   } catch (e) { journaliserExport('export_zip_echec', { erreur: e.message }); erreurSupabase('Export ZIP', e); }
 }
 
@@ -90,9 +95,13 @@ async function demanderEnvoiSecretariat() {
     const ids = $$('#form-secretariat input[name=st]:checked').map(i => i.value);
     if (!ids.length) return toast('Coche au moins un stagiaire.', 'erreur');
     fermerModale();
+    toast('Préparation des preuves de test…', 'ok', 6000);
+    const preuves = await genererPreuvesTest(ids);
+    try { const rc = await genererRecapSessionPdf(); if (rc) preuves.push(rc); } catch (e) { console.warn('Récapitulatif', e); }   // mail + Drive
+    const copies_qcm = await genererCopiesQcm(ids);                                                                              // Drive seulement
     toast('Envoi en cours… tu peux fermer cette page, l\'envoi continuera côté serveur.', 'ok', 12000);
     try {
-      const { data, error } = await sb.functions.invoke('caces-envoyer-secretariat', { body: { session_id: s.id, stagiaire_ids: ids } });
+      const { data, error } = await sb.functions.invoke('caces-envoyer-secretariat', { body: { session_id: s.id, stagiaire_ids: ids, preuves, copies_qcm } });
       if (error) throw new Error(error.message || 'Fonction serveur injoignable');
       if (!data?.ok) throw new Error(data?.error || 'Envoi refusé');
       toast(`Envoyé au secrétariat : ${data.nb_fichiers} document(s) en ${data.nb_envoyes} mail(s)`

@@ -61,6 +61,7 @@ async function rendreSessions(zone) {
   const peutEcrire = S.profil?.role === 'admin' || S.profil?.role === 'formateur';
 
   zone.innerHTML = `
+    <div id="alerte-testeurs"></div>
     <details class="repliable" id="det-vgp" hidden><summary><b>VGP des engins du centre</b> <span id="sum-vgp"></span></summary><div id="alerte-vgp"></div></details>
     <details class="repliable" id="det-reperages"><summary><b>Repérages clients (visites préalables intra)</b> <span id="sum-reperages"></span></summary><div id="reperages"></div></details>
     <div class="barre-actions">
@@ -90,6 +91,7 @@ async function rendreSessions(zone) {
     </table>`;
   if (typeof rendreReperages === 'function') rendreReperages($('#reperages'));
   if (typeof rendreAlerteVgp === 'function') rendreAlerteVgp($('#alerte-vgp'));
+  if (typeof rendreAlerteTesteurs === 'function') rendreAlerteTesteurs($('#alerte-testeurs'));
 }
 
 /* ====================== Création d'une session ====================== */
@@ -392,6 +394,8 @@ async function rendreDetailSession(zone) {
       <div>
         ${!cloturee && d.ecriture ? `<button class="principal" onclick="basculerOuverture()">
           ${s.statut === 'ouverte' ? '⏸ Fermer l\'accès stagiaires' : '▶ Ouvrir l\'accès stagiaires'}</button>` : ''}
+        ${!cloturee && d.ecriture ? `<button title="Répartit les stagiaires entre les testeurs de la session (automatique ou manuel)" onclick="ouvrirRepartitionTesteurs()">👥 Répartir entre testeurs</button>` : ''}
+        ${!cloturee ? `<button title="Ouvre l'évaluation pratique sur une tablette (QR code + code testeur)" onclick="ouvrirAccesTablette()">📱 Évaluer sur tablette</button>` : ''}
         ${!cloturee && d.ecriture ? `<button title="Verrouille la session" onclick="cloturerSession()">🔒 Clôturer la session</button>`
           : (cloturee ? '<span class="etat cloturee">🔒 Session clôturée</span>' : '')}
       </div>
@@ -460,6 +464,7 @@ async function rendreDetailSession(zone) {
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
       <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
       ${d.ecriture ? `<button class="principal" onclick="appelModule('exporterSession')">📤 Export</button>` : ''}
+      <button onclick="appelModule('ouvrirJournalSession')" title="Qui a fait quoi sur cette session">📜 Journal</button>
     </div>
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
@@ -472,7 +477,7 @@ async function rendreDetailSession(zone) {
     </div>
 
     <table class="tableau">
-      <thead><tr><th>Nom</th><th>Prénom</th><th>Fonction</th><th>Catégories visées</th>${s._groupes.length ? '<th>Groupe</th>' : ''}
+      <thead><tr><th>Nom</th><th>Prénom</th><th>Civilité</th><th>Catégories visées</th>${s._groupes.length ? '<th>Groupe</th>' : ''}
         <th>Actions</th></tr></thead>
       <tbody>${(stagiaires || []).map(st => ligneStagiaire(st, d)).join('')
         || '<tr><td colspan="6" class="vide">Aucun stagiaire. Ajoute-les un par un ou importe un fichier Excel.</td></tr>'}
@@ -499,7 +504,7 @@ function ligneStagiaire(st, d) {
   const celluleGroupe = !groupes.length ? '' : `<td><select ${d.ecriture && S.session.statut !== 'cloturee' ? '' : 'disabled'} onchange="changerGroupeStagiaire('${id}', this.value)">
       <option value="1" ${st.groupe_id ? '' : 'selected'}>Groupe 1</option><option value="2" ${st.groupe_id ? 'selected' : ''}>Groupe 2</option></select></td>`;
   return `<tr>
-    <td>${esc(st.nom)}</td><td>${esc(st.prenom)}</td><td>${esc(st.fonction)}</td>
+    <td>${esc(st.nom)}</td><td>${esc(st.prenom)}</td><td>${st.civilite === 'Mme' ? 'Mme' : st.civilite === 'M' ? 'M.' : ''}</td>
     <td>${puces}</td>${celluleGroupe}
     <td class="actions">
       ${btn(d.formateur, '📋', 'FISE — évaluation en formation (formateur)', `appelModule('ouvrirFise','${id}')`, 'réservé au formateur de la session')}

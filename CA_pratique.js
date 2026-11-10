@@ -15,10 +15,18 @@
    limites journalières (refus par la base).
    ===================================================================== */
 
-const OPTIONS_PRATIQUE = {
+const OPTIONS_PAR_DEFAUT = {
   porte_engins: { libelle: 'Porte-engins', ut: 0.5, themes: ['opt_porte_engins'] },
   telecommande: { libelle: 'Télécommande', ut: 0.5, themes: ['opt_telecommande'] },
 };
+// Options administrables (écran Catégories) : chaque option « X » est évaluée par les critères de thème « opt_X » de la grille.
+const OPTIONS_PRATIQUE = { ...OPTIONS_PAR_DEFAUT };
+function rafraichirOptionsPratique() {
+  const lues = (S.referentiel?.options || []).filter(o => o.actif !== false);
+  Object.keys(OPTIONS_PRATIQUE).forEach(k => delete OPTIONS_PRATIQUE[k]);
+  if (!lues.length) return Object.assign(OPTIONS_PRATIQUE, OPTIONS_PAR_DEFAUT);
+  lues.forEach(o => { OPTIONS_PRATIQUE[o.code] = { libelle: o.libelle, ut: Number(o.ut), themes: ['opt_' + o.code] }; });
+}
 const LIBELLES_THEMES_PRATIQUE = {
   prise_poste: 'Prise de poste et mise en service', adequation: 'Adéquation', conduite: 'Conduite',
   manoeuvres: 'Manœuvres', fin_poste: 'Fin de poste – maintenance', conduite_circulation: 'Conduite et circulation',
@@ -129,6 +137,11 @@ async function afficherPratique(st, cat) {
   const points = {};               // id critère -> note (absent = non noté)
   const choisies = new Set();      // options
   let consignesVues = !(ops || []).length;
+  let justification = '';          // justification de l'échec (obligatoire si non admis), saisie ou dictée
+  const penCat = ((S.referentiel.penalites || []).filter(p => p.actif !== false && p.referentiel_code === cat.referentiel_code && p.categorie_code === cat.categorie_code));
+  const penCochees = {};           // id critère -> Set d'ids de pénalités appliquées
+  const penDe = c => penCat.filter(p => p.critere_id === c.id);
+  const plafond = c => Math.max(0, c.bareme_points - [...(penCochees[c.id] || [])].reduce((s2, id) => s2 + Number((penCat.find(p => p.id === id) || {}).points_retires || 0), 0));
   const chrono = Object.fromEntries(PHASES.map(([k]) => [k, { ms: 0, depuis: null, valide: false }]));
   const ms = k => chrono[k].ms + (chrono[k].depuis ? Date.now() - chrono[k].depuis : 0);
   const refMin = (S.referentiel.categories.find(c => c.referentiel_code === cat.referentiel_code && c.code === cat.categorie_code) || {}).temps_reference_min || null;
@@ -175,6 +188,12 @@ async function afficherPratique(st, cat) {
           <select data-elim-pt="${o.id}" hidden><option value="">Point concerné…</option>
           ${[...new Set(criteres.map(c => c.point_numero).filter(x => x != null))].sort((a, b) => a - b).map(n => `<option value="${n}">Point ${n}</option>`).join('')}</select></div>`).join('')}
       </section>
+      <section class="prat-justif" id="prat-justif" hidden>
+        <h3>Justification de l'échec <span class="obligatoire">obligatoire</span></h3>
+        <p class="aide">Explique objectivement les raisons de l'échec (faute éliminatoire, points insuffisants, recommandations au candidat). Ce texte figure sur la preuve d'examen.</p>
+        <textarea id="prat-justif-texte" rows="4" placeholder="Ex. : déplacement avec la charge en position haute au point 6 (faute éliminatoire)…"></textarea>
+        <div class="prat-justif-outils"><button type="button" id="prat-dictee" hidden>🎤 Dicter</button><span class="aide" id="prat-dictee-etat"></span></div>
+      </section>
     </div>
     <div class="prat-barre" id="prat-barre" hidden><div class="verdict" id="prat-verdict"></div>
       <div>${(ops || []).length ? '<button type="button" id="prat-btn-elim" class="danger">⚠ Éliminatoire</button> ' : ''}
@@ -182,20 +201,8 @@ async function afficherPratique(st, cat) {
       <div class="detail" id="prat-detail"></div></div>
     <div class="prat-feuille" id="prat-feuille" hidden></div>`;
 
-  /* ---------- 1. consignes (cas éliminatoires), puis préparation ---------- */
-  function etape() {
-    const c = $('#prat-consignes');
-    if (!consignesVues) {
-      $('#prat-prepa').hidden = true; $('#prat-corps').hidden = true; $('#prat-barre').hidden = true;
-      c.innerHTML = `<section class="prat-elim"><h3>Opérations ou manœuvres éliminatoires</h3>
-        <p>La réalisation des opérations ou des manœuvres suivantes, qui exposent à des risques graves, a pour conséquence l'obtention de la note 0 au point d'évaluation concerné et donc l'échec à l'évaluation pratique :</p>
-        <ul>${ops.map(o => `<li>${esc(o.libelle)}</li>`).join('')}</ul>
-        <button type="button" class="principal" id="prat-compris">Consignes lues au candidat — continuer</button></section>`;
-      $('#prat-compris').addEventListener('click', () => { consignesVues = true; etape(); });
-      return;
-    }
-    c.innerHTML = ''; $('#prat-prepa').hidden = false; majAdeq();
-  }
+  /* ---------- 1. préparation (engin + adéquation), puis consignes (opérations éliminatoires), puis test ---------- */
+  function etape() { $('#prat-prepa').hidden = false; majAdeq(); }
 
   /* ---------- 2. engin + examen d'adéquation ---------- */
   let visiteOk = true;
@@ -207,7 +214,7 @@ async function afficherPratique(st, cat) {
     const essai = !!$('#prat-essai')?.checked;
     const ok = essai || (tous && visiteOk && ids.every(id => adeq[id]?.conforme));
     const zoneA = $('#prat-adeq');
-    $('#prat-corps').hidden = !ok; $('#prat-barre').hidden = !ok;
+    $('#prat-corps').hidden = !ok || !consignesVues; $('#prat-barre').hidden = !ok || !consignesVues;
     zoneA.innerHTML = !essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
@@ -221,7 +228,16 @@ async function afficherPratique(st, cat) {
         majAdeq();
       });
     }));
-    if (ok) { dessinerChrono(); dessiner(); }
+    // Entre l'examen d'adéquation et l'évaluation : rappel des fautes éliminatoires, lu au candidat.
+    const zc = $('#prat-consignes');
+    if (ok && !consignesVues) {
+      zc.innerHTML = `<section class="prat-elim"><h3>⚠ Fautes éliminatoires — à lire au candidat avant de commencer</h3>
+        <p>La réalisation des opérations ou des manœuvres suivantes, qui exposent à des risques graves, a pour conséquence l'obtention de la note 0 au point d'évaluation concerné et donc l'échec à l'évaluation pratique :</p>
+        <ul>${ops.map(o => `<li>${esc(o.libelle)}</li>`).join('')}</ul>
+        <button type="button" class="principal" id="prat-compris">Consignes lues au candidat — commencer l'évaluation</button></section>`;
+      $('#prat-compris').addEventListener('click', () => { consignesVues = true; majAdeq(); });
+    } else zc.innerHTML = '';
+    if (ok && consignesVues) { dessinerChrono(); dessiner(); }
   }
 
   /* ---------- 3. chronomètres T1 / T2 / T3, validés par le testeur ---------- */
@@ -241,7 +257,16 @@ async function afficherPratique(st, cat) {
         : 'Temps de référence non défini pour cette catégorie (à renseigner dans Catégories) : règle des 130 % non contrôlée automatiquement.'}</p>`;
     $$('[data-ch]', z).forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.ch, c = chrono[k];
-      if (b.dataset.act === 'start') c.depuis = Date.now();
+      if (b.dataset.act === 'start') {
+        // Enchaînement : lancer « Production » arrête et valide « Prise de poste » ; lancer « Fin de poste » arrête et valide « Production ».
+        const i = PHASES.findIndex(p => p[0] === k);
+        if (i > 0) {
+          const cp = chrono[PHASES[i - 1][0]];
+          if (cp.depuis) { cp.ms += Date.now() - cp.depuis; cp.depuis = null; }
+          if (cp.ms > 0) cp.valide = true;
+        }
+        c.depuis = Date.now();
+      }
       else if (b.dataset.act === 'pause') { c.ms += Date.now() - c.depuis; c.depuis = null; }
       else if (b.dataset.act === 'valider') { if (c.depuis) { c.ms += Date.now() - c.depuis; c.depuis = null; } c.valide = true; }
       else if (b.dataset.act === 'rouvrir') c.valide = false;
@@ -275,7 +300,7 @@ async function afficherPratique(st, cat) {
           return `<div class="prat-point ${zero ? 'zero' : ''}"><div class="num">${g.pt != null ? 'Point<b>' + g.pt + '</b>' : ''}</div><div>
           ${g.cs.map(c => { const v = points[c.id], force = optCalc().zeroPoints.has(c.point_numero);
             return `<div class="prat-ligne ${v === undefined && !force ? 'non-note' : ''}" data-ouvrir="${c.id}" role="button" tabindex="0">
-              <div class="lib">${esc(c.libelle)}${c.eliminatoire ? ' <span class="prat-badge" style="background:#fbe3e3">éliminatoire</span>' : ''}${c.en_continu ? ' <span class="prat-badge">en continu</span>' : ''}</div>
+              <div class="lib">${esc(c.libelle)}${c.eliminatoire ? ' <span class="prat-badge" style="background:#fbe3e3">éliminatoire</span>' : ''}${c.en_continu ? ' <span class="prat-badge">en continu</span>' : ''}${(penCochees[c.id] && penCochees[c.id].size) ? ' <span class="prat-badge" style="background:#ffe9c7">pénalité −' + (c.bareme_points - plafond(c)) + '</span>' : ''}</div>
               <div class="prat-note-chip" style="${force ? teinte(0, 1, true) : v === undefined ? '' : teinte(v, c.bareme_points, true)}">${force ? 0 : v ?? '–'}<small> / ${c.bareme_points}</small></div>
               <div class="prat-crayon" aria-hidden="true">✎</div></div>`; }).join('')}
           </div></div>`; }).join('')}
@@ -300,6 +325,7 @@ async function afficherPratique(st, cat) {
     if (elim.length) d.push('opération éliminatoire relevée');
     if (r.score < 70) d.push('note globale sous 70');
     $('#prat-detail').textContent = d.join(' · ');
+    const zj = $('#prat-justif'); if (zj) zj.hidden = !(!r.reussi && (r.nonNotes === 0 || elim.length));
     $('#prat-avert').innerHTML = r.pointsSansNumero
       ? '<p class="erreur-discrete">Les points d\'évaluation de cette grille ne sont pas encore renseignés : la règle « note > 0 à chaque point » n\'est pas vérifiée. À compléter par l\'administrateur.</p>' : '';
   }
@@ -316,12 +342,21 @@ async function afficherPratique(st, cat) {
         <div class="feuille-haut"><span>${esc(libTheme(c))}${c.point_numero != null ? ' · point ' + c.point_numero : ''} — ${idx + 1} / ${liste.length}</span>
           <button type="button" class="icone" data-fermer title="Fermer">✕</button></div>
         <p class="feuille-lib">${esc(c.libelle)}</p>
+        ${penDe(c).length ? `<div class="feuille-pen"><b>Pénalités observées</b> <span class="aide">(elles plafonnent la note à ${plafond(c)} / ${b})</span>
+          ${penDe(c).map(p => `<label class="case"><input type="checkbox" data-pen="${p.id}" ${(penCochees[c.id] || new Set()).has(p.id) ? 'checked' : ''}> ${esc(p.libelle)} <b>−${esc(p.points_retires)}</b></label>`).join('')}</div>` : ''}
         <div class="feuille-bande">${Array.from({ length: b + 1 }, (_, n) =>
-          `<button type="button" data-n="${n}" style="${teinte(n, b, v === n)}" class="${v === n ? 'choisi' : ''}">${n}</button>`).join('')}</div>
+          `<button type="button" data-n="${n}" style="${teinte(n, b, v === n)}" class="${v === n ? 'choisi' : ''}" ${n > plafond(c) ? 'disabled' : ''}>${n}</button>`).join('')}</div>
         <div class="feuille-nav"><button type="button" data-nav="-1" ${idx ? '' : 'disabled'}>◀ Précédent</button>
           <button type="button" data-nav="1" ${idx < liste.length - 1 ? '' : 'disabled'}>Suivant ▶</button></div></div>`;
       $$('[data-fermer]', f).forEach(e => e.addEventListener('click', fermer));
       $$('[data-nav]', f).forEach(e => e.addEventListener('click', () => { idx += Number(e.dataset.nav); afficher(); }));
+      $$('[data-pen]', f).forEach(e => e.addEventListener('change', () => {
+        const s2 = (penCochees[c.id] = penCochees[c.id] || new Set()), id = Number(e.dataset.pen);
+        e.checked ? s2.add(id) : s2.delete(id);
+        const cap = plafond(c);
+        if (points[c.id] === undefined || points[c.id] > cap) points[c.id] = cap;   // la pénalité oriente la note
+        dessiner(); afficher();
+      }));
       $$('[data-n]', f).forEach(e => e.addEventListener('click', () => {
         points[c.id] = Number(e.dataset.n); dessiner();
         if (idx < liste.length - 1) { idx++; setTimeout(afficher, 120); } else fermer();
@@ -330,6 +365,29 @@ async function afficherPratique(st, cat) {
     function fermer() { f.hidden = true; f.innerHTML = ''; }
     afficher();
   }
+
+  /* ---------- justification : saisie + dictée vocale (Web Speech API, sinon micro du clavier de la tablette) ---------- */
+  const zt = $('#prat-justif-texte');
+  if (zt) zt.addEventListener('input', () => { justification = zt.value; });
+  const RecoVocale = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const bDictee = $('#prat-dictee');
+  if (bDictee && RecoVocale) {
+    bDictee.hidden = false;
+    let reco = null;
+    bDictee.addEventListener('click', () => {
+      const etatTxt = $('#prat-dictee-etat');
+      if (reco) { reco.stop(); return; }
+      reco = new RecoVocale(); reco.lang = 'fr-FR'; reco.continuous = true; reco.interimResults = false;
+      reco.onresult = ev => {
+        for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) {
+          zt.value = (zt.value + ' ' + ev.results[i][0].transcript).replace(/\s+/g, ' ').trim(); justification = zt.value;
+        }
+      };
+      reco.onend = () => { reco = null; bDictee.textContent = '🎤 Dicter'; etatTxt.textContent = ''; };
+      reco.onerror = e => { etatTxt.textContent = e.error === 'not-allowed' ? 'Micro refusé : autorise-le dans le navigateur.' : 'Dictée interrompue.'; };
+      reco.start(); bDictee.textContent = '⏹ Arrêter la dictée'; etatTxt.textContent = 'Parle, le texte s\'ajoute…';
+    });
+  } else if (bDictee) { $('#prat-dictee-etat').textContent = 'Dictée : utilise le micro du clavier de ta tablette ou de ton téléphone.'; }
 
   /* ---------- événements ---------- */
   // Le type d'engin (MB/CH/CP…) est déduit de la fiche de l'engin choisi ; le testeur peut le corriger
@@ -387,6 +445,8 @@ async function afficherPratique(st, cat) {
         <p class="aide">T1 ${fmtDuree(chrono.t1.ms / 1000)} · T2 ${fmtDuree(chrono.t2.ms / 1000)} · T3 ${fmtDuree(chrono.t3.ms / 1000)} — total ${fmtDuree(totalValideMs() / 1000)}${refMin ? ' (référence ' + refMin + ' min)' : ''}</p>
         ${opts ? `<ul>${opts}</ul>` : ''}${elim.length ? `<p class="erreur-discrete">À 0 : ${elim.map(e => esc(e.libelle) + (e.point ? ' (point ' + e.point + ')' : '')).join(' ; ')}</p>` : ''}
         ${r.pointsZero.length ? `<p class="erreur-discrete">Point(s) à 0 : ${r.pointsZero.join(', ')}</p>` : ''}
+        ${Object.values(penCochees).some(s2 => s2.size) ? `<p class="aide">Pénalités appliquées : ${Object.entries(penCochees).flatMap(([cid, ids]) => [...ids].map(id => { const p = penCat.find(x => x.id === id); return p ? esc(p.libelle) + ' (−' + esc(p.points_retires) + ')' : ''; })).join(' ; ')}</p>` : ''}
+        ${!r.reussi && justification.trim() ? `<p class="aide"><b>Justification :</b> ${esc(justification.trim())}</p>` : ''}
         <p class="aide">L'enregistrement est définitif pour ce passage.</p>
         <div class="feuille-nav"><button type="button" id="recap-non">Revenir à la grille</button><button type="button" class="principal" id="recap-oui">Enregistrer définitivement</button></div></div>`;
       const fin = v => { f.hidden = true; f.innerHTML = ''; resolve(v); };
@@ -396,10 +456,16 @@ async function afficherPratique(st, cat) {
 
   $('#prat-enregistrer').addEventListener('click', async ev => {
     const liste = actifs(), r = calculerPratique(liste, points, optCalc());
-    if (r.nonNotes) return toast(`Il reste ${r.nonNotes} critère(s) à noter (surlignés en jaune).`, 'erreur', 5000);
+    const arretAnticipe = elim.some(e => e.type !== 'temps');   // faute éliminatoire : l'épreuve s'arrête, inutile de tout noter
+    if (r.nonNotes && !arretAnticipe) return toast(`Il reste ${r.nonNotes} critère(s) à noter (surlignés en jaune).`, 'erreur', 5000);
+    if (arretAnticipe) PHASES.forEach(([k]) => { const c = chrono[k]; if (c.depuis) { c.ms += Date.now() - c.depuis; c.depuis = null; } c.valide = true; });
     const nonValides = PHASES.filter(([k]) => !chrono[k].valide);
     if (nonValides.length) return toast('Valide les durées : ' + nonValides.map(p => p[1].split(' · ')[0]).join(', ') + '.', 'erreur', 5000);
     if (tempsDepasse() && !elim.some(e => e.type === 'temps')) return demanderPointTemps();
+    if (!r.reussi && justification.trim().length < 10) {
+      const zj = $('#prat-justif'); if (zj) { zj.hidden = false; zj.scrollIntoView({ behavior: 'smooth', block: 'center' }); $('#prat-justif-texte')?.focus(); }
+      return toast('Échec : la justification est obligatoire (au moins une phrase). Tu peux la dicter avec le bouton 🎤.', 'erreur', 7000);
+    }
     if (!(await recapitulatif(r))) return;
     ev.target.disabled = true;
     const opts = [...choisies], engins = $$('.prat-engin').map(s => s.value || null);
@@ -415,6 +481,9 @@ async function afficherPratique(st, cat) {
         duree_prise_poste_s: Math.round(chrono.t1.ms / 1000), duree_production_s: Math.round(chrono.t2.ms / 1000),
         duree_fin_poste_s: Math.round(chrono.t3.ms / 1000), eliminatoires: elim.length ? elim : null,
         score_global: r.score, reussi: r.reussi,
+        justification_echec: r.reussi ? null : justification.trim(),
+        penalites: Object.entries(penCochees).flatMap(([cid, ids]) => [...ids].map(id => { const p = penCat.find(x => x.id === id);
+          return p ? { critere_id: Number(cid), penalite_id: p.id, libelle: p.libelle, points: Number(p.points_retires) } : null; }).filter(Boolean)),
       },
       resultats: liste.map(c => ({ critere_id: c.id, points_obtenus: optCalc().zeroPoints.has(c.point_numero) ? 0 : Math.min(c.bareme_points, Number(points[c.id]) || 0) })),
       date_validation: r.reussi ? new Date().toISOString().slice(0, 10) : null,

@@ -25,7 +25,7 @@
 // à servir indéfiniment les anciens fichiers en cache (voir la règle
 // ci-dessus), même après un rechargement forcé (Ctrl+F5 ne contourne PAS
 // le service worker).
-const CACHE_VERSION = 'caces-shell-v86';
+const CACHE_VERSION = 'caces-shell-v97';
 
 const FICHIERS_APP_SHELL = [
   './',
@@ -54,10 +54,17 @@ const FICHIERS_APP_SHELL = [
   './CA_planning.js',
   './CA_conseil_planning.js',
   './CA_secretariat.js',
+  './CA_preuve.js',
+  './CA_recap.js',
+  './CA_statistiques.js',
   './CA_export.js',
+  './CA_journal.js',
   './CA_verification.js',
   './CA_parcours.js',
   './CA_adequation.js',
+  './CA_non_conformite.js',
+  './CA_tablette.js',
+  './CA_repartition.js',
   './CA_pratique.js',
   './CA_testeurs.js',
   './CA_admin.js',

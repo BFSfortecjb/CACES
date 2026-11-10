@@ -6,7 +6,7 @@ function codeIndividuel() { return genererCodeAcces(8); }
 
 /** Calcule l'âge à partir d'une date de naissance (contrôle de saisie, comme Habelec). */
 async function editerStagiaire(id) {
-  let st = { nom: '', prenom: '', fonction: '', entreprise: S.session.entreprise || '', date_naissance: null };
+  let st = { nom: '', prenom: '', civilite: '', entreprise: S.session.entreprise || '', date_naissance: null };
   let visees = new Set((S.session._categories || []).map(c => c.referentiel_code + '|' + c.categorie_code));
   if (id) {
     const { data } = await sb.from('stagiaires')
@@ -21,7 +21,10 @@ async function editerStagiaire(id) {
       <div class="grille-2">
         <label>Nom <input name="nom" required value="${esc(st.nom)}"></label>
         <label>Prénom <input name="prenom" required value="${esc(st.prenom)}"></label>
-        <label>Fonction <input name="fonction" value="${esc(st.fonction)}"></label>
+        <label>Civilité <select name="civilite" required>
+          <option value="" ${st.civilite ? '' : 'selected'} disabled>—</option>
+          <option value="M" ${st.civilite === 'M' ? 'selected' : ''}>M.</option>
+          <option value="Mme" ${st.civilite === 'Mme' ? 'selected' : ''}>Mme</option></select></label>
         <label>Entreprise (employeur) <input name="entreprise" value="${esc(st.entreprise)}"></label>
         <label>Date de naissance
           <input name="date_naissance" type="date" max="${dateNaissanceMax()}" value="${esc(st.date_naissance || '')}"></label>
@@ -44,7 +47,7 @@ async function editerStagiaire(id) {
     const donnees = {
       session_id: S.session.id,
       nom: f.nom.value.trim().toUpperCase(), prenom: f.prenom.value.trim(),
-      fonction: f.fonction.value.trim() || null, entreprise: f.entreprise.value.trim() || null,
+      civilite: f.civilite.value || null, entreprise: f.entreprise.value.trim() || null,
       date_naissance: f.date_naissance.value || null,
     };
     if (donnees.date_naissance && !dateNaissanceValide(donnees.date_naissance)) {
@@ -117,12 +120,12 @@ function ouvrirActionsStagiaire(id, nom, prenom) {
 }
 
 /* ===================== Import / export Excel ========================= */
-const COLONNES_STAGIAIRE = ['Nom', 'Prenom', 'Fonction', 'Entreprise', 'Date de naissance'];
+const COLONNES_STAGIAIRE = ['Nom', 'Prenom', 'Civilite', 'Entreprise', 'Date de naissance'];
 
 function modeleExcelStagiaires() {
   const cats = (S.session?._categories || []).map(c => c.referentiel_code + ' ' + c.categorie_code);
   const entetes = [...COLONNES_STAGIAIRE, ...cats];
-  const exemple = ['DUPONT', 'Jean', 'Cariste', 'Entreprise Client', '1985-04-12',
+  const exemple = ['DUPONT', 'Jean', 'M', 'Entreprise Client', '1985-04-12',
     ...cats.map((c, i) => (i === 0 ? 'x' : ''))];
   const ws = XLSX.utils.aoa_to_sheet([entetes, exemple]);
   const wb = XLSX.utils.book_new();
@@ -167,7 +170,7 @@ async function importerStagiairesExcel(input) {
 
       const { data, error } = await sb.from('stagiaires').insert({
         session_id: S.session.id, nom: nom.toUpperCase(), prenom,
-        fonction: val('Fonction') || null, entreprise: val('Entreprise') || S.session.entreprise || null,
+        civilite: (/^(mme|madame|f|femme)/i.test(val('Civilite') || val('Civilité') || '') ? 'Mme' : (/^(m|mr|monsieur|h|homme)/i.test(val('Civilite') || val('Civilité') || '') ? 'M' : null)), entreprise: val('Entreprise') || S.session.entreprise || null,
         date_naissance: naissance, code_acces_individuel: codeIndividuel(),
       }).select().single();
       if (error) { DEBUG.erreur('Import ligne', error.message); ignorees++; continue; }

@@ -73,7 +73,7 @@ async function genererCartonPdf(stagiaireId) { return genererDocumentPdf(stagiai
  */
 async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
   if (!window.jspdf) return toast('Bibliothèque PDF non chargée (connexion ?).', 'erreur');
-  const { data: st, error } = await sb.from('stagiaires').select('id, nom, prenom, date_naissance, photo_path').eq('id', stagiaireId).single();
+  const { data: st, error } = await sb.from('stagiaires').select('id, nom, prenom, civilite, date_naissance, photo_path').eq('id', stagiaireId).single();
   if (error) return erreurSupabase('Lecture du stagiaire', error);
   const cats = await categoriesValidees(stagiaireId);
   if (!cats.length) return toast('Aucune catégorie validée (théorie et pratique) pour ce stagiaire.', 'erreur', 6000);
@@ -95,7 +95,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
     const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const nomComplet = `${st.nom} ${st.prenom}`.trim();
     const ne = st.date_naissance ? ` né(e) le ${dateFr(st.date_naissance)}` : '';
-    const logo = await imageEnDataUrl('assets/logo_bfs.png');
+    const logo = LOGO.data || await imageEnDataUrl('assets/logo_bfs.png');
     const logoAm = avecCarton ? await imageFacultative('assets/logo_assurance_maladie.jpg') : null;
     const premierCert = Object.values(certs)[0];
     const qr = (avecCarton && premierCert && typeof QRCode !== 'undefined') ? await qrDataUrl(urlVerification(premierCert.numero)) : null;
@@ -135,7 +135,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
       if (avecCarton) {
         if (photo) doc.addImage(photo, 'JPEG', 14, 10, 30, 40); else { boite(14, 10, 30, 40); doc.setFontSize(8); doc.text('Photo', 29, 31, { align: 'center' }); }
         doc.setFontSize(7); doc.text('Titulaire (en toutes lettres)', 29, 55, { align: 'center' });
-        doc.setFontSize(9); bleu(); doc.text(`M. ${nomComplet}`.slice(0, 30), 29, 60, { align: 'center' }); noir();
+        doc.setFontSize(9); bleu(); doc.text(`${st.civilite === 'Mme' ? 'Mme' : 'M.'} ${nomComplet}`.slice(0, 30), 29, 60, { align: 'center' }); noir();
         doc.setFontSize(7); doc.text('Date de naissance du titulaire', 29, 67, { align: 'center' });
         doc.setFontSize(9); bleu(); doc.text(st.date_naissance ? dateFr(st.date_naissance) : '', 29, 72, { align: 'center' }); noir();
         doc.setFontSize(7); doc.text('Signataire (en toutes lettres)', 29, 79, { align: 'center' });
@@ -208,15 +208,15 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
         const adr = String(ctr.adresse || '').split(/\n|,\s*/).filter(Boolean).slice(0, 3);
         // colonne gauche
         doc.setFontSize(7); doc.text('Titulaire (en toutes lettres)', 14, 12);
-        doc.setFontSize(9); bleu(); doc.text(`M. ${nomComplet}`.slice(0, 40), 22, 20); noir();
+        doc.setFontSize(9); bleu(); doc.text(`${st.civilite === 'Mme' ? 'Mme' : 'M.'} ${nomComplet}`.slice(0, 40), 22, 20); noir();
         doc.setFontSize(7); doc.text('N° de CACES® obtenu(s)', 14, 32);
         doc.setFontSize(8.5); bleu(); doc.text(libelles.map(l => l.split(' — ')[0]).slice(0, 7), 18, 39); noir();
         doc.setFontSize(8.5); bleu(); doc.setFont('helvetica', 'bold'); doc.text(nomAg, 14, 72, { maxWidth: 80 });
         doc.setFont('helvetica', 'normal'); doc.text(adr, 14, 77); noir();
         doc.setFontSize(7); doc.text(`Inscrit dans la base INRS sous le n° ${NUMERO_INRS}`, 70, 92, { align: 'center' });
         doc.setFillColor(238, 238, 238); doc.setDrawColor(0); doc.rect(8, 95, 124, 9, 'FD');
-        doc.setFontSize(6); doc.text(['Pour vérifier la validité de ce(s) CACES® [employeurs] ou pour éditer l\'attestation correspondante [titulaire]',
-          'consulter la base de données CACES® sur le site : http://www.ameli.fr'], 70, 98.5, { align: 'center' });
+        doc.setFontSize(6); doc.text(['Pour vérifier l\'authenticité de ce(s) CACES®, scanner le QR code ci-contre',
+          'ou consulter le site : https://bfsfortecjb.github.io/CACES/#verification'], 70, 98.5, { align: 'center' });
         doc.setFontSize(6.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 136, 104, { angle: 90 }); noir();
         // colonne droite
         doc.addImage(logo, 'PNG', 150, 8, 40, 21.7);
