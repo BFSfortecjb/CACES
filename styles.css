@@ -818,3 +818,28 @@ body.qg-projection .qg-pied { display: none; }
 .stat-matrice th, .stat-matrice td { min-width: 38px; }
 .stat-matrice td:first-child, .stat-matrice th:first-child { min-width: 160px; text-align: left; }
 .stat-total td { font-weight: 700; background: #f4f4f3; }
+
+/* ---------- Mode tablette / téléphone (QR code testeur) ---------- */
+.tab-entete { position: sticky; top: 0; z-index: 20; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; background: #fff; border-bottom: 3px solid #f3ab12; }
+.tab-titre { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tab-titre > div { display: flex; flex-direction: column; min-width: 0; } .tab-titre b { font-size: 1.05rem; } .tab-titre span { font-size: .8rem; color: #555; }
+.tab-logo { height: 34px; width: auto; }
+.tab-quitter { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #c9ced6; background: #fff; font-size: 1rem; }
+.tab-filtres { display: flex; gap: 8px; padding: 10px 14px; }
+.tab-filtres button { flex: 1; min-height: 48px; border-radius: 24px; border: 1px solid #c9ced6; background: #fff; font-size: 1rem; }
+.tab-filtres button.actif { background: #f3ab12; border-color: #f3ab12; font-weight: 700; }
+.tab-alerte { margin: 0 14px; padding: 10px; background: #fdecea; color: #b2181a; border-radius: 8px; }
+.tab-liste { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 4px 14px 30px; }
+@media (min-width: 700px) { .tab-liste { grid-template-columns: 1fr 1fr; } }
+.tab-carte { background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 1px 5px rgba(0,0,0,.1); }
+.tab-carte h3 { margin: 0 0 2px; font-size: 1.2rem; } .tab-sous { margin: 2px 0 8px; color: #666; font-size: .85rem; }
+.tab-cats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tab-cat { flex: 1 1 120px; min-height: 64px; border-radius: 12px; border: 2px solid #c9ced6; background: #f7f7f6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 1rem; touch-action: manipulation; }
+.tab-cat b { font-size: 1.15rem; } .tab-cat span { font-size: .8rem; }
+.tab-cat.afaire { border-color: #f3ab12; background: #fff8e6; }
+.tab-cat.fait { border-color: #1b7c3c; background: #e8f5ec; } .tab-cat.rate { border-color: #b2181a; background: #fdecea; }
+.tab-cat:disabled { opacity: .45; }
+.tab-chargement { padding: 40px; text-align: center; font-size: 1.2rem; }
+@media (max-width: 700px) {
+  .modale-fond { padding: 0; } .modale, .modale-large { width: 100%; min-height: 100vh; border-radius: 0; }
+}

@@ -85,14 +85,15 @@ function calculerPratique(tous, points, opt = {}) {
     reussi: score >= 70 && !varianteEchec && !themesEchec.length && !pointsZero.length && !elimNul && !opt.forceEchec };
 }
 
-async function ouvrirPratique(stagiaireId) {
+async function ouvrirPratique(stagiaireId, cle = null) {
   const { data: st, error } = await sb.from('stagiaires')
     .select('id, nom, prenom, groupe_id, stagiaire_categories(referentiel_code, categorie_code, pratique_validee)').eq('id', stagiaireId).single();
   if (error) return erreurSupabase('Lecture du stagiaire', error);
   const cats = st.stagiaire_categories || [];
   if (!cats.length) return toast('Ce stagiaire n\'a aucune catégorie visée.', 'erreur');
+  const idx0 = Math.max(0, cle ? cats.findIndex(c => c.referentiel_code + '|' + c.categorie_code === cle) : 0);
   ouvrirModale(`Évaluation pratique — ${st.nom} ${st.prenom}`, `
-    <div class="onglets-fise">${cats.map((c, i) => `<button type="button" class="${i === 0 ? 'principal' : ''}" data-cat="${i}">
+    <div class="onglets-fise">${cats.map((c, i) => `<button type="button" class="${i === idx0 ? 'principal' : ''}" data-cat="${i}">
       ${esc(c.referentiel_code)} ${esc(c.categorie_code)}</button>`).join(' ')}</div>
     <div id="pratique-contenu"></div>`, { large: true, verrou: true });
   $$('.onglets-fise button').forEach(b => b.addEventListener('click', () => {
@@ -100,7 +101,7 @@ async function ouvrirPratique(stagiaireId) {
     b.classList.add('principal');
     afficherPratique(st, cats[Number(b.dataset.cat)]);
   }));
-  afficherPratique(st, cats[0]);
+  afficherPratique(st, cats[idx0]);
 }
 
 /** 00:00 / 00:00:00 */

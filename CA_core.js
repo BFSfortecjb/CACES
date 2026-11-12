@@ -348,6 +348,7 @@ async function router() {
   }
   if (S.recuperationMdp) return ecranNouveauMotDePasse(cible);
   if (!S.utilisateur) return ecranConnexion(cible);
+  if (typeof tabletteActive === 'function' && tabletteActive()) return ecranTabletteSession(cible);
   return ecranFormateur(cible);
 }
 
