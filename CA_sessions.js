@@ -379,6 +379,7 @@ async function rendreDetailSession(zone) {
   if (error) return erreurSupabase('Lecture des stagiaires', error);
   s._categories = cats || [];
   s._groupes = groupes || [];
+  if (typeof chargerRegleCategories === 'function') await chargerRegleCategories(s);
   s._testeurs = ((await sb.from('session_testeurs').select('testeur_id').eq('session_id', s.id)).data || []).map(x => x.testeur_id);
   const d = droitsSession(s);
 
@@ -493,7 +494,8 @@ async function rendreDetailSession(zone) {
 function ligneStagiaire(st, d) {
   const puces = (st.stagiaire_categories || []).map(sc => {
     const cl = classeCategorie(sc);
-    return `<span class="puce ${cl}" title="${esc(LIBELLE_CLASSE_TITRE[cl])}">${esc(sc.referentiel_code)} ${esc(sc.categorie_code)}</span>`;
+    const aff = typeof testeurDeCategorie === 'function' ? testeurDeCategorie(sc.referentiel_code, sc.categorie_code) : null;
+    return `<span class="puce ${cl}" title="${esc(LIBELLE_CLASSE_TITRE[cl] + (aff ? ' — testeur : ' + nomFormateur(aff) : ''))}">${esc(sc.referentiel_code)} ${esc(sc.categorie_code)}</span>`;
   }).join(' ') || '<i>aucune</i>';
   const btn = (autorise, icone, titre, appel, raison) => `<button class="icone" ${autorise ? '' : 'disabled'}
       title="${esc(autorise ? titre : titre + ' — ' + raison)}" onclick="${appel}">${icone}</button>`;

@@ -13,7 +13,7 @@ async function genererRecapSessionPdf() {
     sb.from('epreuves_pratique').select('stagiaire_id, referentiel_code, categorie_code, score_global, reussi, justification_echec, date_passage').in('stagiaire_id', ids).eq('mode_essai', false).order('date_passage'),
     sb.from('qcm_tirages').select('stagiaire_id, referentiel_code, score_global_pct, reussi').in('stagiaire_id', ids).eq('statut', 'termine').order('date_debut'),
   ]);
-  const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   try { const logo = LOGO.data || await imageEnDataUrl('assets/logo_bfs.png'); doc.addImage(logo, 'PNG', 12, 6, 22, 12); } catch (_e) { /* facultatif */ }
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...C.noir).text('RÉCAPITULATIF DE SESSION — CACES®', 148, 13, { align: 'center' });
   doc.setDrawColor(...C.jaune).setLineWidth(0.8).line(118, 15, 178, 15); doc.setLineWidth(0.2);
@@ -51,7 +51,7 @@ async function genererCopieQcmPdf(stagiaireId) {
     sb.from('qcm_tirages').select('id, referentiel_code, date_debut, score_global_pct, reussi').eq('stagiaire_id', stagiaireId).eq('statut', 'termine').order('date_debut'),
   ]);
   if (!tirs?.length) return null;
-  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(...C.noir).text('COPIE DU TEST THÉORIQUE — CACES®', 105, 14, { align: 'center' });
   doc.setFont('helvetica', 'normal').setFontSize(10).text(`${st.nom} ${st.prenom || ''}`.trim(), 105, 20, { align: 'center' });
   let y = 26;

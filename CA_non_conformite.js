@@ -5,7 +5,7 @@
    ===================================================================== */
 async function genererFicheNonConformite(engin, points, nc) {
   const s = S.session || {};
-  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const centre = (S.referentiel.centres || []).find(c => c.id === s.centre_examen_id) || (S.referentiel.centres || [])[0] || {};
   const testeur = (typeof testeurDeLEpreuve === 'function' && nomFormateur(testeurDeLEpreuve())) || (S.profil ? `${S.profil.nom || ''} ${S.profil.prenom || ''}`.trim() : '');
   const manquants = TOUS_POINTS_ADEQUATION.filter(k => !points[k]);

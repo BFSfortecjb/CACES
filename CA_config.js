@@ -13,5 +13,5 @@ const CONFIG = {
 };
 
 /* Numéro de version affiché en pied de page : permet de vérifier que le navigateur a bien la dernière version. */
-const APP_VERSION = 'v97 — 10/11/2026';
+const APP_VERSION = 'v100 — 11/11/2026';
 (function () { const e = document.getElementById('version-appli'); if (e) e.textContent = 'Version ' + APP_VERSION; })();

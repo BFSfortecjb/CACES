@@ -111,6 +111,12 @@ const PHASES = [['t1', 'T1 · Prise de poste'], ['t2', 'T2 · Production'], ['t3
 /** Déroulé : consignes éliminatoires → engin + examen d'adéquation → test chronométré (grille + crayon de notation). */
 async function afficherPratique(st, cat) {
   const zone = $('#pratique-contenu');
+  const affecte = typeof testeurDeCategorie === 'function' ? testeurDeCategorie(cat.referentiel_code, cat.categorie_code) : null;
+  if (affecte && affecte !== S.profil?.id && S.profil?.role !== 'admin') {
+    zone.innerHTML = `<div class="carte"><p><b>${esc(cat.referentiel_code)} ${esc(cat.categorie_code)}</b> est affectée à <b>${esc(nomFormateur(affecte))}</b> pour cette session.</p>
+      <p class="aide">Seul ce testeur peut évaluer cette catégorie (répartition par catégorie de la session).</p></div>`;
+    return;
+  }
   zone.innerHTML = '<p class="chargement">Chargement…</p>';
   const [{ data: criteres, error }, { data: passages }, { data: liens }, { data: ops }, { data: adeqs }] = await Promise.all([
     sb.from('criteres_pratique').select('*').eq('referentiel_code', cat.referentiel_code)

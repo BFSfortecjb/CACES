@@ -44,7 +44,7 @@ async function genererPreuveTestPdf(stagiaireId) {
   const d = await preuveDonnees(stagiaireId);
   if (!d.tirages.length && !d.epreuves.length) return null;
   const s = S.session || {};
-  const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
   const C = BFS_PDF, largeur = 210, marge = 15, largeurUtile = largeur - 2 * marge, hauteurPage = 297;
   const nomT = id => { const f = (S.formateurs || []).find(x => x.id === id); return f ? `${f.nom || ''} ${f.prenom || ''}`.trim() : ''; };
   const libRef = c => (S.referentiel.referentiels.find(r => r.code === c)?.libelle) || c;
