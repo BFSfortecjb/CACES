@@ -203,9 +203,7 @@ function ecranTelecommande(cible, lignes) {
         <p class="aide">${esc(libelleReferentiel(etat.referentiel_code))}</p>
         <div class="carte"><b>Nouveau thème</b>${etat.theme_libelle ? `<br>${esc(etat.theme_libelle)}` : ''}</div>
         <p class="tc-attente">Regarde l'écran : le testeur présente le thème.<br>La question apparaîtra ici dès qu'il la lance.</p>
-        ${etat.question_courante === 1 ? `<div class="carte"><b>Comment répondre</b><ol class="tc-consignes"><li>Lis la question projetée à l'écran.</li>
-          <li>Touche <b>VRAI</b> ou <b>FAUX</b>.</li><li>Touche <b>« Valider ma réponse »</b> : ensuite, plus de modification.</li>
-          <li>Attends la question suivante.</li></ol></div>` : ''}</div>`;
+        ${etat.question_courante === 1 ? `<div class="carte"><b>1</b> VRAI ou FAUX &nbsp;→&nbsp; <b>2</b> Valider &nbsp;→&nbsp; <b>3</b> Attendre</div>` : ''}</div>`;
       return;
     }
     const verrou = etat.valide;

@@ -225,6 +225,7 @@ function dessinerPilote() {
   majChrono();
 }
 
+let _qgOccupe = false;   // évite deux interrogations simultanées (CORRECTIF 12/11 : la déclaration manquait → l'interrogation plantait et plus aucun téléphone connecté n'apparaissait)
 async function interrogerSeance() {
   if (_qgOccupe || !QG.seance) return;
   _qgOccupe = true;
@@ -236,7 +237,7 @@ async function interrogerSeance() {
     if (qgDouble()) dessinerPilote();
     verifierAvanceAuto();
   } catch (e) { /* réseau instable : on réessaie au tick suivant */ }
-  _qgOccupe = false;
+  finally { _qgOccupe = false; }
 }
 
 const nomCourt = p => `${(p.nom || '').toUpperCase()} ${(p.prenom || '').charAt(0).toUpperCase()}.`;
@@ -298,20 +299,32 @@ function dessinerExplicationQg() {
   el.innerHTML = `
     <div class="qg-haut"><div class="qg-infos">${logoImg('logo-projection')}<span>${esc(libelleReferentiel(se.referentiel_code))} — test théorique</span><span id="qg-compte"></span></div></div>
     <div class="qg-corps qg-explication" style="font-size:${QG.police}em">
-      <div class="qg-explication-col">
-        <h2>Comment répondre</h2>
-        ${quiz ? `<ol><li>Lis la question projetée.</li><li>Appuie sur la touche <b>VRAI</b> ou <b>FAUX</b> de ton boîtier.</li>
-            <li>Tu peux changer ta réponse tant que la question suivante n'est pas affichée.</li><li>Attends la question suivante.</li></ol>`
-        : `<ol><li>Lis la question projetée à l'écran.</li><li>Touche <b>VRAI</b> ou <b>FAUX</b> sur ton téléphone.</li>
-            <li>Tu peux changer ton choix tant que tu n'as pas validé.</li><li>Touche <b>« Valider ma réponse »</b> : après validation, plus de modification.</li>
-            <li>Attends la question suivante : elle s'affiche quand tout le monde a validé.</li>
-            <li>Pour une question avec un document : touche <b>« Voir le document en grand »</b> sur ton téléphone.</li></ol>`}
+      <div class="qg-ex-gauche">
+        <div class="qg-tel" aria-hidden="true">
+          <div class="qg-tel-haut">${esc(se.referentiel_code)} — Question 7 / ${QG.questions.length}</div>
+          <div class="qg-tel-txt">Regarde la question à l'écran</div>
+          <div class="qg-tel-vf"><span class="qg-tel-btn sel">VRAI<i class="qg-num">1</i></span><span class="qg-tel-btn">FAUX</span></div>
+          ${quiz ? '' : '<div class="qg-tel-valider">Valider ma réponse<i class="qg-num">2</i></div>'}
+        </div>
+        <ol class="qg-etapes">
+          <li><i class="qg-num">1</i> Touche <b>VRAI</b> ou <b>FAUX</b></li>
+          ${quiz ? '' : '<li><i class="qg-num">2</i> <b>Valide</b> : plus de modification</li>'}
+          <li><i class="qg-num">${quiz ? 2 : 3}</i> Attends la question suivante</li>
+        </ol>
+        ${quiz ? '' : `<div class="qg-doc" aria-hidden="true">
+          <div class="qg-tel qg-tel-doc">
+            <div class="qg-doc-btn">🔍 Voir le document en grand<i class="qg-num">4</i></div>
+            <div class="qg-doc-zoom"><div class="qg-doc-fermer">✕ Fermer</div>
+              <div class="qg-doc-tableau"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span class="loupe">🔍</span></div></div>
+          </div>
+          <div class="qg-doc-legende"><i class="qg-num">4</i> Un tableau ou une image ?<br><b>Touche « Voir le document en grand »</b><br>puis <b>écarte deux doigts</b> pour zoomer 🤏</div>
+        </div>`}
       </div>
-      <div class="qg-explication-col">
+      <div class="qg-ex-droite">
         <h2>Pour réussir</h2>
-        <ul><li>Note globale d'au moins <b>${esc(seuil)} %</b>.</li><li>Au moins <b>50 %</b> de bonnes réponses dans <b>chaque thème</b>.</li>
-          <li><b>${QG.questions.length}</b> questions en <b>${parTheme.length}</b> thème${parTheme.length > 1 ? 's' : ''} :</li></ul>
-        <ul class="qg-explication-themes">${parTheme.map(x => `<li>${esc(x.l)} <small>(${x.n} question${x.n > 1 ? 's' : ''})</small></li>`).join('')}</ul>
+        <div class="qg-tuile"><b>${esc(seuil)} %</b><span>de bonnes réponses au total</span></div>
+        <div class="qg-tuile"><b>50 %</b><span>minimum dans chaque thème</span></div>
+        <div class="qg-tuile"><b>${QG.questions.length}</b><span>questions · ${parTheme.length} thème${parTheme.length > 1 ? 's' : ''}</span></div>
       </div>
       <button class="principal gros qg-explication-go" onclick="finExplicationQg()">Commencer le test ▶</button>
     </div>

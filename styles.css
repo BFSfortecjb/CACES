@@ -843,3 +843,31 @@ body.qg-projection .qg-pied { display: none; }
 @media (max-width: 700px) {
   .modale-fond { padding: 0; } .modale, .modale-large { width: 100%; min-height: 100vh; border-radius: 0; }
 }
+
+/* ---------- Écran d'explication du test (projection) : maquette du téléphone + 3 chiffres clés ---------- */
+.qg-explication { grid-template-columns: 1.4fr 1fr; align-items: center; }
+.qg-ex-gauche { display: flex; align-items: center; justify-content: center; gap: 36px; flex-wrap: wrap; }
+.qg-tel { width: 17em; background: #fff; color: #111; border: .6em solid #000; border-radius: 2em; padding: 1.1em .9em 1.3em; box-shadow: 0 10px 30px rgba(0,0,0,.5); text-align: center; }
+.qg-tel-haut { font-size: .6em; color: #666; margin-bottom: .6em; } .qg-tel-txt { font-size: .75em; font-weight: 700; margin-bottom: .8em; }
+.qg-tel-vf { display: grid; gap: .6em; }
+.qg-tel-btn { position: relative; display: block; padding: 1em 0; border: .15em solid #bbb; border-radius: .7em; font-weight: 800; font-size: 1.15em; background: #fff; }
+.qg-tel-btn.sel { background: #ffd400; border-color: #000; }
+.qg-tel-valider { position: relative; margin-top: .9em; padding: .8em 0; border-radius: .7em; background: #f3ab12; font-weight: 800; font-size: .85em; }
+.qg-num { position: absolute; top: -.6em; right: -.6em; width: 1.6em; height: 1.6em; border-radius: 50%; background: #1a73e8; color: #fff; font: 700 .8em/1.6em sans-serif; font-style: normal; text-align: center; box-shadow: 0 0 0 .15em #fff; }
+.qg-etapes { list-style: none; padding: 0; margin: 0; display: grid; gap: 1.1em; font-size: 1.35em; text-align: left; }
+.qg-etapes li { display: flex; align-items: center; gap: .7em; margin: 0; }
+.qg-etapes .qg-num { position: static; flex: none; font-size: 1em; }
+.qg-ex-droite { display: grid; gap: 14px; } .qg-ex-droite h2 { margin: 0 0 4px; }
+.qg-tuile { background: rgba(255,255,255,.08); border-radius: 16px; padding: 14px 20px; display: flex; align-items: baseline; gap: 16px; }
+.qg-tuile b { font-size: 2.6em; color: #f3ab12; min-width: 2.4em; } .qg-tuile span { font-size: 1.2em; }
+
+.qg-doc { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.qg-tel-doc { width: 12em; padding: .8em .7em 1em; }
+.qg-doc-btn { position: relative; padding: .7em .4em; border: .15em solid #000; border-radius: .6em; background: #ffd400; font-weight: 800; font-size: .62em; margin-bottom: .7em; }
+.qg-doc-zoom { background: #222; border-radius: .5em; overflow: hidden; }
+.qg-doc-fermer { background: #444; color: #fff; font-size: .55em; padding: .5em; }
+.qg-doc-tableau { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; background: #222; height: 7em; }
+.qg-doc-tableau span { background: #fff; display: block; } .qg-doc-tableau span:nth-child(odd) { background: #e9eef7; }
+.qg-doc-tableau .loupe { position: absolute; right: .3em; bottom: .1em; background: none; font-size: 2.4em; filter: drop-shadow(0 0 3px #000); }
+.qg-doc-legende { font-size: 1.25em; text-align: left; line-height: 1.5; }
+.qg-doc-legende .qg-num { position: static; display: inline-block; margin-right: .4em; }
