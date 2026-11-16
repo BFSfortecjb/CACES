@@ -338,6 +338,10 @@ async function basculerOuverture() {
 }
 
 async function cloturerSession() {
+  if (typeof enginsLocationIncomplets === 'function') {
+    const l = (await enginsLocationIncomplets(S.session.id)).filter(x => x.fin || x.debut);
+    if (l.length) { alert('Clôture impossible : photo de la jauge et des défauts (départ et fin) manquante pour : ' + l.map(x => x.nom).join(', ') + '.\nRenseignez-les dans « Renseigner les engins ».'); return; }
+  }
   if (!confirmer('Clôturer la session ? Elle sera verrouillée et les données personnelles pourront être purgées selon le délai réglé en Organisme.')) return;
   await modifierChampSession('statut', 'cloturee', 'statut');
   await modifierChampSession('date_cloture', new Date().toISOString(), 'clôture');
@@ -384,6 +388,7 @@ async function rendreDetailSession(zone) {
   const d = droitsSession(s);
 
   const engins = typeof resumeEnginsSession === 'function' ? await resumeEnginsSession(s.id) : { nb: 0, rouges: 0 };
+  const alerteLoc = typeof alerteEnginsLocation === 'function' ? await alerteEnginsLocation(s) : '';
   const bandeauUt = (typeof bandeauChargeTesteur === 'function' && s.type_session !== 'autorisation') ? await bandeauChargeTesteur(s) : '';
   const lien = location.origin + location.pathname + '#stagiaire?code=' + encodeURIComponent(s.code_acces);
   const cloturee = s.statut === 'cloturee';
@@ -457,6 +462,7 @@ async function rendreDetailSession(zone) {
       </section>
     </div>
 
+    ${alerteLoc}
     ${bandeauUt}
     <div class="carte">
       <b>🚜 Engins utilisés :</b> ${engins.nb}${engins.rouges ? ` <span class="etat erreur">${engins.rouges} non conforme(s)</span>` : ''}

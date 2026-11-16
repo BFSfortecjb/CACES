@@ -333,12 +333,13 @@ async function ouvrirEnginsSession() {
   await chargerTypesDocEngin();
   const peutEcrire = ['formateur', 'admin'].includes(S.profil?.role);
   const [{ data: liens }, { data: parc }, { data: etats }, centresEngins] = await Promise.all([
-    sb.from('session_engins').select('engin_id').eq('session_id', s.id),
+    sb.from('session_engins').select('engin_id, debut_jauge_texte, debut_jauge_photos, debut_defauts_texte, debut_defauts_photos, fin_jauge_texte, fin_jauge_photos, fin_defauts_texte, fin_defauts_photos').eq('session_id', s.id),
     sb.from('engins').select('*').eq('actif', true).order('designation'),
     sb.from('v_engins_statut').select('*'),
     chargerCentresEngins(),
   ]);
   const choisis = new Set((liens || []).map(l => l.engin_id));
+  const lienEngin = Object.fromEntries((liens || []).map(l => [l.engin_id, l]));
   const etat = Object.fromEntries((etats || []).map(x => [x.engin_id, x.etat]));
   const utilises = (parc || []).filter(e => choisis.has(e.id));
   const dispo = (parc || []).filter(e => !choisis.has(e.id));
@@ -348,12 +349,13 @@ async function ouvrirEnginsSession() {
 
   ouvrirModale('Engins utilisés pour les tests de cette session', `
     <h4 class="titre-theme">Engins de la session (${utilises.length})</h4>
-    <table class="tableau"><thead><tr><th>Engin</th><th>N° de série</th><th>Provenance</th><th>Documents</th><th></th></tr></thead><tbody>
+    <table class="tableau"><thead><tr><th>Engin</th><th>N° de série</th><th>Provenance</th><th>Documents</th><th>Jauge et défauts (location)</th><th></th></tr></thead><tbody>
     ${utilises.map(e => `<tr><td>${esc(libelleEngin(e))}</td><td>${esc(e.numero_serie)}</td>
       <td>${esc(PROVENANCES[e.provenance])}${e.proprietaire ? ' — ' + esc(e.proprietaire) : ''}</td><td>${pastilleEtat(etat[e.id])}</td>
+      <td>${e.provenance === 'propriete' ? '' : cellulesEtatLocation(lienEngin[e.id], e.id, peutEcrire)}</td>
       <td><button class="icone" title="Documents et avis" data-fiche="${e.id}">📄</button>
         ${peutEcrire ? `<button class="icone" title="Retirer de la session" data-retirer="${e.id}">✕</button>` : ''}</td></tr>`).join('')
-      || '<tr><td colspan="5" class="vide">Aucun engin renseigné pour cette session.</td></tr>'}</tbody></table>
+      || '<tr><td colspan="6" class="vide">Aucun engin renseigné pour cette session.</td></tr>'}</tbody></table>
     ${peutEcrire ? `
     <h4 class="titre-theme">Ajouter un engin du centre</h4>
     <div><select id="choix-engin"><option value="">— choisir dans le parc —</option>
@@ -376,8 +378,16 @@ async function ouvrirEnginsSession() {
   };
   $('#btn-ajout-engin')?.addEventListener('click', async () => {
     const v = $('#choix-engin').value; if (!v) return;
+    const eg = (parc || []).find(x => x.id === v);
+    // Engin loué ou prêté : photo de la jauge + défauts obligatoires AVANT de l'enregistrer dans la session
+    if (eg && eg.provenance !== 'propriete') return formulaireEtatEnginLoue(eg, 'debut', ouvrirEnginsSession);
     await lier(v); ouvrirEnginsSession();
   });
+  $$('[data-etat]').forEach(b => b.addEventListener('click', () => {
+    const [phase, id] = b.dataset.etat.split('|');
+    const eg = (parc || []).find(x => x.id === id);
+    if (eg) formulaireEtatEnginLoue(eg, phase, ouvrirEnginsSession, lienEngin[id]);
+  }));
   $$('[data-fiche]').forEach(b => b.addEventListener('click', () => ouvrirFicheEngin(b.dataset.fiche, { session: s })));
   $$('[data-retirer]').forEach(b => b.addEventListener('click', async () => {
     const { error } = await sb.from('session_engins').delete().eq('session_id', s.id).eq('engin_id', b.dataset.retirer);
@@ -406,9 +416,91 @@ async function ouvrirEnginsSession() {
       if (error) return erreurSupabase('Création de l\'engin', error);
       engin = data;
     }
+    if (engin.provenance !== 'propriete') {
+      return formulaireEtatEnginLoue(engin, 'debut', () => ouvrirFicheEngin(engin.id, { session: s }));
+    }
     await lier(engin.id);
     ouvrirFicheEngin(engin.id, { session: s });
   });
+}
+
+/* ====================== Engins de location : jauge + défauts (départ / fin) ====================== */
+const etatCompletEngin = (l, phase) =>
+  !!(l && (l[phase + '_jauge_texte'] || '').trim() && (l[phase + '_jauge_photos'] || []).length && (l[phase + '_defauts_texte'] || '').trim());
+
+function cellulesEtatLocation(l, engId, peutEcrire) {
+  const bloc = (phase, titre) => {
+    const ok = etatCompletEngin(l, phase);
+    const liens = [...(l?.[phase + '_jauge_photos'] || []), ...(l?.[phase + '_defauts_photos'] || [])]
+      .map((f, i) => `<a href="${esc(f.lien)}" target="_blank" rel="noopener">📎${i + 1}</a>`).join(' ');
+    return `<div>${ok ? '<span class="etat ok">✔</span>' : '<span class="etat erreur">À faire</span>'} <b>${titre}</b>
+      ${ok ? `: jauge ${esc(l[phase + '_jauge_texte'])} — ${esc(l[phase + '_defauts_texte'])} ${liens}` : ''}
+      ${peutEcrire ? `<button class="icone" title="${ok ? 'Modifier' : 'Renseigner'}" data-etat="${phase}|${engId}">${ok ? '✏️' : '📸'}</button>` : ''}</div>`;
+  };
+  return bloc('debut', 'Départ') + bloc('fin', 'Fin');
+}
+
+/** phase = 'debut' | 'fin'. Photos de la jauge de carburant + niveau en texte + défauts (RAS si aucun). Tout est obligatoire. */
+function formulaireEtatEnginLoue(engin, phase, apres, ligne = null) {
+  const s = S.session;
+  const titre = phase === 'debut' ? 'État de départ' : 'État de fin';
+  const v = ligne || {};
+  ouvrirModale(`${titre} — ${libelleEngin(engin)}`, `
+    <form id="form-etat-loc" class="formulaire">
+      <p class="aide">Engin ${esc(PROVENANCES[engin.provenance] || 'loué')}${engin.proprietaire ? ' (' + esc(engin.proprietaire) + ')' : ''} :
+        ${phase === 'debut' ? 'à faire <b>avant la première utilisation</b>, avec le loueur si possible.' : 'à faire <b>avant la restitution</b> de l\'engin.'}</p>
+      <div class="grille-2">
+        <label>Niveau de carburant / de charge <input name="jauge_texte" required placeholder="Ex : 80 %" value="${esc(v[phase + '_jauge_texte'] || '')}"></label>
+        <label>Photo de la jauge ${(v[phase + '_jauge_photos'] || []).length ? '(remplace l\'actuelle)' : '(obligatoire)'}
+          <input type="file" name="jauge" accept="image/*" capture="environment" multiple ${(v[phase + '_jauge_photos'] || []).length ? '' : 'required'}></label>
+        <label>Défauts / dommages constatés <input name="defauts_texte" required placeholder="RAS si aucun" value="${esc(v[phase + '_defauts_texte'] || '')}"></label>
+        <label>Photos des défauts <span class="aide">(si défaut)</span>
+          <input type="file" name="defauts" accept="image/*" capture="environment" multiple></label></div>
+      <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button>
+        <button type="submit" class="principal">Enregistrer</button></div>
+      <p id="msg-etat-loc" class="aide"></p></form>`);
+  $('#form-etat-loc').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const f = ev.target, msg = $('#msg-etat-loc');
+    try {
+      const chemin = ['Sessions', s.nom, 'Engins', libelleEngin(engin), phase === 'debut' ? 'Etat depart' : 'Etat fin'];
+      msg.textContent = 'Envoi des photos sur le Drive…';
+      const jauge = f.jauge.files.length ? await envoyerPhotosSurDrive(f.jauge, chemin, 'jauge') : (v[phase + '_jauge_photos'] || []);
+      const defauts = f.defauts.files.length ? await envoyerPhotosSurDrive(f.defauts, chemin, 'defauts') : (v[phase + '_defauts_photos'] || []);
+      const champs = {
+        [phase + '_jauge_texte']: f.jauge_texte.value.trim(), [phase + '_jauge_photos']: jauge,
+        [phase + '_defauts_texte']: f.defauts_texte.value.trim(), [phase + '_defauts_photos']: defauts,
+        [phase + '_le']: new Date().toISOString(), [phase + '_par']: S.profil.id };
+      // départ : création (ou correction) de la ligne ; fin : mise à jour de la ligne existante (le contrôle base exige le départ complet)
+      const { error } = phase === 'debut'
+        ? await sb.from('session_engins').upsert({ session_id: s.id, engin_id: engin.id, ajoute_par: S.profil.id, ...champs }, { onConflict: 'session_id,engin_id' })
+        : await sb.from('session_engins').update(champs).eq('session_id', s.id).eq('engin_id', engin.id);
+      if (error) throw error;
+      toast(phase === 'debut' ? 'Engin enregistré avec son état de départ' : 'État de fin enregistré');
+      if (typeof apres === 'function') apres();
+    } catch (err) { msg.textContent = ''; erreurSupabase('Enregistrement de l\'état de l\'engin', err); }
+  });
+}
+
+/** Engins de location de la session dont l'état de départ / de fin n'est pas renseigné (pour l'alerte rouge). */
+async function enginsLocationIncomplets(sessionId) {
+  const { data } = await sb.from('session_engins')
+    .select('engin_id, debut_jauge_texte, debut_jauge_photos, debut_defauts_texte, fin_jauge_texte, fin_jauge_photos, fin_defauts_texte, engins(designation, marque, modele, numero_serie, provenance)')
+    .eq('session_id', sessionId);
+  const loc = (data || []).filter(x => x.engins && x.engins.provenance !== 'propriete');
+  return loc.map(x => ({ nom: libelleEngin(x.engins), debut: !etatCompletEngin(x, 'debut'), fin: !etatCompletEngin(x, 'fin') }))
+    .filter(x => x.debut || x.fin);
+}
+
+/** Message rouge du tableau de bord de session. */
+async function alerteEnginsLocation(s) {
+  if (s.statut === 'cloturee') return '';
+  const l = await enginsLocationIncomplets(s.id);
+  if (!l.length) return '';
+  return `<div class="carte alerte-rouge" role="alert">
+    <b>⛔ Engins de location : photos de la jauge de carburant et des défauts à faire</b>
+    <ul>${l.map(x => `<li>${esc(x.nom)} — ${[x.debut ? 'état de <b>départ</b> manquant' : '', x.fin ? 'état de <b>fin</b> à faire avant la restitution' : ''].filter(Boolean).join(' · ')}</li>`).join('')}</ul>
+    <button onclick="appelModule('ouvrirEnginsSession')">Renseigner maintenant</button></div>`;
 }
 
 
