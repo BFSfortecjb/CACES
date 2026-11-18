@@ -1,3 +1,4 @@
+/* BFS-VL-13a9fd26 */
 /* =====================================================================
    sw.js — service worker de l'app shell (2026-08)
 
@@ -25,7 +26,7 @@
 // à servir indéfiniment les anciens fichiers en cache (voir la règle
 // ci-dessus), même après un rechargement forcé (Ctrl+F5 ne contourne PAS
 // le service worker).
-const CACHE_VERSION = 'caces-shell-v104';
+const CACHE_VERSION = 'caces-shell-v105';
 
 const FICHIERS_APP_SHELL = [
   './',

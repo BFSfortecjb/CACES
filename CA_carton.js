@@ -93,6 +93,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
   if (!opts.silencieux) toast('Génération du PDF…');
   try {
     const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    doc.setProperties({ title: 'Carton CACES', author: 'BFS Prévention', creator: 'BFS CACES — © 2026 Jérémy Bizeul — Vigie-lance', keywords: 'BFS-VL-074c21f7' });
     const nomComplet = `${st.nom} ${st.prenom}`.trim();
     const ne = st.date_naissance ? ` né(e) le ${dateFr(st.date_naissance)}` : '';
     const logo = LOGO.data || await imageEnDataUrl('assets/logo_bfs.png');
