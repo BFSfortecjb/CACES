@@ -40,7 +40,8 @@ async function intervenantsSynchroGalaxy(formationId) {
   const norm = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, '');
   return liste.map(i => {
     const cle = norm(i.nom) + '|' + norm(i.prenom);
-    const compte = (S.formateurs || []).find(f => norm(f.nom) + '|' + norm(f.prenom) === cle || norm(f.prenom) + '|' + norm(f.nom) === cle) || null;
+    const trouves = (S.formateurs || []).filter(f => norm(f.nom) + '|' + norm(f.prenom) === cle || norm(f.prenom) + '|' + norm(f.nom) === cle);
+    const compte = trouves.length === 1 ? trouves[0] : null;      // homonymes : jamais de rapprochement automatique
     return { nom: `${i.nom || ''} ${i.prenom || ''}`.trim(), role: /test/i.test(`${i.nom_role || ''} ${i.role || ''}`) ? 'testeur' : 'formateur', compte };
   });
 }
