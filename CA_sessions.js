@@ -122,7 +122,9 @@ function nouvelleSession() {
             <option value="caces">CACES (test + carton)</option>
             <option value="autorisation">Autorisation de conduite</option></select></label>
         <label>N° de session Galaxy <b id="galaxy-oblig">(obligatoire)</b>
-          <input name="galaxy" id="galaxy-champ" required placeholder="Ex : 12345"></label>
+          <input name="galaxy" id="galaxy-champ" required placeholder="Ex : 12345">
+          <button type="button" onclick="galaxyDansNouvelleSession()" title="Préremplit l'intitulé, les dates, le lieu et les catégories depuis Galaxy">⬇ Récupérer depuis Galaxy</button>
+          <span class="aide" id="msg-galaxy"></span></label>
         <label>Intitulé <input name="nom" required value="CACES — ${new Date().getFullYear()}"></label>
         <label>Entreprise (client) <input name="entreprise"></label>
         <label>Date de début <input type="date" name="date_debut" value="${new Date().toISOString().slice(0, 10)}"></label>
@@ -476,6 +478,7 @@ async function rendreDetailSession(zone) {
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
       <div>
+        ${!cloturee && d.ecriture && s.numero_session_galaxy ? `<button onclick="appelModule('ouvrirImportGalaxy')" title="Importe les stagiaires inscrits dans Galaxy (lecture seule)">⬇ Importer depuis Galaxy</button>` : ''}
         <button onclick="modeleExcelStagiaires()" title="Télécharger un modèle Excel">⬇ Modèle Excel</button>
         ${!cloturee && d.ecriture ? `<label class="bouton-fichier" title="Importer une liste de stagiaires">⬆ Importer Excel
           <input type="file" accept=".xlsx,.xls,.csv" hidden onchange="importerStagiairesExcel(this)"></label>
