@@ -25,10 +25,16 @@ async function genererRecapSessionPdf() {
       const t = (tirs || []).filter(x => x.stagiaire_id === st.id && x.referentiel_code === c.referentiel_code).pop();
       const e = (eps || []).filter(x => x.stagiaire_id === st.id && x.referentiel_code === c.referentiel_code && x.categorie_code === c.categorie_code).pop();
       const ok = c.theorie_validee === true && c.pratique_validee === true;
-      corps.push([`${st.nom} ${st.prenom || ''}`.trim(), `${c.referentiel_code} ${c.categorie_code}`,
-        t ? `${t.score_global_pct ?? '—'} %` : (c.theorie_validee ? 'validée' : '—'),
-        e ? `${e.score_global ?? '—'}/100` : (c.pratique_validee ? 'validée' : '—'),
-        { content: ok ? 'ADMIS' : 'NON ADMIS', styles: { fontStyle: 'bold', textColor: ok ? C.vert : C.rouge } },
+      const rouge = { fontStyle: 'bold', textColor: C.rouge, fillColor: [253, 232, 232] };
+      const thRatee = c.theorie_validee === false || (t && (t.reussi === false || Number(t.score_global_pct) < 70));
+      const prRatee = c.pratique_validee === false || (e && e.reussi === false);
+      const nonVal = !ok;
+      const cell = (txt, ko) => ko ? { content: txt, styles: rouge } : txt;
+      corps.push([nonVal ? { content: `${st.nom} ${st.prenom || ''}`.trim(), styles: { fontStyle: 'bold', textColor: C.rouge } } : `${st.nom} ${st.prenom || ''}`.trim(),
+        `${c.referentiel_code} ${c.categorie_code}`,
+        cell(t ? `${t.score_global_pct ?? '—'} %` : (c.theorie_validee ? 'validée' : '— non validée'), thRatee || (!t && !c.theorie_validee)),
+        cell(e ? `${e.score_global ?? '—'}/100` : (c.pratique_validee ? 'validée' : '— non validée'), prRatee || (!e && !c.pratique_validee)),
+        { content: ok ? 'ADMIS' : 'NON ADMIS', styles: ok ? { fontStyle: 'bold', textColor: C.vert } : rouge },
         ok ? '' : (e?.justification_echec || '')]);
     });
   });
@@ -38,7 +44,7 @@ async function genererRecapSessionPdf() {
     head: [['Stagiaire', 'Référentiel / cat.', 'Théorie', 'Pratique', 'Résultat', 'Recommandation du testeur']],
     body: corps.length ? corps : [[{ content: 'Aucun résultat enregistré', colSpan: 6 }]] });
   const nbOk = corps.filter(l => l[4].content === 'ADMIS').length;
-  doc.setFontSize(8.5).setTextColor(...C.gris).text(`${nbOk}/${corps.length} catégorie(s) validée(s) — édité le ${new Date().toLocaleDateString('fr-FR')}`, 12, doc.lastAutoTable.finalY + 6);
+  doc.setFontSize(8.5).setTextColor(...C.gris).text(`${nbOk}/${corps.length} catégorie(s) validée(s) — en rouge : théorie < 70 % ou élément non validé — édité le ${new Date().toLocaleDateString('fr-FR')}`, 12, doc.lastAutoTable.finalY + 6);
   return { nom: `Recapitulatif_session_${(s.numero_session_galaxy || s.nom || 'session')}`.replace(/[^\w.-]+/g, '_') + '.pdf', base64: doc.output('datauristring').split(',')[1] };
 }
 

@@ -38,7 +38,7 @@ async function parametresResultatsGalaxy(st) {
   const [{ data: cats }, { data: tirs }, { data: eps }, { data: certs }] = await Promise.all([
     sb.from('stagiaire_categories').select('*').eq('stagiaire_id', st.id),
     sb.from('qcm_tirages').select('score_global_pct, reussi, date_fin').eq('stagiaire_id', st.id).eq('statut', 'termine'),
-    sb.from('epreuves_pratique').select('categorie_code, score_global, reussi, date_passage').eq('stagiaire_id', st.id).order('date_passage', { ascending: false }),
+    sb.from('epreuves_pratique').select('categorie_code, score_global, reussi, date_passage, testeur_id').eq('stagiaire_id', st.id).order('date_passage', { ascending: false }),
     sb.from('certificats').select('referentiel_code, categorie_code, numero, date_delivrance').eq('stagiaire_id', st.id),
   ]);
   const toutes = cats || [];
@@ -55,6 +55,7 @@ async function parametresResultatsGalaxy(st) {
     const cert = (certs || []).find(x => x.referentiel_code === c.referentiel_code && x.categorie_code === c.categorie_code);
     const r = c.pratique_validee === true ? 'admis' : (c.pratique_validee === false ? 'non_admis' : 'attente');
     const o = { categorie: c.categorie_code, resultat: r };
+    const nt = nomFormateur(ep?.testeur_id || S.session.testeur_id); if (nt) o.nom_testeur = nt;
     if (ep && ep.score_global != null) o.note = Math.round(Number(ep.score_global));
     if (r === 'admis') {
       if (!cert) throw new Error(`Numéro de carton manquant pour la catégorie ${c.categorie_code} : coche aussi « Carton » pour l'attribuer d'abord`);
@@ -62,6 +63,9 @@ async function parametresResultatsGalaxy(st) {
     }
     return o;
   });
+  const noms = [...new Set(liste.map(o => o.nom_testeur).filter(Boolean))];
+  if (!noms.length && nomFormateur(S.session.testeur_id)) noms.push(nomFormateur(S.session.testeur_id));
+  if (noms.length) p.nom_testeur = noms.join(', ');
   p.liste_categories = JSON.stringify(liste);
   return p;
 }
