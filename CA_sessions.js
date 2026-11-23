@@ -473,6 +473,7 @@ async function rendreDetailSession(zone) {
       <button onclick="appelModule('ouvrirDocumentsSession')">📎 Documents de la session</button>
       <button onclick="appelModule('ouvrirPlanning')">📅 Planning (jours de formation / de test)</button>
       ${d.ecriture ? `<button class="principal" onclick="appelModule('exporterSession')">📤 Export</button>` : ''}
+      ${d.ecriture && s.numero_session_galaxy && s.type_session !== 'autorisation' ? `<button onclick="ouvrirEnvoiGalaxy()">⬆ Envoyer vers Galaxy</button>` : ''}
       <button onclick="appelModule('ouvrirJournalSession')" title="Qui a fait quoi sur cette session">📜 Journal</button>
     </div>
     <div class="barre-actions">
