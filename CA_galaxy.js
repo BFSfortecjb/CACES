@@ -129,7 +129,7 @@ async function ouvrirImportGalaxy() {
           const { data, error } = await sb.from('stagiaires').insert({
             session_id: s.id, nom: i.nom.toUpperCase(), prenom: i.prenom, civilite: i.civilite, email: i.email, fonction: i.fonction,
             entreprise: i.entreprise, date_naissance: i.naissance && dateNaissanceValide(i.naissance) ? i.naissance : null,
-            galaxy_stagiaire_id: i.galaxy_id, code_acces_individuel: codeIndividuel() }).select().single();
+            galaxy_stagiaire_id: i.galaxy_id, galaxy_nom: i.nom.toUpperCase(), galaxy_prenom: i.prenom, code_acces_individuel: codeIndividuel() }).select().single();
           if (error) throw error;
           const choisies = i.categories.map(cleCat).filter(c => catsConnues.has(c)).map(c => { const [referentiel_code, categorie_code] = c.split('|'); return { referentiel_code, categorie_code }; });
           await synchroniserCategoriesStagiaire(data.id, choisies.length ? choisies : (s._categories || []));

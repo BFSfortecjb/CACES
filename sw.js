@@ -68,6 +68,7 @@ const FICHIERS_APP_SHELL = [
   './CA_repartition.js',
   './CA_galaxy.js',
   './CA_galaxy_envoi.js',
+  './CA_galaxy_synchro.js',
   './CA_pratique.js',
   './CA_testeurs.js',
   './CA_admin.js',

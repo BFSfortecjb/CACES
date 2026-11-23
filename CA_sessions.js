@@ -479,7 +479,8 @@ async function rendreDetailSession(zone) {
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
       <div>
-        ${!cloturee && d.ecriture && s.numero_session_galaxy ? `<button onclick="appelModule('ouvrirImportGalaxy')" title="Importe les stagiaires inscrits dans Galaxy (lecture seule)">⬇ Importer depuis Galaxy</button>` : ''}
+        ${!cloturee && d.ecriture && s.numero_session_galaxy ? `<button onclick="appelModule('ouvrirImportGalaxy')" title="Importe les stagiaires inscrits dans Galaxy (lecture seule)">⬇ Importer depuis Galaxy</button>
+        <button onclick="appelModule('ouvrirSynchroGalaxy')" title="Met à jour noms et inscrits depuis Galaxy (jamais l'inverse) ; les noms corrigés dans l'appli sont conservés">🔄 Synchroniser depuis Galaxy</button>` : ''}
         <button onclick="modeleExcelStagiaires()" title="Télécharger un modèle Excel">⬇ Modèle Excel</button>
         ${!cloturee && d.ecriture ? `<label class="bouton-fichier" title="Importer une liste de stagiaires">⬆ Importer Excel
           <input type="file" accept=".xlsx,.xls,.csv" hidden onchange="importerStagiairesExcel(this)"></label>
