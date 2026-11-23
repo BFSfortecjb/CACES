@@ -11,7 +11,7 @@ async function genererRecapSessionPdf() {
   const [{ data: cats }, { data: eps }, { data: tirs }] = await Promise.all([
     sb.from('stagiaire_categories').select('stagiaire_id, referentiel_code, categorie_code, theorie_validee, pratique_validee').in('stagiaire_id', ids),
     sb.from('epreuves_pratique').select('stagiaire_id, referentiel_code, categorie_code, score_global, reussi, justification_echec, date_passage').in('stagiaire_id', ids).eq('mode_essai', false).order('date_passage'),
-    sb.from('qcm_tirages').select('stagiaire_id, referentiel_code, score_global_pct, reussi').in('stagiaire_id', ids).eq('statut', 'termine').order('date_debut'),
+    sb.from('qcm_tirages').select('stagiaire_id, referentiel_code, score_global_pct, reussi, date_debut, date_fin').in('stagiaire_id', ids).eq('statut', 'termine').order('date_debut'),
   ]);
   const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   try { const logo = LOGO.data || await imageEnDataUrl('assets/logo_bfs.png'); doc.addImage(logo, 'PNG', 12, 6, 22, 12); } catch (_e) { /* facultatif */ }
@@ -29,12 +29,18 @@ async function genererRecapSessionPdf() {
       const thRatee = c.theorie_validee === false || (t && (t.reussi === false || Number(t.score_global_pct) < 70));
       const prRatee = c.pratique_validee === false || (e && e.reussi === false);
       const nonVal = !ok;
+      // Une seule des deux parties validée : en attente 12 mois (à compter de la date de l'épreuve réussie)
+      const dateRef = c.pratique_validee === true && c.theorie_validee !== true ? (e?.date_passage) : (c.theorie_validee === true && c.pratique_validee !== true ? (t?.date_fin || t?.date_debut) : null);
+      const partiel = c.pratique_validee === true && c.theorie_validee !== true ? 'PRATIQUE VALIDÉE\nthéorie à repasser'
+        : (c.theorie_validee === true && c.pratique_validee !== true && c.pratique_validee !== false ? 'THÉORIE VALIDÉE\npratique à passer' : '');
+      const limite = (() => { const d = new Date(dateRef || Date.now()); d.setFullYear(d.getFullYear() + 1); return d.toLocaleDateString('fr-FR'); })();
       const cell = (txt, ko) => ko ? { content: txt, styles: rouge } : txt;
       corps.push([nonVal ? { content: `${st.nom} ${st.prenom || ''}`.trim(), styles: { fontStyle: 'bold', textColor: C.rouge } } : `${st.nom} ${st.prenom || ''}`.trim(),
         `${c.referentiel_code} ${c.categorie_code}`,
         cell(t ? `${t.score_global_pct ?? '—'} %` : (c.theorie_validee ? 'validée' : '— non validée'), thRatee || (!t && !c.theorie_validee)),
         cell(e ? `${e.score_global ?? '—'}/100` : (c.pratique_validee ? 'validée' : '— non validée'), prRatee || (!e && !c.pratique_validee)),
-        { content: ok ? 'ADMIS' : 'NON ADMIS', styles: ok ? { fontStyle: 'bold', textColor: C.vert } : rouge },
+        ok ? { content: 'ADMIS', styles: { fontStyle: 'bold', textColor: C.vert } }
+          : (partiel ? { content: `${partiel}\n(valable jusqu'au ${limite})`, styles: { fontStyle: 'bold', textColor: [200, 110, 0], fillColor: [255, 243, 224] } } : { content: 'NON ADMIS', styles: rouge }),
         ok ? '' : (e?.justification_echec || '')]);
     });
   });

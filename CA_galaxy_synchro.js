@@ -14,6 +14,37 @@ async function inscritsSynchroGalaxy(f) {
   return (await inscritsGalaxy(f)).map(i => ({ ...i, annule: false }));
 }
 
+/** Présences Galaxy d'une formation : { galaxy_stagiaire_id: { 'AAAA-MM-JJ': [matin, après-midi] } } (true = présent).
+ *  Une ligne Galaxy par demi-journée (dans l'ordre : matin puis après-midi) ; présent = temps réalisé > 00:00 ou signature. Une seule ligne = journée entière. */
+async function presencesSynchroGalaxy(formationId) {
+  const sortie = {};
+  for (let page = 1; page <= 10; page++) {
+    const rep = await galaxy('get_presence', { search: { convention_element_id: formationId } }, page, 400);
+    const l = rep.result || [];
+    l.forEach(x => {
+      const g = String(x.id || ''), jour = String(x.date_formation || '').slice(0, 10); if (!g || !jour) return;
+      const present = (String(x.realise || '00:00:00') !== '00:00:00') || !!(x.date_signature || x.date_signature_apres_midi);
+      ((sortie[g] = sortie[g] || {})[jour] = sortie[g][jour] || []).push(present);
+    });
+    if (l.length < 400) break;
+  }
+  Object.values(sortie).forEach(j => Object.keys(j).forEach(d => { const a = j[d]; j[d] = a.length === 1 ? [a[0], a[0]] : [a[0], a[1]]; }));
+  return sortie;
+}
+
+/** Intervenants de la formation (Galaxy) rapprochés des comptes de l'appli par nom + prénom (ou e-mail).
+ *  Renvoie { lignes: [{nom, role, compte|null}], } ; rôle « testeur » si le rôle Galaxy contient « test », sinon « formateur ». */
+async function intervenantsSynchroGalaxy(formationId) {
+  const rep = await galaxy('get_formations', { search: { formation_id: formationId }, avec_liste_des_formateur: 1 }, 1, 5);
+  const liste = ((rep.result || [])[0] || {}).liste_formateur || [];
+  const norm = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, '');
+  return liste.map(i => {
+    const cle = norm(i.nom) + '|' + norm(i.prenom);
+    const compte = (S.formateurs || []).find(f => norm(f.nom) + '|' + norm(f.prenom) === cle || norm(f.prenom) + '|' + norm(f.nom) === cle) || null;
+    return { nom: `${i.nom || ''} ${i.prenom || ''}`.trim(), role: /test/i.test(`${i.nom_role || ''} ${i.role || ''}`) ? 'testeur' : 'formateur', compte };
+  });
+}
+
 async function ouvrirSynchroGalaxy() {
   const s = S.session;
   if (s.statut === 'cloturee' || s.cloturee) return toast('Session clôturée : synchronisation impossible.', 'erreur');
@@ -39,6 +70,30 @@ async function ouvrirSynchroGalaxy() {
       else if (!gChange) lignes.push({ type: 'garde', a, g });                                               // correction locale conservée
       else lignes.push({ type: 'conflit', a, g });                                                           // les deux ont changé
     }
+    let interv = [], intervErr = null;
+    try { interv = await intervenantsSynchroGalaxy(form.formation_id || s.numero_session_galaxy); } catch (e) { intervErr = e.message; }
+    const testeursApp = new Set(testeursSession(s)), intervAjout = interv.filter(i => i.compte && i.role === 'testeur' && !testeursApp.has(i.compte.id));
+    const formAChanger = interv.filter(i => i.compte && i.role === 'formateur' && i.compte.id !== s.formateur_id);
+    const intervInconnus = interv.filter(i => !i.compte);
+    const testeursGalaxy = new Set(interv.filter(i => i.compte && i.role === 'testeur').map(i => i.compte.id));
+    const testeursAbsents = [...testeursApp].filter(id => interv.length && !testeursGalaxy.has(id));
+    let presGal = {}, presErr = null;
+    try { presGal = await presencesSynchroGalaxy(form.formation_id || s.numero_session_galaxy); } catch (e) { presErr = e.message; }
+    const idsApp = (apps || []).map(a => a.id);
+    const [{ data: presApp }, { data: jours }] = await Promise.all([
+      idsApp.length ? sb.from('presences_stagiaires').select('stagiaire_id, jour, demi').in('stagiaire_id', idsApp) : { data: [] },
+      sb.from('session_jours').select('jour').eq('session_id', s.id)]);
+    const joursSession = new Set((jours || []).map(j => j.jour)), dejaApp = new Set((presApp || []).map(p => `${p.stagiaire_id}|${p.jour}|${p.demi}`));
+    const presAjout = [], presRetrait = [], presHorsPlanning = new Set();
+    (apps || []).filter(a => a.galaxy_stagiaire_id && presGal[a.galaxy_stagiaire_id]).forEach(a => {
+      Object.entries(presGal[a.galaxy_stagiaire_id]).forEach(([jour, [m, ap]]) => {
+        if (!joursSession.has(jour)) { presHorsPlanning.add(jour); return; }
+        [['matin', m], ['apres_midi', ap]].forEach(([demi, pr]) => {
+          const cle = `${a.id}|${jour}|${demi}`, ici = dejaApp.has(cle);
+          if (pr && !ici) presAjout.push({ a, jour, demi }); else if (!pr && ici) presRetrait.push({ a, jour, demi });
+        });
+      });
+    });
     const connus = new Set((apps || []).map(a => a.galaxy_stagiaire_id));
     const nouveaux = gal.filter(g => !g.annule && !connus.has(g.galaxy_id));
     const aTraiter = lignes.filter(l => l.type === 'maj' || l.type === 'conflit' || l.type === 'maj_ref');
@@ -49,7 +104,8 @@ async function ouvrirSynchroGalaxy() {
         : l.type === 'conflit' ? `<label class="case"><input type="checkbox" data-i="${i}"> Prendre Galaxy (sinon on garde l'appli)</label>` : '';
       return `<tr><td>${esc(l.a.nom)} ${esc(l.a.prenom)}</td><td>${l.g ? esc(l.g.nom + ' ' + l.g.prenom) : '—'}</td><td>${lib}</td><td>${act}</td></tr>`;
     };
-    const rien = !lignes.some(l => l.type !== 'maj_ref') && !nouveaux.length;
+    const nbPres = presAjout.length + presRetrait.length;
+    const rien = !lignes.some(l => l.type !== 'maj_ref') && !nouveaux.length && !nbPres && !intervAjout.length && !formAChanger.length;
     ouvrirModale(`Synchroniser depuis Galaxy — ${esc(form.nom_produit || '')}`, `
       <p class="aide">Galaxy → appli uniquement. Un nom corrigé dans l'appli est conservé tant que tu ne choisis pas de reprendre celui de Galaxy. Aucun résultat n'est modifié, aucun stagiaire supprimé.</p>
       ${rien ? '<p>✔ Tout est à jour : rien à synchroniser.</p>' : `
@@ -58,6 +114,17 @@ async function ouvrirSynchroGalaxy() {
         ${nouveaux.map(g => `<tr><td>—</td><td>${esc(g.nom + ' ' + g.prenom)}</td><td><span class="etat avertissement">Nouvel inscrit Galaxy</span></td>
           <td><label class="case"><input type="checkbox" data-nv="${esc(g.galaxy_id)}" checked> Ajouter</label></td></tr>`).join('')}
       </tbody></table>`}
+      <h4>Intervenants (Galaxy)</h4>
+      ${intervErr ? `<p class="aide"><b>Lecture des intervenants impossible</b> (${esc(intervErr)}).</p>` : `
+      <p class="aide">Galaxy : ${interv.map(i => `${esc(i.nom)} (${i.role})${i.compte ? '' : ' — <b>pas de compte dans l\'appli</b>'}`).join(' ; ') || 'aucun intervenant'}.</p>
+      ${intervAjout.map((i, k) => `<p><label class="case"><input type="checkbox" data-ta="${k}" checked> Ajouter <b>${esc(i.nom)}</b> comme testeur de la session</label></p>`).join('')}
+      ${formAChanger.map((i, k) => `<p><label class="case"><input type="checkbox" data-fo="${k}"> Remplacer le formateur de la session par <b>${esc(i.nom)}</b> (actuel : ${esc(nomFormateur(s.formateur_id)) || '—'})</label></p>`).join('')}
+      ${testeursAbsents.length ? `<p class="aide">Testeur(s) de l'appli absent(s) de Galaxy (conservé(s)) : ${testeursAbsents.map(id => esc(nomFormateur(id))).join(', ')}.</p>` : ''}
+      ${intervInconnus.length ? `<p class="aide">Sans compte BFS CACES : ${intervInconnus.map(i => esc(i.nom)).join(', ')} — à créer par l'administrateur si besoin.</p>` : ''}`}
+      ${presErr ? `<p class="aide"><b>Présences : lecture Galaxy impossible</b> (${esc(presErr)}).</p>` : (nbPres ? `
+      <p><label class="case"><input type="checkbox" id="sy-pres" checked> <b>Présences</b> : ${presAjout.length} demi-journée(s) à cocher, ${presRetrait.length} à décocher d'après Galaxy</label></p>
+      <p class="aide">${[...new Set([...presAjout, ...presRetrait].map(x => `${esc(x.a.nom)} ${esc(x.a.prenom)} (${esc(dateFr(x.jour))})`))].slice(0, 12).join(' ; ')}${nbPres > 12 ? '…' : ''}</p>` : '<p class="aide">Présences : identiques à Galaxy.</p>')}
+      ${presHorsPlanning.size ? `<p class="aide">Jours présents dans Galaxy mais absents du planning de l'appli (ignorés) : ${[...presHorsPlanning].map(j => esc(dateFr(j))).join(', ')}.</p>` : ''}
       <div class="pied-modale"><button type="button" onclick="fermerModale()">Fermer</button>
         <button class="principal" id="btn-synchro-galaxy" ${rien && !aTraiter.length ? 'disabled' : ''}>Appliquer la sélection</button></div>
       <p id="msg-synchro" class="aide"></p>`);
@@ -71,6 +138,20 @@ async function ouvrirSynchroGalaxy() {
           const l = lignes[Number(c.dataset.i)], maj = { galaxy_nom: U(l.g.nom), galaxy_prenom: P(l.g.prenom) };   // la référence Galaxy avance dans tous les cas
           if (c.checked) { maj.nom = U(l.g.nom); maj.prenom = P(l.g.prenom); n++; }
           const { error } = await sb.from('stagiaires').update(maj).eq('id', l.a.id); if (error) throw error;
+        }
+        for (const c of $$('input[data-ta]:checked')) {
+          const i = intervAjout[Number(c.dataset.ta)];
+          const r = !s.testeur_id ? await sb.from('sessions_formation').update({ testeur_id: i.compte.id }).eq('id', s.id)
+            : await sb.from('session_testeurs').insert({ session_id: s.id, testeur_id: i.compte.id });
+          if (r.error) throw r.error; n++;
+        }
+        for (const c of $$('input[data-fo]:checked')) {
+          const { error } = await sb.from('sessions_formation').update({ formateur_id: formAChanger[Number(c.dataset.fo)].compte.id }).eq('id', s.id); if (error) throw error; n++;
+        }
+        if ($('#sy-pres')?.checked) {
+          for (const x of presRetrait) { const { error } = await sb.from('presences_stagiaires').delete().match({ stagiaire_id: x.a.id, jour: x.jour, demi: x.demi }); if (error) throw error; }
+          if (presAjout.length) { const { error } = await sb.from('presences_stagiaires').upsert(presAjout.map(x => ({ stagiaire_id: x.a.id, jour: x.jour, demi: x.demi }))); if (error) throw error; }
+          n += presAjout.length + presRetrait.length;
         }
         const catsConnues = new Set((S.referentiel.categories || []).map(c => c.referentiel_code + '|' + c.code)), ref = referentielGalaxy(form.nom_produit);
         for (const c of $$('input[data-nv]:checked')) {

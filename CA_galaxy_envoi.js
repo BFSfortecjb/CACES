@@ -53,7 +53,8 @@ async function parametresResultatsGalaxy(st) {
   const liste = toutes.map(c => {
     const ep = (eps || []).find(e => e.categorie_code === c.categorie_code);
     const cert = (certs || []).find(x => x.referentiel_code === c.referentiel_code && x.categorie_code === c.categorie_code);
-    const r = c.pratique_validee === true ? 'admis' : (c.pratique_validee === false ? 'non_admis' : 'attente');
+    // Pratique réussie sans théorie validée : « en attente » (valable 12 mois pour repasser la théorie), jamais « admis » ni « non admis ».
+    const r = c.pratique_validee === true ? (c.theorie_validee === true ? 'admis' : 'attente') : (c.pratique_validee === false ? 'non_admis' : 'attente');
     const o = { categorie: c.categorie_code, resultat: r };
     const nt = nomFormateur(ep?.testeur_id || S.session.testeur_id); if (nt) o.nom_testeur = nt;
     if (ep && ep.score_global != null) o.note = Math.round(Number(ep.score_global));
