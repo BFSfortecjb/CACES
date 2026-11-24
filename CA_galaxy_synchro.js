@@ -71,6 +71,21 @@ async function ouvrirSynchroGalaxy() {
       else if (!gChange) lignes.push({ type: 'garde', a, g });                                               // correction locale conservée
       else lignes.push({ type: 'conflit', a, g });                                                           // les deux ont changé
     }
+    // Catégories : on AJOUTE celles de Galaxy qui manquent dans l'appli (jamais de retrait ; les résultats ne sont pas touchés).
+    const refGx = referentielGalaxy(form.nom_produit), catsConnues = new Set((S.referentiel.categories || []).map(c => c.referentiel_code + '|' + c.code));
+    const [{ data: catsApp }, { data: catsSess }] = await Promise.all([
+      (apps || []).length ? sb.from('stagiaire_categories').select('stagiaire_id, referentiel_code, categorie_code').in('stagiaire_id', (apps || []).map(a => a.id)) : { data: [] },
+      sb.from('session_categories').select('referentiel_code, categorie_code').eq('session_id', s.id)]);
+    const dejaCat = new Set((catsApp || []).map(c => `${c.stagiaire_id}|${c.referentiel_code}|${c.categorie_code}`));
+    const sessCat = new Set((catsSess || []).map(c => c.referentiel_code + '|' + c.categorie_code));
+    const catsAjout = [];
+    if (refGx && !/autorisation/i.test(form.nom_produit || '')) {
+      (apps || []).filter(a => a.galaxy_stagiaire_id).forEach(a => {
+        const g = parGal.get(a.galaxy_stagiaire_id); if (!g || g.annule) return;
+        const manque = [...new Set((g.categories || []).map(k => cleCategorieGalaxy(refGx, k)))].filter(c => catsConnues.has(c) && !dejaCat.has(a.id + '|' + c));
+        if (manque.length) catsAjout.push({ a, cles: manque });
+      });
+    }
     let interv = [], intervErr = null;
     try { interv = await intervenantsSynchroGalaxy(form.formation_id || s.numero_session_galaxy); } catch (e) { intervErr = e.message; }
     const testeursApp = new Set(testeursSession(s)), intervAjout = interv.filter(i => i.compte && i.role === 'testeur' && !testeursApp.has(i.compte.id));
@@ -106,7 +121,7 @@ async function ouvrirSynchroGalaxy() {
       return `<tr><td>${esc(l.a.nom)} ${esc(l.a.prenom)}</td><td>${l.g ? esc(l.g.nom + ' ' + l.g.prenom) : '—'}</td><td>${lib}</td><td>${act}</td></tr>`;
     };
     const nbPres = presAjout.length + presRetrait.length;
-    const rien = !lignes.some(l => l.type !== 'maj_ref') && !nouveaux.length && !nbPres && !intervAjout.length && !formAChanger.length;
+    const rien = !lignes.some(l => l.type !== 'maj_ref') && !nouveaux.length && !nbPres && !intervAjout.length && !formAChanger.length && !catsAjout.length;
     ouvrirModale(`Synchroniser depuis Galaxy — ${esc(form.nom_produit || '')}`, `
       <p class="aide">Galaxy → appli uniquement. Un nom corrigé dans l'appli est conservé tant que tu ne choisis pas de reprendre celui de Galaxy. Aucun résultat n'est modifié, aucun stagiaire supprimé.</p>
       ${rien ? '<p>✔ Tout est à jour : rien à synchroniser.</p>' : `
@@ -115,6 +130,9 @@ async function ouvrirSynchroGalaxy() {
         ${nouveaux.map(g => `<tr><td>—</td><td>${esc(g.nom + ' ' + g.prenom)}</td><td><span class="etat avertissement">Nouvel inscrit Galaxy</span></td>
           <td><label class="case"><input type="checkbox" data-nv="${esc(g.galaxy_id)}" checked> Ajouter</label></td></tr>`).join('')}
       </tbody></table>`}
+      ${catsAjout.length ? `<h4>Catégories</h4>${catsAjout.map((x, k) => `<p><label class="case"><input type="checkbox" data-ca="${k}" checked>
+        Ajouter à <b>${esc(x.a.nom)} ${esc(x.a.prenom)}</b> : ${x.cles.map(c => `<span class="etat avertissement">${esc(c.replace('|', ' '))}</span>`).join(' ')}
+        ${x.cles.some(c => !sessCat.has(c)) ? '<span class="aide">(catégorie ajoutée aussi à la session)</span>' : ''}</label></p>`).join('')}` : ''}
       <h4>Intervenants (Galaxy)</h4>
       ${intervErr ? `<p class="aide"><b>Lecture des intervenants impossible</b> (${esc(intervErr)}).</p>` : `
       <p class="aide">Galaxy : ${interv.map(i => `${esc(i.nom)} (${i.role})${i.compte ? '' : ' — <b>pas de compte dans l\'appli</b>'}`).join(' ; ') || 'aucun intervenant'}.</p>
@@ -140,6 +158,13 @@ async function ouvrirSynchroGalaxy() {
           if (c.checked) { maj.nom = U(l.g.nom); maj.prenom = P(l.g.prenom); n++; }
           const { error } = await sb.from('stagiaires').update(maj).eq('id', l.a.id); if (error) throw error;
         }
+        for (const c of $$('input[data-ca]:checked')) {
+          const x = catsAjout[Number(c.dataset.ca)];
+          const nouvCS = x.cles.filter(k => !sessCat.has(k)).map(k => { const [referentiel_code, categorie_code] = k.split('|'); return { session_id: s.id, referentiel_code, categorie_code }; });
+          if (nouvCS.length) { const { error } = await sb.from('session_categories').insert(nouvCS); if (error) throw error; nouvCS.forEach(r => sessCat.add(r.referentiel_code + '|' + r.categorie_code)); }
+          const lignesSC = x.cles.map(k => { const [referentiel_code, categorie_code] = k.split('|'); return { stagiaire_id: x.a.id, referentiel_code, categorie_code }; });
+          const { error } = await sb.from('stagiaire_categories').insert(lignesSC); if (error) throw error; n += lignesSC.length;
+        }
         for (const c of $$('input[data-ta]:checked')) {
           const i = intervAjout[Number(c.dataset.ta)];
           const r = !s.testeur_id ? await sb.from('sessions_formation').update({ testeur_id: i.compte.id }).eq('id', s.id)
@@ -160,7 +185,7 @@ async function ouvrirSynchroGalaxy() {
           const { data, error } = await sb.from('stagiaires').insert({ session_id: s.id, nom: U(g.nom), prenom: P(g.prenom), galaxy_stagiaire_id: g.galaxy_id,
             galaxy_nom: U(g.nom), galaxy_prenom: P(g.prenom), code_acces_individuel: codeIndividuel() }).select().single();
           if (error) throw error;
-          const ch = (g.categories || []).map(k => ref + '|' + k).filter(k => catsConnues.has(k)).map(k => { const [referentiel_code, categorie_code] = k.split('|'); return { referentiel_code, categorie_code }; });
+          const ch = (g.categories || []).map(k => cleCategorieGalaxy(ref, k)).filter(k => catsConnues.has(k)).map(k => { const [referentiel_code, categorie_code] = k.split('|'); return { referentiel_code, categorie_code }; });
           await synchroniserCategoriesStagiaire(data.id, ch.length ? ch : (s._categories || [])); n++;
         }
         fermerModale(); toast(`Synchronisation : ${n} changement(s) appliqué(s)`); rendreDetailSession($('#contenu'));

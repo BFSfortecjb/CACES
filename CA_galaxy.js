@@ -21,7 +21,9 @@ async function galaxy(methode, parametres = {}, page = 1, nombre = 400) {
 
 const REFERENTIELS_GALAXY = [[/R\.?\s?482/i, 'R482A'], [/R\.?\s?485/i, 'R485'], [/R\.?\s?486/i, 'R486A'], [/R\.?\s?489/i, 'R489']];
 const referentielGalaxy = nomProduit => (REFERENTIELS_GALAXY.find(([re]) => re.test(nomProduit || '')) || [])[1] || null;
-const categoriesGalaxy = texte => String(texte || '').split(/\s*(?:,|;|\/|\+|\bet\b)\s*/i).map(x => x.trim().toUpperCase()).filter(Boolean);
+// « 1B Rec. et 5 Rec. » (recyclage) -> ['1B', '5'] : le suffixe « Rec. » est retiré
+const categoriesGalaxy = texte => String(texte || '').split(/\s*(?:,|;|\/|\+|\bet\b)\s*/i)
+  .map(x => x.trim().toUpperCase().replace(/\s+REC\.?$/, '').trim()).filter(Boolean);
 const jourGalaxy = v => String(v || '').slice(0, 10) || null;
 
 /** Lieu Galaxy → centre de test de l'appli (cherche d'abord le nom du centre, puis quelques correspondances connues). */
@@ -33,6 +35,19 @@ function centreDepuisLieuGalaxy(f) {
   const regles = [[/vend[ée]e|mont-mercure|s[èe]vremont/, 'Sèvremont'], [/briec|bretagne/, 'Briec']];
   const r = regles.find(([re]) => re.test(t));
   return r ? centres.find(c => c.nom === r[1]) || null : null;
+}
+
+/** Galaxy range parfois, dans un produit R489, les catégories « 1 » et « 2 » (gerbeur / transpalette à conducteur accompagnant) : ce sont des catégories de la R485.
+ *  Renvoie la clé « RÉFÉRENTIEL|CATÉGORIE » de l'appli. */
+const CATS_GALAXY_AUTRE_REF = { R489: { '1': 'R485', '2': 'R485' } };
+function cleCategorieGalaxy(ref, k) {
+  const connues = new Set((S.referentiel?.categories || []).map(c => c.referentiel_code + '|' + c.code));
+  if (connues.has(ref + '|' + k)) return ref + '|' + k;
+  const autre = (CATS_GALAXY_AUTRE_REF[ref] || {})[k];
+  if (autre && connues.has(autre + '|' + k)) return autre + '|' + k;
+  // Produit mixte (ex. « R485 et/ou R489 ») : catégorie cherchée dans tous les référentiels, retenue si elle n'existe que dans un seul
+  const candidats = [...connues].filter(x => x.split('|')[1] === k);
+  return candidats.length === 1 ? candidats[0] : ref + '|' + k;
 }
 
 async function formationGalaxy(numero) {
@@ -80,8 +95,8 @@ async function galaxyDansNouvelleSession() {
     const centre = centreDepuisLieuGalaxy(form);
     if (centre) f.lieu_choix.value = String(centre.id);
     if (!/autorisation/i.test(form.nom_produit || '') && ref) {
-      const codes = new Set(inscrits.flatMap(i => i.categories));
-      $$('#form-session input[name=categorie]').forEach(c => { const [r, k] = c.value.split('|'); c.checked = r === ref && codes.has(k); });
+      const cles = new Set(inscrits.flatMap(i => i.categories).map(k => cleCategorieGalaxy(ref, k)));
+      $$('#form-session input[name=categorie]').forEach(c => { c.checked = cles.has(c.value); });
       f.querySelector('input[name=categorie]')?.dispatchEvent(new Event('change', { bubbles: true }));
     }
     msg.innerHTML = `✔ <b>${esc(form.nom_produit)}</b> — ${esc(dateFr(debut))}${fin && fin !== debut ? ' au ' + esc(dateFr(fin)) : ''}, ${esc(form.nom_lieu || '')} —
@@ -103,7 +118,7 @@ async function ouvrirImportGalaxy() {
     const catsSession = new Set((s._categories || []).map(c => c.referentiel_code + '|' + c.categorie_code));
     const catsConnues = new Set((S.referentiel.categories || []).map(c => c.referentiel_code + '|' + c.code));
     const nouveaux = inscrits.filter(i => !dejaIds.has(i.galaxy_id));
-    const cleCat = k => ref + '|' + k;
+    const cleCat = k => cleCategorieGalaxy(ref, k);
     ouvrirModale(`Importer depuis Galaxy — ${form.nom_produit || ''} (${dateFr(jourGalaxy(form.date_debut))})`, `
       <p class="aide">${inscrits.length} inscrit(s) dans Galaxy, ${nouveaux.length} à importer${inscrits.length - nouveaux.length ? ` (${inscrits.length - nouveaux.length} déjà importé(s))` : ''}.
         ${ref ? '' : '<b>Référentiel non reconnu à partir du nom du produit : les catégories ne seront pas importées.</b>'}</p>
