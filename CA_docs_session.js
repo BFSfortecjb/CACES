@@ -29,6 +29,20 @@
     ouvrirModale('Circuit de test', `<ul class="liste-simple">${l.map(d => `<li><button data-ct="${d.id}">${esc(d.titre)}</button></li>`).join('')}</ul>`);
     $$('[data-ct]').forEach(x => x.addEventListener('click', () => { fermerModale(); visionner(l.find(d => d.id === x.dataset.ct)); }));
   });
+  window.rendreRecommandations = async function (zone, s, cats) {
+    if (!zone) return;
+    const refs = [...new Set((cats || []).map(c => net(c.referentiel_code)).filter(Boolean))].sort();
+    if (!refs.length) { zone.innerHTML = ''; return; }
+    const { data } = await sb.from('documents_qualite').select('*').eq('categorie', 'recommandation').eq('actuelle', true).in('ref', refs.map(r => 'RECO-' + r));
+    const l = data || [];
+    if (!l.length) { zone.innerHTML = ''; return; }
+    zone.innerHTML = `<div class="carte"><h3>📖 Recommandation de la session</h3>
+      <ul class="liste-simple">${l.map(d => `<li><button type="button" data-reco="${d.id}">${esc(d.titre)}</button> <span class="aide">${esc(d.version)}</span></li>`).join('')}</ul></div>`;
+    $$('[data-reco]', zone).forEach(b => b.addEventListener('click', async () => {
+      const u = await urlDocumentQualite(l.find(x => x.id === b.dataset.reco));
+      if (u) window.open(u, '_blank', 'noopener'); else toast('Aucun fichier pour ce document.', 'erreur');
+    }));
+  };
   window.rendreFichesExercice = async function (zone, s, cats) {
     if (!zone) return;
     const l = await docsPour('fiche_exercice', (cats || []).map(c => c.referentiel_code));

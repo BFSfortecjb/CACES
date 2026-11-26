@@ -481,6 +481,7 @@ async function rendreDetailSession(zone) {
       <button onclick="appelModule('ouvrirJournalSession')" title="Qui a fait quoi sur cette session">📜 Journal</button>
     </div>
     <div id="presences-galaxy"></div>
+    <div id="recos-session"></div>
     <div id="fiches-exercice"></div>
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
@@ -502,6 +503,7 @@ async function rendreDetailSession(zone) {
       </tbody>
     </table>`;
 
+  try { if (typeof rendreRecommandations === 'function') rendreRecommandations($('#recos-session'), s, cats); } catch (e) { /* bloc facultatif */ }
   try { if (typeof rendreFichesExercice === 'function') rendreFichesExercice($('#fiches-exercice'), s, cats); } catch (e) { /* bloc facultatif */ }
   try { if (typeof rendrePresencesGalaxy === 'function') rendrePresencesGalaxy($('#presences-galaxy'), s); } catch (e) { /* bloc facultatif */ }
   try {
