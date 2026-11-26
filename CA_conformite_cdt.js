@@ -1,0 +1,105 @@
+/* =====================================================================
+   CA_conformite_cdt.js — Lot 1 (26/11/2026) : conformité au référentiel de certification (RC 2020 V2)
+   1. Onglet Statistiques « Conformité CDT » : taux de tests en CDT par famille sur l'année civile (§4.7, seuils du tableau T1),
+      détail par CDT (Briec, Sèvremont) et hors CDT (chez le client), nombre de tests CDT qui manquent, rappel du 15 janvier.
+   2. Onglet Statistiques « Bilan annuel » : chiffres à transmettre à l'organisme certificateur avant le 1er mars (§6.5.1), export Excel (CSV).
+   3. Bandeau d'alerte sur l'écran Sessions (administrateur) quand une famille est sous le seuil.
+   Source : vues v_taux_cdt / v_taux_cdt_detail et fonction bilan_annuel (patch bf). Un « test » = une épreuve pratique passée
+   (un échec puis une réussite = 2 tests), hors essais, sur l'année civile du passage. BFS = un organisme, deux CDT (Briec, Sèvremont).
+   ===================================================================== */
+const SEUILS_CDT_T1 = { R482: 30, R483: 20, R484: 20, R485: 30, R486: 30, R487: 20, R489: 50, R490: 50 };
+const CONF = { annee: new Date().getFullYear() };
+
+/** Nombre de tests supplémentaires à faire en CDT (sans test hors CDT) pour atteindre le seuil : x ≥ (s·n − cdt) / (1 − s). */
+function cdtManquants(nb, cdt, seuil) {
+  if (!seuil || seuil >= 100 || !nb) return 0;
+  return Math.max(0, Math.ceil((seuil / 100 * nb - cdt) / (1 - seuil / 100) - 1e-9));
+}
+
+function selecteurAnnee(id, valeur) {
+  const a = new Date().getFullYear();
+  return `<label>Année civile <select id="${id}">${Array.from({ length: 6 }, (_, i) => a - i).map(x => `<option ${x === valeur ? 'selected' : ''}>${x}</option>`).join('')}</select></label>`;
+}
+
+/* ---------- 1. Conformité CDT ---------- */
+async function statConformiteCdt(z) {
+  z.innerHTML = '<p class="chargement">Calcul des taux…</p>';
+  const an = CONF.annee;
+  const [g, d] = await Promise.all([
+    sb.from('v_taux_cdt').select('*').eq('annee', an),
+    sb.from('v_taux_cdt_detail').select('*').eq('annee', an).order('lieu'),
+  ]);
+  if (g.error || d.error) { z.innerHTML = ''; return erreurSupabase('Lecture des taux CDT', g.error || d.error); }
+  const famillesApp = new Set((S.referentiel.referentiels || []).map(r => String(r.code).slice(0, 4)));
+  const familles = [...new Set([...Object.keys(SEUILS_CDT_T1).filter(f => famillesApp.has(f)), ...(g.data || []).map(x => x.famille)])].sort();
+  const par = f => (g.data || []).find(x => x.famille === f);
+  const lignes = familles.map(f => {
+    const x = par(f), nb = x?.nb_tests || 0, cdt = x?.nb_cdt || 0, seuil = x?.seuil ?? SEUILS_CDT_T1[f] ?? null;
+    const taux = nb ? Math.round(1000 * cdt / nb) / 10 : null;
+    const sous = nb > 0 && seuil != null && taux < seuil;
+    return { f, nb, cdt, hors: nb - cdt, taux, seuil, sous, manque: sous ? cdtManquants(nb, cdt, seuil) : 0,
+      detail: (d.data || []).filter(y => y.famille === f) };
+  });
+  const sous = lignes.filter(l => l.sous);
+  z.innerHTML = `<div class="stat-barre-outils">${selecteurAnnee('conf-annee', an)}</div>
+    ${sous.length ? `<div class="carte" style="border-left:4px solid #c0392b"><b>⚠ ${sous.length} famille(s) sous le seuil en ${an} : ${sous.map(l => esc(l.f)).join(', ')}</b>
+      <p class="aide">Référentiel §4.7 : en cas de non-atteinte du taux sur l'année N, l'organisme informe son organisme certificateur <b>avant le 15 janvier ${an + 1}</b>
+      et lui propose un plan d'action (atteindre le taux en 6 mois de plus, soit jusqu'au 30 juin ${an + 1}). Sans cela : non-conformité majeure, puis retrait de la famille du périmètre.
+      Le taux se calcule par famille pour l'ensemble de l'organisme (tous les CDT réunis).</p></div>` : ''}
+    <div class="carte"><h3>Tests réalisés en CDT par famille — année ${an}</h3>
+    <div class="tableau-defile"><table class="tableau"><thead><tr><th>Famille</th><th>Tests</th><th>En CDT</th><th>Hors CDT</th><th>Taux CDT</th><th>Minimum (T1)</th><th>État</th><th>Tests CDT à ajouter pour atteindre le minimum</th></tr></thead><tbody>
+    ${lignes.map(l => `<tr><td><b>${esc(l.f)}</b></td><td>${l.nb}</td><td>${l.cdt}</td><td>${l.hors}</td><td>${l.taux == null ? '—' : l.taux + ' %'}</td><td>${l.seuil ?? '—'} %</td>
+      <td>${l.nb === 0 ? '<span class="etat neutre">aucun test</span>' : l.sous ? '<span class="etat erreur">⚠ sous le minimum</span>' : '<span class="etat ok">✔ conforme</span>'}</td>
+      <td>${l.sous ? '<b>' + l.manque + '</b>' : ''}</td></tr>
+      ${l.detail.map(y => `<tr class="stat-sous-ligne"><td style="padding-left:1.6em;color:#666">${esc(y.lieu)}</td><td>${y.nb_tests}</td><td>${y.en_cdt ? y.nb_tests : ''}</td><td>${y.en_cdt ? '' : y.nb_tests}</td><td colspan="4"></td></tr>`).join('')}`).join('')
+      || '<tr><td colspan="8" class="vide">Aucune famille.</td></tr>'}</tbody></table></div>
+    <p class="aide">Un test = une épreuve pratique passée (un échec puis une réussite comptent 2 tests), hors essais. « En CDT » = session dans l'un des deux centres (Briec, Sèvremont) ;
+      « Hors CDT » = chez le client (visite préalable obligatoire). Minimums du tableau T1 : R482, R485, R486 ≥ 30 % · R483, R484, R487 ≥ 20 % · R489, R490 ≥ 50 %.
+      Le référentiel précise que le taux peut être révisé chaque année.</p></div>`;
+  $('#conf-annee', z).onchange = ev => { CONF.annee = Number(ev.target.value); statConformiteCdt(z); };
+}
+
+/* ---------- 2. Bilan annuel pour l'organisme certificateur ---------- */
+async function statBilanAnnuel(z) {
+  z.innerHTML = '<p class="chargement">Calcul du bilan…</p>';
+  const an = CONF.annee;
+  const { data, error } = await sb.rpc('bilan_annuel', { p_annee: an });
+  if (error) { z.innerHTML = ''; return erreurSupabase('Bilan annuel', error); }
+  const { count: nbSessions } = await sb.from('sessions_formation').select('id', { count: 'exact', head: true })
+    .neq('type_session', 'autorisation').gte('date_debut', `${an}-01-01`).lte('date_debut', `${an}-12-31`);
+  const L = data || [];
+  const somme = k => L.reduce((s, x) => s + (x[k] || 0), 0);
+  const tot = { inscrits: somme('inscrits'), recus: somme('recus'), tests: somme('tests'), tests_cdt: somme('tests_cdt'), tests_hors_cdt: somme('tests_hors_cdt'), tests_reussis: somme('tests_reussis') };
+  z.innerHTML = `<div class="stat-barre-outils">${selecteurAnnee('conf-annee', an)}<button id="bil-csv">⬇ Export Excel (CSV)</button></div>
+    <div class="carte"><h3>Bilan annuel ${an} pour l'organisme certificateur</h3>
+    <p class="aide">À transmettre <b>avant le 1er mars ${an + 1}</b> (référentiel §6.5.1) : candidats inscrits et reçus par catégorie, sessions organisées, tests réalisés en CDT et hors CDT par catégorie.
+      Le chiffre d'affaires et les effectifs ne sont pas dans l'appli : à compléter hors appli. Sessions de l'année (hors autorisations de conduite) : <b>${nbSessions ?? '—'}</b>.</p>
+    <div class="tableau-defile"><table class="tableau"><thead><tr><th>Recommandation</th><th>Catégorie</th><th>Candidats inscrits</th><th>Candidats reçus</th><th>Tests réalisés</th><th>dont en CDT</th><th>dont hors CDT</th><th>Tests réussis</th><th>Sessions</th></tr></thead><tbody>
+    ${L.map(x => `<tr><td>${esc(x.referentiel_code)}</td><td>${esc(x.categorie_code)}</td><td>${x.inscrits}</td><td>${x.recus}</td><td>${x.tests}</td><td>${x.tests_cdt}</td><td>${x.tests_hors_cdt}</td><td>${x.tests_reussis}</td><td>${x.sessions}</td></tr>`).join('')
+      || '<tr><td colspan="9" class="vide">Aucune donnée pour cette année.</td></tr>'}
+    ${L.length ? `<tr class="stat-total"><td colspan="2"><b>TOTAL</b></td><td><b>${tot.inscrits}</b></td><td><b>${tot.recus}</b></td><td><b>${tot.tests}</b></td><td><b>${tot.tests_cdt}</b></td><td><b>${tot.tests_hors_cdt}</b></td><td><b>${tot.tests_reussis}</b></td><td></td></tr>` : ''}
+    </tbody></table></div>
+    <p class="aide">« Candidats reçus » = catégories dont la théorie et la pratique sont validées. « Tests » = épreuves pratiques passées (un échec puis une réussite = 2 tests), hors essais, sur l'année civile du passage ;
+      « inscrits » et « sessions » suivent la date de début de la session.</p></div>`;
+  $('#conf-annee', z).onchange = ev => { CONF.annee = Number(ev.target.value); statBilanAnnuel(z); };
+  $('#bil-csv', z).onclick = () => {
+    const c = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const csv = '﻿' + [['RECOMMANDATION', 'CATEGORIE', 'CANDIDATS INSCRITS', 'CANDIDATS RECUS', 'TESTS REALISES', 'DONT EN CDT', 'DONT HORS CDT', 'TESTS REUSSIS', 'SESSIONS'].map(c).join(';'),
+      ...L.map(x => [x.referentiel_code, x.categorie_code, x.inscrits, x.recus, x.tests, x.tests_cdt, x.tests_hors_cdt, x.tests_reussis, x.sessions].map(c).join(';')),
+      ['TOTAL', '', tot.inscrits, tot.recus, tot.tests, tot.tests_cdt, tot.tests_hors_cdt, tot.tests_reussis, nbSessions ?? ''].map(c).join(';')].join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `bilan_annuel_${an}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  };
+}
+
+/* ---------- 3. Bandeau d'alerte (écran Sessions, administrateur) ---------- */
+async function rendreAlerteCdt(zone) {
+  if (!zone || S.profil?.role !== 'admin') return;
+  const an = new Date().getFullYear(), fin = new Date().getMonth() >= 8;   // à partir de septembre, même sur peu de tests
+  const { data } = await sb.from('v_taux_cdt').select('*').eq('annee', an);
+  const bas = (data || []).filter(x => x.seuil != null && Number(x.taux) < x.seuil && (x.nb_tests >= 10 || fin));
+  if (!bas.length) { zone.innerHTML = ''; return; }
+  zone.innerHTML = `<div class="carte" style="border-left:4px solid #c0392b"><b>⚠ Taux de tests en CDT sous le minimum en ${an}</b>
+    <ul>${bas.map(x => `<li>${esc(x.famille)} : ${x.taux} % (minimum ${x.seuil} %) — ${cdtManquants(x.nb_tests, x.nb_cdt, x.seuil)} test(s) en CDT à ajouter</li>`).join('')}</ul>
+    <p class="aide">Sinon, informer l'organisme certificateur avant le 15 janvier ${an + 1} avec un plan d'action. <button class="lien" onclick="STAT.onglet='cdt'; retour('statistiques')">Voir le détail</button></p></div>`;
+}

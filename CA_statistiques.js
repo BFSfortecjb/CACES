@@ -26,7 +26,7 @@ async function rendreStatistiques(zone) {
       <label class="case"><input type="checkbox" id="st-audit" ${STAT.audit ? 'checked' : ''}> Uniquement les sessions clôturées (audit)</label>
       <button class="principal" id="st-go">Actualiser</button>
     </div>
-    <nav class="stat-onglets">${[['synthese', 'Synthèse CDT'], ['matrice', 'Testeur × catégorie'], ['detail', 'Détail candidats'], ['jours', 'Journées de tests']]
+    <nav class="stat-onglets">${[['synthese', 'Synthèse CDT'], ['cdt', 'Conformité CDT'], ['bilan', 'Bilan annuel'], ['matrice', 'Testeur × catégorie'], ['detail', 'Détail candidats'], ['jours', 'Journées de tests']]
       .map(([k, l]) => `<button data-st="${k}" class="${STAT.onglet === k ? 'actif' : ''}">${l}</button>`).join('')}</nav>
     <div id="st-corps"><p class="chargement">Chargement…</p></div>`;
   const lire = () => { STAT.debut = $('#st-debut').value; STAT.fin = $('#st-fin').value; STAT.centre = $('#st-centre').value; STAT.client = $('#st-client').value.trim(); STAT.audit = $('#st-audit').checked; };
@@ -53,6 +53,9 @@ async function chargerStatistiques() {
 
 function dessinerStatistiques() {
   const z = $('#st-corps'); if (!z) return;
+  if (STAT.onglet === 'cdt' || STAT.onglet === 'bilan') {   // indépendants des filtres de période (année civile propre)
+    return (typeof statConformiteCdt === 'function' ? { cdt: statConformiteCdt, bilan: statBilanAnnuel }[STAT.onglet] : () => {})(z);
+  }
   if (!STAT.lignes.length) { z.innerHTML = '<div class="carte"><p class="vide">Aucun test sur cette période avec ces filtres.</p></div>'; return; }
   ({ synthese: statSynthese, matrice: statMatrice, detail: statDetail, jours: statJours })[STAT.onglet](z);
 }

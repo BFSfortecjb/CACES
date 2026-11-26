@@ -62,6 +62,7 @@ async function rendreSessions(zone) {
 
   zone.innerHTML = `
     <div id="alerte-testeurs"></div>
+    <div id="alerte-cdt"></div>
     <details class="repliable" id="det-vgp" hidden><summary><b>VGP des engins du centre</b> <span id="sum-vgp"></span></summary><div id="alerte-vgp"></div></details>
     <details class="repliable" id="det-reperages"><summary><b>Repérages clients (visites préalables intra)</b> <span id="sum-reperages"></span></summary><div id="reperages"></div></details>
     <div class="barre-actions">
@@ -92,6 +93,7 @@ async function rendreSessions(zone) {
   if (typeof rendreReperages === 'function') rendreReperages($('#reperages'));
   if (typeof rendreAlerteVgp === 'function') rendreAlerteVgp($('#alerte-vgp'));
   if (typeof rendreAlerteTesteurs === 'function') rendreAlerteTesteurs($('#alerte-testeurs'));
+  if (typeof rendreAlerteCdt === 'function') rendreAlerteCdt($('#alerte-cdt'));
 }
 
 /* ====================== Création d'une session ====================== */
