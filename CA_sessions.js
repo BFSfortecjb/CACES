@@ -99,7 +99,7 @@ async function rendreSessions(zone) {
 /* ====================== Création d'une session ====================== */
 function optionsPersonnes(selectionne, exclureId, seulementTesteurs = false, categories = null) {
   const fonction = seulementTesteurs ? 'testeur' : 'formateur';
-  return (S.formateurs || []).filter(f => f.id !== exclureId && f.role !== 'secretariat' && (!seulementTesteurs || f.est_testeur !== false)
+  return (S.formateurs || []).filter(f => f.id !== exclureId && !['secretariat', 'auditeur'].includes(f.role) && (!seulementTesteurs || f.est_testeur !== false)
       && (f.id === selectionne || !categories || habilite(f.id, fonction, categories))).map(f =>
     `<option value="${f.id}" ${f.id === selectionne ? 'selected' : ''}>${esc(((f.nom || '') + ' ' + (f.prenom || '')).trim() || f.email)}</option>`).join('');
 }

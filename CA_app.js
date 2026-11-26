@@ -84,8 +84,10 @@ const ONGLETS_ADMIN = new Set(['categories', 'testeurs', 'verification', 'qualit
 // Onglet ouvert au rôle Secrétariat en plus de l'administrateur
 const ONGLETS_SECRETARIAT = new Set(['motsdepasse']);
 
+const ONGLETS_AUDITEUR = new Set(['sessions', 'statistiques', 'qualite', 'moncompte']);
 function ongletsVisibles() {
   return Object.entries(ONGLETS).filter(([id]) => {
+    if (S.profil?.role === 'auditeur') return ONGLETS_AUDITEUR.has(id);
     if (ONGLETS_ADMIN.has(id)) return S.vision === 'admin';
     if (ONGLETS_SECRETARIAT.has(id)) return S.vision === 'admin' || S.profil?.role === 'secretariat';
     return true;

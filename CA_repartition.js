@@ -19,7 +19,7 @@ function etatEcheanceTesteur(f) {
 }
 function alertesEcheancesTesteurs() {
   const admin = S.profil?.role === 'admin';
-  const liste = (S.formateurs || []).filter(f => f.est_testeur !== false && f.role !== 'secretariat' && (admin || f.id === S.profil?.id));
+  const liste = (S.formateurs || []).filter(f => f.est_testeur !== false && !['secretariat', 'auditeur'].includes(f.role) && (admin || f.id === S.profil?.id));
   return liste.map(etatEcheanceTesteur).filter(e => e && e.niveau !== 'ok').sort((a, b) => a.jours - b.jours);
 }
 function rendreAlerteTesteurs(zone) {

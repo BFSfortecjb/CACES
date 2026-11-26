@@ -1,7 +1,7 @@
 /* CA_comptes.js — onglet Comptes (admin) : formateurs / testeurs / admin / secrétariat.
    Un compte doit d'abord exister dans l'Univers BFS (Supabase Auth) ; ici on le
    rattache à BFS CACES par son e-mail (fonction rattacher_formateur_par_email). */
-const LIBELLE_ROLE = { formateur: 'Formateur', admin: 'Administrateur', secretariat: 'Secrétariat' };
+const LIBELLE_ROLE = { formateur: 'Formateur', admin: 'Administrateur', secretariat: 'Secrétariat', auditeur: 'Auditeur (lecture seule)' };
 
 async function rendreComptes(zone) {
   await chargerFormateurs();
@@ -16,7 +16,7 @@ async function rendreComptes(zone) {
     <table class="tableau"><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Testeur</th><th>Échéance testeur</th><th>Catégories (formateur / testeur)</th><th>Actif</th><th></th></tr></thead><tbody>
     ${liste.map(f => `<tr class="${f.actif === false ? 'termine' : ''}">
       <td>${esc(((f.nom || '') + ' ' + (f.prenom || '')).trim())}</td><td>${esc(f.email)}</td>
-      <td>${esc(LIBELLE_ROLE[f.role] || f.role)}</td><td>${f.role === 'secretariat' ? '—' : (f.est_testeur === false ? 'Non' : 'Oui')}</td><td>${(() => { const e = f.est_testeur === false ? null : etatEcheanceTesteur(f); return f.date_echeance_testeur && f.est_testeur !== false ? `<span style="color:${e.niveau === 'echu' ? '#c0392b' : e.niveau === 'bientot' ? '#e67e22' : 'inherit'}">${dateFr(f.date_echeance_testeur)}${e.niveau === 'echu' ? ' (échu)' : ''}</span>` : '—'; })()}</td><td>${f.role === 'secretariat' ? '—' : esc(resume(f.id, 'formateur') + ' / ' + (f.est_testeur === false ? '—' : resume(f.id, 'testeur')))}</td><td>${f.actif === false ? 'Non' : 'Oui'}</td>
+      <td>${esc(LIBELLE_ROLE[f.role] || f.role)}</td><td>${['secretariat', 'auditeur'].includes(f.role) ? '—' : (f.est_testeur === false ? 'Non' : 'Oui')}</td><td>${(() => { const e = f.est_testeur === false ? null : etatEcheanceTesteur(f); return f.date_echeance_testeur && f.est_testeur !== false ? `<span style="color:${e.niveau === 'echu' ? '#c0392b' : e.niveau === 'bientot' ? '#e67e22' : 'inherit'}">${dateFr(f.date_echeance_testeur)}${e.niveau === 'echu' ? ' (échu)' : ''}</span>` : '—'; })()}</td><td>${f.role === 'secretariat' ? '—' : esc(resume(f.id, 'formateur') + ' / ' + (f.est_testeur === false ? '—' : resume(f.id, 'testeur')))}</td><td>${f.actif === false ? 'Non' : 'Oui'}</td>
       <td><button class="lien" onclick="modifierCompte('${esc(f.id)}')">Modifier</button></td></tr>`).join('')}
     </tbody></table>`;
   S._comptes = liste;
