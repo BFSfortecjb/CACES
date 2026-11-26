@@ -103,3 +103,30 @@ async function rendreAlerteCdt(zone) {
     <ul>${bas.map(x => `<li>${esc(x.famille)} : ${x.taux} % (minimum ${x.seuil} %) — ${cdtManquants(x.nb_tests, x.nb_cdt, x.seuil)} test(s) en CDT à ajouter</li>`).join('')}</ul>
     <p class="aide">Sinon, informer l'organisme certificateur avant le 15 janvier ${an + 1} avec un plan d'action. <button class="lien" onclick="STAT.onglet='cdt'; retour('statistiques')">Voir le détail</button></p></div>`;
 }
+
+/* ---------- Lot 2 : garde-fous du test pratique ---------- */
+const MAIL_RECLAMATION = 'reclamation@bfs-prevention.fr';
+
+/** Message si le type de lieu, le centre et l'indicateur « en CDT » de la session ne concordent pas ('' si cohérent). */
+function incoherenceLieu(s) {
+  if (!s) return '';
+  const client = s.lieu_type === 'client';
+  if (client && s.en_cdt !== false) return 'Incohérence : session chez le client mais comptée « en CDT ». Corrigez le lieu dans la fiche de la session.';
+  if (!client && s.en_cdt === false) return 'Incohérence : session au centre mais comptée « hors CDT ». Corrigez le lieu dans la fiche de la session.';
+  if (!client && !s.centre_examen_id) return 'Aucun centre d\'examen (CDT) choisi pour cette session : le taux de tests en CDT sera faussé.';
+  return '';
+}
+
+/** Lien mailto de réclamation pré-rempli avec le n° de session. */
+function lienReclamation(s) {
+  const ref = (s && (s.numero_session_galaxy || s.nom)) || '';
+  return `mailto:${MAIL_RECLAMATION}?subject=${encodeURIComponent('Réclamation — session ' + ref)}&body=${encodeURIComponent('Session : ' + ref + '\nNom du candidat :\nObjet de la réclamation :\n')}`;
+}
+
+/** Mention réclamation (lien + QR code) à afficher aux candidats. */
+function mentionReclamation(s) {
+  const id = 'qr-recl-' + Math.random().toString(36).slice(2, 7), lien = lienReclamation(s);
+  setTimeout(() => { const z = document.getElementById(id); if (z) { try { new QRCode(z, { text: lien, width: 72, height: 72 }); } catch (_e) { /* QR facultatif */ } } }, 0);
+  return `<div class="aide" style="display:flex;gap:10px;align-items:center;margin:6px 0"><div id="${id}"></div>
+    <span>Une réclamation sur ce test ? Écrire à <a href="${esc(lien)}">${MAIL_RECLAMATION}</a> (n° de session pré-rempli) ou scanner le QR code.</span></div>`;
+}

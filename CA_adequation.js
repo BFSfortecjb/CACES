@@ -29,6 +29,7 @@ const TOUS_POINTS_ADEQUATION = GROUPES_ADEQUATION.flatMap(g => g.points.map(p =>
 async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
   const pts = { ...(existante?.points || {}) };
   const nc = { ...(existante?.non_conformite || {}) };
+  let enBloc = !!existante?.saisie_en_bloc, observation = existante?.observation || '';
   const libelle = [engin.designation, engin.marque, engin.modele].filter(Boolean).join(' ');
   function dessiner() {
     const manque = TOUS_POINTS_ADEQUATION.filter(k => !pts[k]);
@@ -40,6 +41,8 @@ async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
             <label><input type="checkbox" data-k="${k}" ${pts[k] ? 'checked' : ''}> <span>${esc(lib)}</span></label>
             ${aide ? `<button type="button" class="icone" data-aide="${k}" title="Aide">ℹ</button>` : ''}
             <div class="adeq-aide" id="aide-${k}" hidden>${esc(aide || '')}</div></div>`).join('')}`).join('')}
+        <div class="adeq-bloc"><button type="button" id="adeq-tout">☑ Tout est conforme</button>
+          <label class="aide">Observation (facultatif) <input type="text" id="adeq-obs" value="${esc(observation)}" maxlength="300" placeholder="ex. engin vérifié à 8 h 15"></label></div>
         ${manque.length ? `<div class="adeq-nc"><b>En cas de non-conformité :</b> appeler immédiatement votre référent technique et responsable de site.
           <label><input type="checkbox" data-nc="traitee" ${nc.traitee ? 'checked' : ''}> Non-conformité traitée immédiatement</label>
           <label><input type="checkbox" data-nc="fiche" ${nc.fiche ? 'checked' : ''}> Édition d'une fiche de non-conformité (annexe 1, procédure n° 4)</label>
@@ -48,7 +51,9 @@ async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
           <button type="button" id="adeq-annuler">Retour</button>
           <button type="button" class="principal" id="adeq-valider">${manque.length ? 'Enregistrer (test bloqué)' : 'Valider : examen d\'adéquation OUI'}</button></div>
       </section>`;
-    $$('[data-k]', cible).forEach(i => i.addEventListener('change', () => { pts[i.dataset.k] = i.checked; dessiner(); }));
+    $$('[data-k]', cible).forEach(i => i.addEventListener('change', () => { pts[i.dataset.k] = i.checked; enBloc = false; dessiner(); }));
+    $('#adeq-tout', cible).addEventListener('click', () => { TOUS_POINTS_ADEQUATION.forEach(k => { pts[k] = true; }); enBloc = true; dessiner(); });
+    $('#adeq-obs', cible).addEventListener('input', e => { observation = e.target.value; });
     $$('[data-nc]', cible).forEach(i => i.addEventListener('change', () => { nc[i.dataset.nc] = i.checked; }));
     $$('[data-aide]', cible).forEach(b => b.addEventListener('click', () => { const e = $('#aide-' + b.dataset.aide, cible); e.hidden = !e.hidden; }));
     $('#adeq-fiche-nc', cible)?.addEventListener('click', async () => {
@@ -62,7 +67,7 @@ async function rendreAdequation(cible, sessionId, engin, existante, onFini) {
         return toast('Point(s) non conforme(s) : coche « traitée immédiatement » et « fiche de non-conformité ».', 'erreur', 6000);
       const { error } = await sb.from('adequations_session').upsert({
         session_id: sessionId, engin_id: engin.id, testeur_id: testeurDeLEpreuve(), date_examen: new Date().toISOString(),
-        points: pts, non_conformite: conforme ? null : nc, conforme }, { onConflict: 'session_id,engin_id' });
+        points: pts, non_conformite: conforme ? null : nc, conforme, saisie_en_bloc: enBloc && conforme, observation: observation.trim() || null }, { onConflict: 'session_id,engin_id' });
       if (error) return erreurSupabase('Enregistrement de l\'examen d\'adéquation', error);
       toast(conforme ? 'Examen d\'adéquation enregistré' : 'Non-conformité enregistrée : le test reste bloqué', conforme ? undefined : 'erreur', 5000);
       onFini(true);

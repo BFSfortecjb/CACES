@@ -212,6 +212,9 @@ async function afficherPratique(st, cat) {
   function etape() { $('#prat-prepa').hidden = false; majAdeq(); }
 
   /* ---------- 2. engin + examen d'adéquation ---------- */
+  let photoOk = !!st.photo_path;
+  sb.from('stagiaires').select('photo_path').eq('id', st.id).maybeSingle().then(({ data }) => { photoOk = !!data?.photo_path; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
+  document.addEventListener('photo-enregistree', e => { if (e.detail === st.id) { photoOk = true; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); } });
   let visiteOk = true;
   visitePrealableOk().then(v => { visiteOk = v; if (!v && $('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
   function majAdeq() {
@@ -219,14 +222,18 @@ async function afficherPratique(st, cat) {
     const typesOk = groupes.every(g => typesDuGroupe(g).length <= 1 || typeChoisi[g]);
     const tous = ids.length && ids.every(Boolean) && typesOk;
     const essai = !!$('#prat-essai')?.checked;
-    const ok = essai || (tous && visiteOk && ids.every(id => adeq[id]?.conforme));
+    const ok = essai || (tous && visiteOk && photoOk && ids.every(id => adeq[id]?.conforme));
     const zoneA = $('#prat-adeq');
     $('#prat-corps').hidden = !ok || !consignesVues; $('#prat-barre').hidden = !ok || !consignesVues;
-    zoneA.innerHTML = !essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
+    const alerteLieu = typeof incoherenceLieu === 'function' ? incoherenceLieu(S.session) : '';
+    const bandeauPhoto = !essai && !photoOk ? `<div class="adeq-banniere ko">PHOTO DU CANDIDAT OBLIGATOIRE avant le test (identification du titulaire) — test bloqué.
+      <button type="button" id="prat-photo">📷 Prendre la photo</button></div>` : '';
+    zoneA.innerHTML = (alerteLieu ? `<div class="adeq-banniere ko">⚠ ${esc(alerteLieu)}</div>` : '') + bandeauPhoto + (typeof mentionReclamation === 'function' ? mentionReclamation(S.session) : '') + (!essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
             — ${esc([e.designation, e.marque, e.modele].filter(Boolean).join(' '))}
-            <button type="button" data-adeq="${id}">${a ? 'Revoir' : 'Examen d\'adéquation'}</button></div>`; }).join('');
+            <button type="button" data-adeq="${id}">${a ? 'Revoir' : 'Examen d\'adéquation'}</button></div>`; }).join(''));
+    $('#prat-photo', zoneA)?.addEventListener('click', () => ouvrirPhoto(st.id));
     $$('[data-adeq]', zoneA).forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.adeq;
       $('#prat-corps').hidden = true; $('#prat-barre').hidden = true;

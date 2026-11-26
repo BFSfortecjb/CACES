@@ -71,6 +71,7 @@ async function ouvrirPhoto(stagiaireId) {
       if (e1) throw e1;
       const { error: e2 } = await sb.from('stagiaires').update({ photo_path: path }).eq('id', st.id);
       if (e2) throw e2;
+      document.dispatchEvent(new CustomEvent('photo-enregistree', { detail: st.id }));
       const nouvelle = await urlPhotoStagiaire(path);
       $('.photo-cadre').innerHTML = `<img id="photo-apercu" src="${esc(nouvelle)}" alt="Photo du titulaire">`;
       msg.textContent = 'Photo enregistrée.'; toast('Photo enregistrée');

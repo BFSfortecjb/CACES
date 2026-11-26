@@ -139,6 +139,7 @@ async function genererPreuveTestPdf(stagiaireId) {
   doc.setTextColor(255, 255, 255).setFont('helvetica', 'bold').setFontSize(10.5); doc.text(texte, largeur / 2, y + 7.5, { align: 'center' });
   y += 17; doc.setTextColor(...C.gris).setFont('helvetica', 'normal').setFontSize(8);
   doc.text(`Édité le ${new Date().toLocaleDateString('fr-FR')} — signature du testeur :`, marge, y);
+  doc.setFontSize(7); doc.text(`Réclamation : ${MAIL_RECLAMATION} (session ${s.numero_session_galaxy || s.nom || ''}).`, marge + 75, y + 6);
   doc.setDrawColor(0).rect(marge, y + 2, 70, 16);
   const nom = `${d.st.nom}_${d.st.prenom || ''}_preuve_test.pdf`.replace(/\s+/g, '_').replace(/[^\w.-]+/g, '_');
   return { nom, base64: doc.output('datauristring').split(',')[1] };
