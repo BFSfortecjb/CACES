@@ -4,7 +4,7 @@
    Chaque document a une version, une date, « validé par / le », une échéance de révision (alerte) et un lien ou un fichier.
    Lecture : tous les comptes. Ajout / nouvelle version : administrateur. L'historique des versions est conservé.
    ===================================================================== */
-const CAT_DOC = { recommandation: 'Recommandations CACES® et textes de référence', faq_caces: 'FAQ CACES® officielle', fiche_exercice: 'Fiches d\'exercice', grille_inrs: 'Grille INRS', procedure: 'Procédures', veille: 'Veille réglementaire', autre: 'Autres' };
+const CAT_DOC = { recommandation: 'Recommandations CACES® et textes de référence', faq_caces: 'FAQ CACES® officielle', fiche_exercice: 'Fiches d\'exercice', circuit_test: 'Circuits de test (par CDT)', grille_inrs: 'Grille INRS', procedure: 'Procédures', veille: 'Veille réglementaire', autre: 'Autres' };
 
 function docEtatRevision(d) {
   if (!d.revision_avant) return '';
@@ -65,6 +65,10 @@ function formDocQualite(base) {
       <label>Référence <input type="text" name="ref" value="${esc(base?.ref || '')}" placeholder="ex. FAQ-CACES" ${nv ? 'readonly' : ''} required></label>
       <label>Version <input type="text" name="version" required placeholder="ex. 2"></label>
       <label>Date de la version <input type="date" name="date_version" value="${new Date().toISOString().slice(0, 10)}" required></label></div></fieldset>
+    <fieldset id="doc-portee" ${['fiche_exercice', 'circuit_test'].includes(base?.categorie || 'recommandation') ? '' : 'hidden'}><legend>Portée (CDT et référentiel)</legend><div class="grille-2">
+      <label>CDT concerné <select name="centre"><option value="">Tous les CDT</option>${(S.referentiel?.centres || []).filter(c => c.actif !== false).map(c => `<option value="${c.id}" ${base?.centre_examen_id === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>
+      <label>Référentiel <select name="refcode"><option value="">Tous</option>${['R482', 'R483', 'R484', 'R485', 'R486', 'R487', 'R489', 'R490'].map(r => `<option ${base?.referentiel_code === r ? 'selected' : ''}>${r}</option>`).join('')}</select></label></div>
+      <p class="aide">Circuit de test : montré au candidat depuis l'écran de test. Fiche d'exercice : proposée dans la session du CDT concerné.</p></fieldset>
     <fieldset><legend>Contenu (un lien OU un fichier)</legend><div class="grille-2">
       <label>Lien (site officiel, Drive…) <input type="url" name="lien" value="${esc(base?.lien || '')}" placeholder="https://…"></label>
       <label>Fichier <input type="file" name="fichier"></label></div></fieldset>
@@ -83,6 +87,7 @@ function formDocQualite(base) {
     <label>Notes <textarea name="notes" rows="2">${esc(base?.notes || '')}</textarea></label>
     <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button><button type="submit" class="principal">Enregistrer</button></div></form>`);
   const f0 = $('#doc-form');
+  f0.categorie?.addEventListener('change', () => { $('#doc-portee').hidden = !['fiche_exercice', 'circuit_test'].includes(f0.categorie.value); });
   f0.diffusion.addEventListener('change', () => { $('#doc-cibles').hidden = !f0.diffusion.checked; });
   f0.addEventListener('submit', async ev => {
     ev.preventDefault(); const f = ev.target; let chemin = null;
@@ -98,6 +103,8 @@ function formDocQualite(base) {
     const { error } = await sb.from('documents_qualite').insert({ ref: f.ref.value.trim(), categorie: base?.categorie || f.categorie.value, titre: f.titre.value.trim(),
       version: f.version.value.trim(), date_version: f.date_version.value, valide_par: f.valide_par.value || null, valide_le: f.valide_le.value || null,
       revision_avant: f.revision_avant.value || null, lien: f.lien.value.trim() || null, fichier_path: chemin, notes: f.notes.value.trim() || null, actuelle: true,
+      centre_examen_id: ['fiche_exercice', 'circuit_test'].includes(base?.categorie || f.categorie.value) && f.centre.value ? Number(f.centre.value) : null,
+      referentiel_code: ['fiche_exercice', 'circuit_test'].includes(base?.categorie || f.categorie.value) && f.refcode.value ? f.refcode.value : null,
       diffusion_tracee: f.diffusion.checked, diffusion_cibles: f.diffusion.checked ? cibles : [] });
     if (error) return erreurSupabase('Enregistrement du document', error);
     fermerModale(); rendreEspaceDoc($('#contenu'));
