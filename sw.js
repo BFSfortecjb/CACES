@@ -26,7 +26,7 @@
 // à servir indéfiniment les anciens fichiers en cache (voir la règle
 // ci-dessus), même après un rechargement forcé (Ctrl+F5 ne contourne PAS
 // le service worker).
-const CACHE_VERSION = 'caces-shell-v143';
+const CACHE_VERSION = 'caces-shell-v144';
 
 // Fichiers lourds (grilles INRS en PDF, ≈ 1,3 Mo) : chargés en arrière-plan APRÈS l'installation, pour ne pas ralentir le premier affichage.
 const FICHIERS_DIFFERES = [

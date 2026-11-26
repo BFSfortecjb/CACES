@@ -26,12 +26,16 @@ async function rendreMesDocuments(zone) {
     ${Object.entries(TYPES_DOC_PERSO).map(([k, lib]) => {
       const l = docs.filter(d => d.type === k && d.actuelle), h = docs.filter(d => d.type === k && !d.actuelle);
       return `<div class="carte"><h3>${lib}</h3>${l.length ? `<table class="tableau"><thead><tr><th>Document</th><th>Document du / Validité</th><th></th></tr></thead><tbody>
-        ${l.map(d => { const e = etat(d); return `<tr><td><b>${esc(d.titre)}</b>${d.notes ? `<div class="aide">${esc(d.notes)}</div>` : ''}</td>
+        ${l.map(d => { const e = etat(d); return `<tr><td><b>${esc(d.titre)}</b>${['photo', 'signature'].includes(d.type) ? `<div><img data-prev="${d.id}" alt="" style="max-height:70px;background:#fff;border:1px solid #ddd;border-radius:6px"></div>` : ''}${d.notes ? `<div class="aide">${esc(d.notes)}</div>` : ''}</td>
           <td>${d.date_document ? 'du ' + dateFr(d.date_document) + ' → ' : ''}${d.date_validite ? dateFr(d.date_validite) : '—'} ${e === 'retard' ? '<b style="color:#b2181a">Expiré</b>' : e === 'proche' ? '<b style="color:#c97a02">Bientôt</b>' : ''}</td>
           <td><button data-o="${d.id}">Ouvrir</button> <button data-r="${d.id}">Remplacer</button> <button data-x="${d.id}" class="danger">Supprimer</button></td></tr>`; }).join('')}</tbody></table>`
         : '<p class="aide">Aucun document.</p>'}
         ${h.length ? `<details><summary class="aide">Anciennes versions (${h.length})</summary>${h.map(d => `<div><button data-o="${d.id}">${esc(d.titre)} — ${dateFr(d.created_at.slice(0, 10))}</button></div>`).join('')}</details>` : ''}</div>`;
     }).join('')}`;
+  $$('[data-prev]', zone).forEach(async im => {
+    const d = docs.find(x => x.id === im.dataset.prev), { data: u } = await sb.storage.from('caces-personnel').createSignedUrl(d.fichier_path, 600);
+    if (u?.signedUrl) im.src = u.signedUrl;
+  });
   const ouvrir = async id => {
     const d = docs.find(x => x.id === id), { data: u } = await sb.storage.from('caces-personnel').createSignedUrl(d.fichier_path, 600);
     if (u?.signedUrl) window.open(u.signedUrl, '_blank', 'noopener'); else toast('Fichier introuvable.', 'erreur');
@@ -54,7 +58,8 @@ function formMesDocuments(personne, base) {
   ouvrirModale(base ? 'Remplacer — ' + base.titre : 'Ajouter un document', `<form id="md-form" class="formulaire">
     <label>Type <select name="type" ${base ? 'disabled' : ''}>${Object.entries(TYPES_DOC_PERSO).map(([k, v]) => `<option value="${k}" ${base?.type === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
     <label>Titre <input type="text" name="titre" value="${esc(base?.titre || '')}" required placeholder="ex. Certificat de testeur R489"></label>
-    <label>Fichier <input type="file" name="fichier" required></label>
+    <div id="md-capture" hidden></div>
+    <label id="md-l-fic">Fichier <input type="file" name="fichier" required></label>
     <div class="aide"><button type="button" id="md-ocr">🔍 Lire le document pour pré-remplir</button> <span id="md-ocr-etat"></span>
       <br>Lecture faite sur cet appareil (rien n'est envoyé). Vérifie toujours les valeurs proposées.</div>
     <div id="md-lignes" hidden></div>
@@ -66,7 +71,52 @@ function formMesDocuments(personne, base) {
   let lignesOcr = [];
   const f0 = $('#md-form'), maj = () => { const bp = (base?.type || f0.type.value) === 'base_prevention';
     $('#md-aide-bp').hidden = !bp; $('#md-l-val').hidden = bp; f0.date_document.required = bp; };
-  f0.type.addEventListener('change', maj); maj();
+  let capture = null, flux = null;                       // fichier produit par le selfie ou la signature
+  const arreterCamera = () => { flux?.getTracks().forEach(t => t.stop()); flux = null; };
+  const majCapture = () => {
+    const t = base?.type || f0.type.value, z = $('#md-capture'); capture = null; arreterCamera();
+    z.hidden = !['photo', 'signature'].includes(t); f0.fichier.required = z.hidden; $('#md-l-fic').querySelector('input').required = z.hidden;
+    $('#md-ocr').parentElement.hidden = ['photo', 'signature'].includes(t);
+    if (t === 'photo') initSelfie(z); else if (t === 'signature') initSignature(z); else z.innerHTML = '';
+  };
+  const initSelfie = z => {
+    z.innerHTML = `<div class="aide">Prends un selfie avec la caméra de l'appareil, ou choisis un fichier ci-dessous.</div>
+      <video id="md-video" autoplay playsinline muted style="max-width:100%;width:320px;border-radius:8px;background:#000" hidden></video>
+      <canvas id="md-photo" style="max-width:100%;width:320px;border-radius:8px" hidden></canvas>
+      <div><button type="button" id="md-cam">📷 Ouvrir la caméra</button> <button type="button" id="md-snap" class="principal" hidden>Prendre la photo</button>
+        <button type="button" id="md-recam" hidden>Reprendre</button> <span class="aide" id="md-cam-etat"></span></div>`;
+    $('#md-cam').onclick = async () => {
+      try {
+        flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 960 } }, audio: false });
+        const v = $('#md-video'); v.srcObject = flux; v.hidden = false; $('#md-photo').hidden = true; $('#md-cam').hidden = true; $('#md-snap').hidden = false; $('#md-recam').hidden = true;
+      } catch (e) { $('#md-cam-etat').textContent = 'Caméra indisponible ou refusée (' + (e.name || e) + ') : choisis un fichier à la place.'; }
+    };
+    $('#md-snap').onclick = () => {
+      const v = $('#md-video'), c = $('#md-photo'), w = v.videoWidth || 640, h = v.videoHeight || 480, k = Math.min(1, 800 / Math.max(w, h));
+      c.width = Math.round(w * k); c.height = Math.round(h * k); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      c.toBlob(b => { capture = new File([b], 'selfie.jpg', { type: 'image/jpeg' }); }, 'image/jpeg', 0.9);
+      arreterCamera(); v.hidden = true; c.hidden = false; $('#md-snap').hidden = true; $('#md-recam').hidden = false; $('#md-cam').hidden = true;
+      if (!f0.titre.value) f0.titre.value = 'Photo d\'identité';
+    };
+    $('#md-recam').onclick = () => { capture = null; $('#md-cam').click(); };
+  };
+  const initSignature = z => {
+    z.innerHTML = `<div class="aide">Signe dans le cadre avec le doigt, le stylet ou la souris.</div>
+      <canvas id="md-sign" width="700" height="240" style="width:100%;max-width:700px;height:auto;border:2px dashed #bbb;border-radius:8px;background:#fff;touch-action:none"></canvas>
+      <div><button type="button" id="md-sign-eff">Effacer</button> <span class="aide" id="md-sign-etat"></span></div>`;
+    const c = $('#md-sign'), g = c.getContext('2d'); let dessine = false, trace = false;
+    g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111';
+    const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+    c.addEventListener('pointerdown', e => { dessine = true; c.setPointerCapture(e.pointerId); const [x, y] = pos(e); g.beginPath(); g.moveTo(x, y); g.lineTo(x + 0.1, y + 0.1); g.stroke(); e.preventDefault(); });
+    c.addEventListener('pointermove', e => { if (!dessine) return; const [x, y] = pos(e); g.lineTo(x, y); g.stroke(); trace = true; e.preventDefault(); });
+    const fin = () => { if (!dessine) return; dessine = false; if (trace) c.toBlob(b => { capture = new File([b], 'signature.png', { type: 'image/png' }); }, 'image/png'); };
+    c.addEventListener('pointerup', fin); c.addEventListener('pointercancel', fin); c.addEventListener('pointerleave', fin);
+    $('#md-sign-eff').onclick = () => { g.clearRect(0, 0, c.width, c.height); capture = null; trace = false; };
+    if (!f0.titre.value) f0.titre.value = 'Ma signature';
+  };
+  const garde = setInterval(() => { if (!document.getElementById('md-form')) { arreterCamera(); clearInterval(garde); } }, 1000);
+  const majTout = () => { maj(); majCapture(); };
+  f0.type.addEventListener('change', majTout); majTout();
   $('#md-ocr').addEventListener('click', async () => {
     const fic = f0.fichier.files[0], etat = $('#md-ocr-etat'); if (!fic) return toast('Choisis d\'abord un fichier.', 'erreur');
     try {
@@ -91,7 +141,8 @@ function formMesDocuments(personne, base) {
     } catch (e) { etat.textContent = 'Lecture impossible (' + (e.message || e) + ') : saisie manuelle.'; }
   });
   $('#md-form').addEventListener('submit', async ev => {
-    ev.preventDefault(); const f = ev.target, fic = f.fichier.files[0]; if (!fic) return;
+    ev.preventDefault(); const f = ev.target, fic = capture || f.fichier.files[0];
+    if (!fic) return toast(['photo', 'signature'].includes(base?.type || f.type.value) ? 'Prends la photo ou signe avant d\'enregistrer.' : 'Choisis un fichier.', 'erreur');
     const type = base?.type || f.type.value;
     const chemin = `${personne}/${type}/${Date.now()}_${fic.name.replace(/[^\w.-]+/g, '_')}`;
     const { error: e1 } = await sb.storage.from('caces-personnel').upload(chemin, fic, { upsert: false });
