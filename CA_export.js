@@ -88,7 +88,7 @@ async function demanderEnvoiSecretariat() {
     <p class="aide">Destinataire : <b>${esc(destinataire)}</b>. ${autorisation ? 'Autorisations de conduite' : 'Cartons CACES® (les n° sont attribués à la génération)'} en pièces jointes d'un seul mail, copie sur le Drive de la session.</p>
     <form class="formulaire" id="form-secretariat">
       <fieldset><legend>Stagiaires (${eligibles.length})</legend>
-        ${eligibles.map(st => `<label class="case"><input type="checkbox" name="st" value="${st.id}" checked> ${esc(st.nom)} ${esc(st.prenom)}</label>`).join('')}
+        ${eligibles.map(st => `<label class="case ${estRecyclage(st.id) ? 'nom-recyclage' : ''}" title="${estRecyclage(st.id) ? 'Recyclage' : 'Formation initiale'}"><input type="checkbox" name="st" value="${st.id}" checked> ${esc(st.nom)} ${esc(st.prenom)}</label>`).join('')}
       </fieldset>
       <button class="principal" type="submit">Envoyer</button></form>`);
   $('#form-secretariat').addEventListener('submit', async ev => {

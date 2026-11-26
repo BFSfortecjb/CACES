@@ -88,7 +88,7 @@ async function ouvrirEnvoiGalaxy() {
       return `<td><label class="case"><input type="checkbox" data-st="${st.id}" data-type="${type}" ${actif && relie ? 'checked' : ''} ${actif && relie ? '' : 'disabled'}>
         ${e ? `<span class="etat ok" title="Envoyé le ${esc(dateFr(e.envoye_le))}">envoyé</span>` : ''}</label></td>`;
     };
-    return `<tr><td>${esc(st.nom)} ${esc(st.prenom || '')}${relie ? '' : ' <span class="etat ko" title="Stagiaire non relié à Galaxy : importe-le depuis Galaxy">non relié à Galaxy</span>'}</td>
+    return `<tr><td ${attrRecyclage(st.id)}>${esc(st.nom)} ${esc(st.prenom || '')}${relie ? '' : ' <span class="etat ko" title="Stagiaire non relié à Galaxy : importe-le depuis Galaxy">non relié à Galaxy</span>'}</td>
       <td>${titres}/${cats.length}</td>${case_('carton', !autorisation && titres > 0)}${case_('preuve_test', true)}${case_('copie_qcm', true)}${case_('resultats', !autorisation)}
       <td class="aide" data-etat="${st.id}"></td></tr>`;
   };

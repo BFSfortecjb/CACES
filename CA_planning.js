@@ -54,7 +54,7 @@ async function ouvrirPlanning() {
       ? `${esc(r)} : <i>validée</i>` : `${esc(r)} ${sel(st.id, r, '', 'theorie')}`).join('<br>');
     const pr = cats.map(c => c.pratique_validee === true ? `${esc(c.categorie_code)} : <i>validée</i>`
       : `${esc(c.categorie_code)} ${sel(st.id, c.referentiel_code, c.categorie_code, 'pratique')}`).join('<br>');
-    return `<tr><td>${esc(st.nom)} ${esc(st.prenom)}</td><td>${th}</td><td>${pr}</td></tr>`;
+    return `<tr><td ${attrRecyclage(st.id)}>${esc(st.nom)} ${esc(st.prenom)}</td><td>${th}</td><td>${pr}</td></tr>`;
   }).join('');
 
   ouvrirModale('📅 Planning de la session', `
@@ -131,7 +131,7 @@ async function afficherPresences() {
       <tr><th rowspan="2">Stagiaire</th>${tous.map(j => `<th colspan="2" style="text-align:center">${esc(dateFr(j))}<br><small>${jours.test.includes(j) ? 'test' : 'formation'}</small>
         ${peut ? `<br><button class="icone" title="Tout cocher / décocher" onclick="cocherJourPresence('${j}')">☑</button>` : ''}</th>`).join('')}</tr>
       <tr>${tous.map(() => '<th style="text-align:center">Matin</th><th style="text-align:center">Après-midi</th>').join('')}</tr></thead>
-      <tbody>${(stags || []).map(st => `<tr><td>${esc(st.nom)} ${esc(st.prenom || '')}</td>${tous.map(j => ['matin', 'apres_midi'].map(m =>
+      <tbody>${(stags || []).map(st => `<tr><td ${attrRecyclage(st.id)}>${esc(st.nom)} ${esc(st.prenom || '')}</td>${tous.map(j => ['matin', 'apres_midi'].map(m =>
         `<td style="text-align:center"><input type="checkbox" ${set.has(`${st.id}|${j}|${m}`) ? 'checked' : ''} ${peut ? '' : 'disabled'}
           onchange="basculerPresence('${st.id}','${j}','${m}',this.checked)"></td>`).join('')).join('')}</tr>`).join('') || '<tr><td class="vide">Aucun stagiaire.</td></tr>'}</tbody></table></div></div>`;
 }

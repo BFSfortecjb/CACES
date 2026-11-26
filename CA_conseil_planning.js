@@ -254,7 +254,7 @@ function dessinerConseil(r, ctx, n, nouveaux) {
       ${nouveaux.length ? `<span class="aide">Jours à créer : ${nouveaux.map(dateFr).join(', ')}</span>` : ''}
       <p>${diag.join('<br>')}</p></div>
     <details class="carte"><summary><b>Profil des stagiaires</b> <small>(🟢 à l'aise : passent en premier · 🟠 stressé : réparti sur 2 jours)</small></summary>
-      ${ctx.stags.map(st => `<div class="ligne-profil"><span>${esc(st.nom)} ${esc(st.prenom || '')}</span>
+      ${ctx.stags.map(st => `<div class="ligne-profil"><span ${attrRecyclage(st.id)}>${esc(st.nom)} ${esc(st.prenom || '')}</span>
         <select onchange="changerProfilConseil('${st.id}', this.value)">${[['aise', '🟢 À l\'aise — en premier'], ['standard', 'Standard'], ['stresse', '🟠 Stressé — sur 2 jours']]
           .map(([v, l]) => `<option value="${v}" ${ctx.profil(st) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</details>
     <div class="tableau-defilant"><table class="tableau"><thead><tr><th>Jour</th>${testeurs.map(t => `<th>${esc(nomFormateur(t))}</th>`).join('')}</tr></thead><tbody>

@@ -63,7 +63,7 @@ async function ouvrirRepartitionTesteurs() {
   };
   const dessiner = () => {
     const nb = Object.fromEntries(ids.map(t => [t, 0])); Object.values(aff).forEach(t => { if (t) nb[t]++; });
-    $('#rep-corps').innerHTML = (stags || []).map(st => `<tr><td>${esc(st.nom)} ${esc(st.prenom || '')}</td>
+    $('#rep-corps').innerHTML = (stags || []).map(st => `<tr><td ${attrRecyclage(st.id)}>${esc(st.nom)} ${esc(st.prenom || '')}</td>
       <td>${numGroupe(st) ? 'Groupe ' + numGroupe(st) : '—'}</td>
       <td><select data-st="${st.id}"><option value="">(par défaut)</option>${ids.map(t => `<option value="${t}" ${aff[st.id] === t ? 'selected' : ''} ${peut(t, st) ? '' : 'disabled'}>${esc(nomF(t))}</option>`).join('')}</select></td></tr>`).join('');
     $('#rep-compte').innerHTML = ids.map(t => `<span class="prat-badge" style="${nb[t] > MAX_THEORIE_PAR_TESTEUR ? 'background:#c0392b;color:#fff' : ''}">${esc(nomF(t))} : ${nb[t]}</span>`).join(' ')

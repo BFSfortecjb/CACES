@@ -28,7 +28,7 @@ async function ouvrirQcmGeneral(modePrereglage) {
   // Session mixte (ex. R485 + R489) : un test théorique PAR référentiel, avec uniquement les stagiaires inscrits à ce référentiel.
   const lignes = (ref) => mesStags.filter(st => (st.stagiaire_categories || []).some(c => c.referentiel_code === ref)).map((st, i) => {
     const fait = (st.stagiaire_categories || []).filter(c => c.referentiel_code === ref).every(c => c.theorie_validee);
-    return `<tr><td><label><input type="checkbox" class="qg-part" value="${st.id}" ${fait ? '' : 'checked'}> ${esc(st.nom)} ${esc(st.prenom)}</label>
+    return `<tr><td><label ${attrRecyclage(st.id)}><input type="checkbox" class="qg-part" value="${st.id}" ${fait ? '' : 'checked'}> ${esc(st.nom)} ${esc(st.prenom)}</label>
       ${fait ? ' <span class="etat">✔ théorie validée</span>' : ''}</td>
       <td class="qg-col-box"><input type="number" min="1" max="999" class="qg-num" data-id="${st.id}" value="${st.numero_telecommande || ''}" style="width:70px"></td></tr>`;
   }).join('');

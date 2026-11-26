@@ -29,6 +29,7 @@ async function editerStagiaire(id) {
         <label>Date de naissance
           <input name="date_naissance" type="date" max="${dateNaissanceMax()}" value="${esc(st.date_naissance || '')}"></label>
       </div>
+      <label class="case" title="Affiche le nom du stagiaire en bleu. Posé automatiquement à l'import Galaxy (catégorie « Rec »), modifiable ici."><input type="checkbox" name="recyclage" ${st.recyclage ? 'checked' : ''}> Recyclage</label>
       <fieldset><legend>Catégories de CACES® visées par ce stagiaire</legend>
         ${categoriesSession.map(c => `<label class="case"><input type="checkbox" name="categorie"
           value="${esc(c.referentiel_code)}|${esc(c.categorie_code)}"
@@ -48,7 +49,7 @@ async function editerStagiaire(id) {
       session_id: S.session.id,
       nom: f.nom.value.trim().toUpperCase(), prenom: f.prenom.value.trim(),
       civilite: f.civilite.value || null, entreprise: f.entreprise.value.trim() || null,
-      date_naissance: f.date_naissance.value || null,
+      date_naissance: f.date_naissance.value || null, recyclage: f.recyclage.checked,
     };
     if (donnees.date_naissance && !dateNaissanceValide(donnees.date_naissance)) {
       return toast('Cette date de naissance donne moins de 16 ans — vérifie qu\'il ne s\'agit pas de '

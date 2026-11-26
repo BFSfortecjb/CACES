@@ -96,6 +96,7 @@ async function ecranTabletteSession(cible) {
   cible.innerHTML = '<div class="tab-chargement">Chargement…</div>';
   const { data: s, error } = await sb.from('sessions_formation').select('*').eq('id', sid).single();
   if (error || !s) { toast('Session introuvable : redemandez un QR code.', 'erreur'); return quitterTablette(); }
+  if (typeof chargerRecyclage === 'function') await chargerRecyclage(s.id);
   S.session = s; S.ecran = 'session'; S.vision = S.profil?.role === 'admin' ? 'admin' : 'formateur';
   const [{ data: stags }, { data: groupes }, { data: sts }] = await Promise.all([
     sb.from('stagiaires').select('id, nom, prenom, civilite, entreprise, groupe_id, testeur_id, ordre, stagiaire_categories(referentiel_code, categorie_code, theorie_validee, pratique_validee)').eq('session_id', sid).order('ordre').order('nom'),
@@ -124,7 +125,7 @@ async function ecranTabletteSession(cible) {
         ${liste.map(st => {
           const peut = !cloturee && peutTesterStagiaire(st, s, moi);
           return `<section class="tab-carte">
-            <h3>${esc(st.nom)} ${esc(st.prenom || '')}</h3>
+            <h3 ${attrRecyclage(st.id)}>${esc(st.nom)} ${esc(st.prenom || '')}</h3>
             ${st.entreprise ? `<p class="tab-sous">${esc(st.entreprise)}</p>` : ''}
             <div class="tab-cats">${(st.stagiaire_categories || []).map(c => {
               const aff = testeurDeCategorie(c.referentiel_code, c.categorie_code, s), autre = aff && aff !== moi;

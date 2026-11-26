@@ -24,6 +24,8 @@ const referentielGalaxy = nomProduit => (REFERENTIELS_GALAXY.find(([re]) => re.t
 // « 1B Rec. et 5 Rec. » (recyclage) -> ['1B', '5'] : le suffixe « Rec. » est retiré
 const categoriesGalaxy = texte => String(texte || '').split(/\s*(?:,|;|\/|\+|\bet\b)\s*/i)
   .map(x => x.trim().toUpperCase().replace(/\s+REC\.?$/, '').trim()).filter(Boolean);
+/** Vrai si au moins un code de catégorie suivie finit par « Rec » (ex. « 1B Rec. et 5 »). */
+const recyclageGalaxy = texte => String(texte || '').split(/\s*(?:,|;|\/|\+|\bet\b)\s*/i).some(x => /\s+REC\.?\s*$/i.test(x.trim()));
 const jourGalaxy = v => String(v || '').slice(0, 10) || null;
 
 /** Lieu Galaxy → centre de test de l'appli (cherche d'abord le nom du centre, puis quelques correspondances connues). */
@@ -74,7 +76,7 @@ async function inscritsGalaxy(f) {
       fonction: (fiche.fonction || '').trim() || null,
       entreprise: (fiche.entreprise_rattache || fiche.nom_etablissement || '').trim() || null,
       naissance: jourGalaxy(fiche.date_naissance),
-      categories: categoriesGalaxy(l.categorie_suivi),
+      categories: categoriesGalaxy(l.categorie_suivi), recyclage: recyclageGalaxy(l.categorie_suivi),
     });
   }
   return sortie;
@@ -144,7 +146,7 @@ async function ouvrirImportGalaxy() {
           const { data, error } = await sb.from('stagiaires').insert({
             session_id: s.id, nom: i.nom.toUpperCase(), prenom: i.prenom, civilite: i.civilite, email: i.email, fonction: i.fonction,
             entreprise: i.entreprise, date_naissance: i.naissance && dateNaissanceValide(i.naissance) ? i.naissance : null,
-            galaxy_stagiaire_id: i.galaxy_id, galaxy_nom: i.nom.toUpperCase(), galaxy_prenom: i.prenom, code_acces_individuel: codeIndividuel() }).select().single();
+            galaxy_stagiaire_id: i.galaxy_id, galaxy_nom: i.nom.toUpperCase(), galaxy_prenom: i.prenom, recyclage: !!i.recyclage, code_acces_individuel: codeIndividuel() }).select().single();
           if (error) throw error;
           const choisies = i.categories.map(cleCat).filter(c => catsConnues.has(c)).map(c => { const [referentiel_code, categorie_code] = c.split('|'); return { referentiel_code, categorie_code }; });
           await synchroniserCategoriesStagiaire(data.id, choisies.length ? choisies : (s._categories || []));

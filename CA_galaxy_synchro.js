@@ -9,7 +9,7 @@ async function inscritsSynchroGalaxy(f) {
     const rep = await galaxy('get_sta_ins', { search: { convention_element_id: f.formation_id || f.id } }, 1, 400);
     const l = rep.result || [];
     if (l.length) return l.map(x => ({ galaxy_id: String(x.stagiaire_id), nom: String(x.nom || '').trim(), prenom: String(x.prenom || '').trim(),
-      annule: String(x.annule) === '1', categories: categoriesGalaxy(x.categorie_suivi) }));
+      annule: String(x.annule) === '1', categories: categoriesGalaxy(x.categorie_suivi), recyclage: recyclageGalaxy(x.categorie_suivi) }));
   } catch (_e) { /* repli ci-dessous */ }
   return (await inscritsGalaxy(f)).map(i => ({ ...i, annule: false }));
 }
@@ -183,7 +183,7 @@ async function ouvrirSynchroGalaxy() {
         for (const c of $$('input[data-nv]:checked')) {
           const g = gal.find(x => x.galaxy_id === c.dataset.nv); if (!g) continue;
           const { data, error } = await sb.from('stagiaires').insert({ session_id: s.id, nom: U(g.nom), prenom: P(g.prenom), galaxy_stagiaire_id: g.galaxy_id,
-            galaxy_nom: U(g.nom), galaxy_prenom: P(g.prenom), code_acces_individuel: codeIndividuel() }).select().single();
+            galaxy_nom: U(g.nom), galaxy_prenom: P(g.prenom), recyclage: !!g.recyclage, code_acces_individuel: codeIndividuel() }).select().single();
           if (error) throw error;
           const ch = (g.categories || []).map(k => cleCategorieGalaxy(ref, k)).filter(k => catsConnues.has(k)).map(k => { const [referentiel_code, categorie_code] = k.split('|'); return { referentiel_code, categorie_code }; });
           await synchroniserCategoriesStagiaire(data.id, ch.length ? ch : (s._categories || [])); n++;

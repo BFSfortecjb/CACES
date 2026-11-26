@@ -393,6 +393,7 @@ async function rendreDetailSession(zone) {
 
   const engins = typeof resumeEnginsSession === 'function' ? await resumeEnginsSession(s.id) : { nb: 0, rouges: 0 };
   const alerteLoc = typeof alerteEnginsLocation === 'function' ? await alerteEnginsLocation(s) : '';
+  if (typeof chargerRecyclage === 'function') await chargerRecyclage(s.id);   // stagiaires en recyclage (nom en bleu)
   const bandeauUt = (typeof bandeauChargeTesteur === 'function' && s.type_session !== 'autorisation') ? await bandeauChargeTesteur(s) : '';
   const lien = location.origin + location.pathname + '#stagiaire?code=' + encodeURIComponent(s.code_acces);
   const cloturee = s.statut === 'cloturee';
@@ -522,7 +523,7 @@ function ligneStagiaire(st, d) {
   const celluleGroupe = !groupes.length ? '' : `<td><select ${d.ecriture && S.session.statut !== 'cloturee' ? '' : 'disabled'} onchange="changerGroupeStagiaire('${id}', this.value)">
       <option value="1" ${st.groupe_id ? '' : 'selected'}>Groupe 1</option><option value="2" ${st.groupe_id ? 'selected' : ''}>Groupe 2</option></select></td>`;
   return `<tr>
-    <td>${esc(st.nom)}</td><td>${esc(st.prenom)}</td><td>${st.civilite === 'Mme' ? 'Mme' : st.civilite === 'M' ? 'M.' : ''}</td>
+    <td ${attrRecyclage(st.id)}>${esc(st.nom)}</td><td ${attrRecyclage(st.id)}>${esc(st.prenom)}</td><td>${st.civilite === 'Mme' ? 'Mme' : st.civilite === 'M' ? 'M.' : ''}</td>
     <td>${puces}</td>${celluleGroupe}
     <td class="actions">
       ${btn(d.formateur, '📋', 'FISE — évaluation en formation (formateur)', `appelModule('ouvrirFise','${id}')`, 'réservé au formateur de la session')}

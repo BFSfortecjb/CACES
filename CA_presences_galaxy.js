@@ -49,7 +49,7 @@ function rendrePresencesGalaxy(zone, session) {
       const gens = new Map();                         // stagiaire_id Galaxy -> { nom, prenom, horsListe, jours: {iso: ligne} }
       lignes.forEach(l => {
         const id = String(l.stagiaire_id);
-        if (!gens.has(id)) { const s = parGalaxy.get(id); gens.set(id, { nom: s ? s.nom : (l.nom || ''), prenom: s ? s.prenom : (l.prenom || ''), horsListe: !s, jours: {} }); }
+        if (!gens.has(id)) { const s = parGalaxy.get(id); gens.set(id, { nom: s ? s.nom : (l.nom || ''), prenom: s ? s.prenom : (l.prenom || ''), horsListe: !s, rec: !!s && typeof estRecyclage === 'function' && estRecyclage(s.id), jours: {} }); }
         gens.get(id).jours[String(l.date_formation || '').slice(0, 10)] = l;
       });
       const liste = [...gens.values()].sort((a, b) => a.horsListe - b.horsListe || `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr'));
@@ -65,7 +65,7 @@ function rendrePresencesGalaxy(zone, session) {
             if (present) total += pgMinutes(l.duree_plage);
             return `<td class="pg-c">${pgRepere('M', pgHeure(l.debut_matin), present)}${pgRepere('A', pgHeure(l.debut_aprem), present)}</td>`;
           }).join('');
-          return `<tr><td>${esc(`${g.nom} ${g.prenom}`.trim())}${g.horsListe ? ' <i class="aide">(pas dans la liste)</i>' : ''}</td>${cases}<td class="pg-c"><b>${total ? pgDuree(total) : '0 h'}</b></td></tr>`;
+          return `<tr><td class="${g.rec ? 'nom-recyclage' : ''}" title="${g.horsListe ? '' : (g.rec ? 'Recyclage' : 'Formation initiale')}">${esc(`${g.nom} ${g.prenom}`.trim())}${g.horsListe ? ' <i class="aide">(pas dans la liste)</i>' : ''}</td>${cases}<td class="pg-c"><b>${total ? pgDuree(total) : '0 h'}</b></td></tr>`;
         }).join('')}</tbody></table></div>
         <p class="aide">Source : Galaxy (lecture seule). Total = durée prévue des jours où le stagiaire est présent.</p>`;
     } catch (e) {
