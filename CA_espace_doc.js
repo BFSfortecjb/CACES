@@ -4,7 +4,7 @@
    Chaque document a une version, une date, « validé par / le », une échéance de révision (alerte) et un lien ou un fichier.
    Lecture : tous les comptes. Ajout / nouvelle version : administrateur. L'historique des versions est conservé.
    ===================================================================== */
-const CAT_DOC = { faq_caces: 'FAQ CACES® officielle', fiche_exercice: 'Fiches d\'exercice', grille_inrs: 'Grille INRS', procedure: 'Procédures', veille: 'Veille réglementaire', autre: 'Autres' };
+const CAT_DOC = { recommandation: 'Recommandations CACES® et textes de référence', faq_caces: 'FAQ CACES® officielle', fiche_exercice: 'Fiches d\'exercice', grille_inrs: 'Grille INRS', procedure: 'Procédures', veille: 'Veille réglementaire', autre: 'Autres' };
 
 function docEtatRevision(d) {
   if (!d.revision_avant) return '';
@@ -27,7 +27,7 @@ async function rendreEspaceDoc(zone) {
   zone.innerHTML = `<div class="barre-actions"><h2>📚 Documents</h2>${admin ? '<button class="principal" id="doc-nouv">+ Nouveau document</button>' : ''}</div>
     <p class="aide">Versions maîtrisées (référentiel §4.9.4) : seule la version actuelle est proposée ; l'historique est conservé. La FAQ est la <b>FAQ CACES® officielle</b>.</p>
     ${Object.entries(CAT_DOC).map(([k, lib]) => {
-      const l = actuels.filter(d => d.categorie === k); if (!l.length) return '';
+      const l = actuels.filter(d => d.categorie === k || (k === 'autre' && !CAT_DOC[d.categorie])); if (!l.length) return '';
       return `<div class="carte"><h3>${lib}</h3><table class="tableau"><thead><tr><th>Document</th><th>Version</th><th>Date</th><th>Validé par</th><th>Révision avant</th><th></th></tr></thead><tbody>
       ${l.map(d => { const e = docEtatRevision(d); const nb = tous.filter(x => x.ref === d.ref).length;
         return `<tr><td><b>${esc(d.titre)}</b><div class="aide">${esc(d.ref)}${d.notes ? ' — ' + esc(d.notes) : ''}</div></td><td>${esc(d.version)}</td><td>${dateFr(d.date_version)}</td>
