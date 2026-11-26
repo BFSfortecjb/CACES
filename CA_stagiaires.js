@@ -116,6 +116,7 @@ function ouvrirActionsStagiaire(id, nom, prenom) {
       <button onclick="fermerModale();appelModule('ouvrirParcours','${id}')">🔁 Parcours : recyclage / autre catégorie (photo ancien CACES®)</button>
       <button onclick="fermerModale();appelModule('voirCopie','${id}')">📄 Voir la copie corrigée du QCM</button>
       <button onclick="fermerModale();appelModule('${S.session.type_session === 'autorisation' ? 'genererAutorisationPdf' : 'genererCartonPdf'}','${id}')">${S.session.type_session === 'autorisation' ? '🪪 Générer l\'autorisation de conduite (PDF)' : '🪪 Générer le carton CACES® (PDF)'}</button>
+      ${S.session.type_session === 'autorisation' ? `<button onclick="fermerModale();appelModule('avisTesteurPdf','${id}')">📝 Avis du testeur (PDF)</button>` : ''}
       ${d.ecriture ? `<button class="danger" onclick="fermerModale();supprimerStagiaire('${id}')">🗑 Supprimer le stagiaire</button>` : ''}
     </div>`);
 }

@@ -120,6 +120,7 @@ async function afficherPratique(st, cat) {
   }
   const bloque = typeof blocageTesteur === 'function' && S.profil?.role !== 'admin' ? blocageTesteur(S.profil?.id, cat.referentiel_code, cat.categorie_code) : '';
   if (bloque) { zone.innerHTML = `<div class="carte" style="border-left:4px solid #b2181a"><p><b>Évaluation impossible : ${esc(bloque)}.</b></p><p class="aide">Mets à jour tes documents dans « Mon espace › Mes documents », ou demande à l'administrateur de le faire.</p></div>`; return; }
+  if (S.session?.type_session === 'autorisation' && typeof afficherPratiqueAllegee === 'function') return afficherPratiqueAllegee(st, cat);   // autorisation de conduite : évaluation allégée
   zone.innerHTML = '<p class="chargement">Chargement…</p>';
   const [{ data: criteres, error }, { data: passages }, { data: liens }, { data: ops }, { data: adeqs }] = await Promise.all([
     sb.from('criteres_pratique').select('*').eq('referentiel_code', cat.referentiel_code)

@@ -132,7 +132,7 @@ async function auditMissions(corps) {
 function auditNouvelle(corps, type, centreId) {
   const centres = (S.referentiel?.centres || []).filter(c => c.actif !== false);
   const testeurs = (S.formateurs || []).filter(f => f.actif !== false);
-  ouvrirModale(`<h3>Nouvel audit</h3><form id="aud-f" class="formulaire">
+  ouvrirModale('Nouvel audit', `<form id="aud-f" class="formulaire">
     <label>Type <select name="type">${Object.entries(TYPES_MISSION).map(([k, v]) => `<option value="${k}" ${type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
     <label>Site <select name="centre"><option value="">—</option>${centres.map(c => `<option value="${c.id}" ${c.id === centreId ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>
     <label>Testeur observé (audit de test) <select name="testeur"><option value="">—</option>${testeurs.map(f => `<option value="${f.id}">${esc(nomTesteur(f.id))}</option>`).join('')}</select></label>
@@ -253,7 +253,7 @@ async function auditEditeur(corps) {
     ${(data || []).map(x => `<tr><td>${esc(x.code)}</td><td>${esc(x.section)}</td><td>${x.portee}</td><td>${ecr ? `<input data-id="${x.id}" data-k="titre" value="${esc(x.titre)}" style="width:100%">` : esc(x.titre)}</td><td>${ecr ? `<input type="checkbox" data-id="${x.id}" data-k="actif" ${x.actif ? 'checked' : ''}>` : (x.actif ? 'oui' : 'non')}</td></tr>`).join('')}</tbody></table></div>`;
   $$('[data-k]', corps).forEach(i => i.addEventListener('change', async () => { const { error } = await sb.from('audit_exigences').update({ [i.dataset.k]: i.type === 'checkbox' ? i.checked : i.value }).eq('id', i.dataset.id); if (error) erreurSupabase('Mise à jour', error); else toast('Enregistré.'); }));
   $('#ex-nv', corps)?.addEventListener('click', () => {
-    ouvrirModale(`<h3>Nouvelle exigence</h3><form id="ex-f" class="formulaire"><label>Code <input name="code" required></label><label>Section <input name="section" required></label>
+    ouvrirModale('Nouvelle exigence', `<form id="ex-f" class="formulaire"><label>Code <input name="code" required></label><label>Section <input name="section" required></label>
       <label>Portée <select name="portee">${['organisme', 'site', 'testeur', 'test', 'dossiers'].map(p => `<option>${p}</option>`).join('')}</select></label><label>Titre <input name="titre" required></label><label>Critère <textarea name="critere"></textarea></label>
       <div class="actions"><button class="principal">Ajouter</button> <button type="button" onclick="fermerModale()">Annuler</button></div></form>`);
     $('#ex-f').addEventListener('submit', async e => { e.preventDefault(); const f = e.target; const ordre = ((data || []).at(-1)?.ordre || 0) + 1;
