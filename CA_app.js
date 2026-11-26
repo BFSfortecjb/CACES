@@ -76,11 +76,11 @@ const ONGLETS = {
 };
 // Libellés des écrans accessibles en sous-onglet
 const LIBELLE_ECRAN = { tableaubord: 'Tableau de bord', organisme: 'Réglages', testeurs: 'Testeurs & UT', qualite: 'Qualité', categories: 'Catégories', fise: 'Catalogue FISE',
-  grilles: 'Grilles pratiques', comptes: 'Comptes', motsdepasse: 'Mots de passe', moncompte: 'Mes paramètres', messtats: 'Mes statistiques', docqualite: 'Documents', faqcaces: 'FAQ CACES®' };
+  grilles: 'Grilles pratiques', comptes: 'Comptes', motsdepasse: 'Mots de passe', moncompte: 'Mes paramètres', mesdocs: 'Mes documents', messtats: 'Mes statistiques', docqualite: 'Documents', faqcaces: 'FAQ CACES®' };
 // Sous-onglets de chaque groupe (onglet principal)
 const GROUPES_ONGLETS = {
   organisme: ['tableaubord', 'organisme', 'testeurs', 'qualite', 'categories', 'fise', 'grilles', 'comptes', 'motsdepasse'],
-  moncompte: ['moncompte', 'messtats', 'grilles'],
+  moncompte: ['moncompte', 'messtats', 'mesdocs', 'grilles'],
   docqualite: ['docqualite', 'faqcaces'],
 };
 const estAdmin = () => S.vision === 'admin';
@@ -143,6 +143,7 @@ const RENDU = {
   comptes:      z => (typeof rendreComptes === 'function' ? rendreComptes : rendreAVenir('Comptes'))(z),
   motsdepasse:  z => (typeof rendreMotsDePasse === 'function' ? rendreMotsDePasse : rendreAVenir('Mots de passe'))(z),
   messtats:     z => (typeof rendreMesStats === 'function' ? rendreMesStats : rendreAVenir('Mes statistiques'))(z),
+  mesdocs:      z => (typeof rendreMesDocuments === 'function' ? rendreMesDocuments : rendreAVenir('Mes documents'))(z),
   moncompte:    z => (typeof rendreMonCompte === 'function' ? rendreMonCompte : rendreAVenir('Mon compte'))(z),
 };
 
