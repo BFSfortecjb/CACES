@@ -218,7 +218,8 @@ async function connexion(email, motDePasse) {
 
 async function deconnexion() {
   await sb.auth.signOut();
-  S.utilisateur = null; S.profil = null; S.organisme = null;
+  S.utilisateur = null; S.profil = null; S.organisme = null; S._diffusionsOk = false; S._ecranRestaure = false;
+  try { sessionStorage.removeItem('caces_nav'); } catch (_e) { /* ignoré */ }
   location.hash = '';
   router();
 }
@@ -349,6 +350,12 @@ async function router() {
   if (S.recuperationMdp) return ecranNouveauMotDePasse(cible);
   if (!S.utilisateur) return ecranConnexion(cible);
   if (typeof tabletteActive === 'function' && tabletteActive()) return ecranTabletteSession(cible);
+  if (typeof verifierDiffusions === 'function' && !S._diffusionsOk) {            // diffusion tracée : accusé de réception avant d'entrer
+    const aLire = await verifierDiffusions();
+    if (aLire.length) return afficherDiffusions(cible, aLire);
+    S._diffusionsOk = true;
+  }
+  if (typeof restaurerEcran === 'function') await restaurerEcran();              // F5 : on reste sur l'écran où l'on était
   return ecranFormateur(cible);
 }
 

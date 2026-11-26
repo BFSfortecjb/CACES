@@ -44,7 +44,7 @@ async function qualiteReclamations(corps) {
 
 function qualiteFormReclamation(r) {
   r = r || {};
-  ouvrirModale(r.id ? 'Modifier la réclamation' : 'Nouvelle réclamation', `<form id="q-form" class="grille-form">
+  ouvrirModale(r.id ? 'Modifier la réclamation' : 'Nouvelle réclamation', `<form id="q-form" class="formulaire">
     <label>Reçue le <input type="date" name="recue_le" value="${r.recue_le || new Date().toISOString().slice(0, 10)}" required></label>
     <label>Origine <input name="origine" value="${esc(r.origine || '')}" placeholder="candidat, entreprise, certificateur…"></label>
     <label>Objet <textarea name="objet" rows="3" required>${esc(r.objet || '')}</textarea></label>
@@ -75,7 +75,7 @@ async function qualiteAudits(corps) {
     l.map(a => [a.date_audit, T[a.type], a.perimetre, a.auditeur, a.constats, a.actions, STATUT_AUDIT[a.statut]])));
   const form = a => {
     a = a || {};
-    ouvrirModale(a.id ? 'Modifier' : 'Nouvel audit / revue', `<form id="q-form" class="grille-form">
+    ouvrirModale(a.id ? 'Modifier' : 'Nouvel audit / revue', `<form id="q-form" class="formulaire">
       <label>Type <select name="type">${Object.entries(T).map(([k, v]) => `<option value="${k}" ${a.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label>Date <input type="date" name="date_audit" value="${a.date_audit || new Date().toISOString().slice(0, 10)}" required></label>
       <label>Périmètre <input name="perimetre" value="${esc(a.perimetre || '')}"></label>

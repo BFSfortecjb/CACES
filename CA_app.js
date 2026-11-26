@@ -146,7 +146,31 @@ const RENDU = {
   moncompte:    z => (typeof rendreMonCompte === 'function' ? rendreMonCompte : rendreAVenir('Mon compte'))(z),
 };
 
+/** Mémorise l'écran courant (et la session ouverte) pour qu'une actualisation (F5) reste sur la même page. */
+function memoriserEcran() {
+  try {
+    sessionStorage.setItem('caces_nav', JSON.stringify({ ecran: S.ecran, session: S.session?.id || null,
+      stat: typeof STAT !== 'undefined' ? STAT.onglet : null, qual: typeof QUALITE !== 'undefined' ? QUALITE.onglet : null }));
+  } catch (_e) { /* stockage indisponible : on ignore */ }
+}
+/** Au premier affichage après un chargement de page : retrouve l'écran mémorisé s'il est encore autorisé. */
+async function restaurerEcran() {
+  if (S._ecranRestaure) return; S._ecranRestaure = true;
+  let nav = null; try { nav = JSON.parse(sessionStorage.getItem('caces_nav') || 'null'); } catch (_e) { /* ignoré */ }
+  if (!nav || !nav.ecran) return;
+  if (typeof STAT !== 'undefined' && nav.stat) STAT.onglet = nav.stat;
+  if (typeof QUALITE !== 'undefined' && nav.qual) QUALITE.onglet = nav.qual;
+  if (nav.ecran === 'session' && nav.session) {
+    const { data } = await sb.from('sessions_formation').select('*').eq('id', nav.session).maybeSingle();
+    if (data) { S.session = data; S.ecran = 'session'; }
+    return;
+  }
+  const permis = new Set([...ongletsVisibles().map(([id]) => id), ...Object.keys(GROUPES_ONGLETS).flatMap(g => sousOnglets(g))]);
+  if (RENDU[nav.ecran] && permis.has(nav.ecran)) S.ecran = nav.ecran;
+}
+
 function ecranFormateur(cible) {
+  memoriserEcran();
   cible.innerHTML = `
     <header class="entete">
       <div class="titre">${logoImg('logo-entete')}${esc(CONFIG.NOM_APPLICATION)}
