@@ -215,6 +215,9 @@ async function afficherPratique(st, cat) {
   let photoOk = !!st.photo_path;
   sb.from('stagiaires').select('photo_path').eq('id', st.id).maybeSingle().then(({ data }) => { photoOk = !!data?.photo_path; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
   document.addEventListener('photo-enregistree', e => { if (e.detail === st.id) { photoOk = true; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); } });
+  let declOk = false;
+  const chargerDecl = async () => { const t = testeurDeLEpreuve(); if (!t) return; const { data } = await sb.from('declarations_testeur').select('id').eq('stagiaire_id', st.id).eq('testeur_id', t).maybeSingle(); declOk = !!data; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); };
+  chargerDecl();
   let visiteOk = true;
   visitePrealableOk().then(v => { visiteOk = v; if (!v && $('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
   function majAdeq() {
@@ -222,17 +225,25 @@ async function afficherPratique(st, cat) {
     const typesOk = groupes.every(g => typesDuGroupe(g).length <= 1 || typeChoisi[g]);
     const tous = ids.length && ids.every(Boolean) && typesOk;
     const essai = !!$('#prat-essai')?.checked;
-    const ok = essai || (tous && visiteOk && photoOk && ids.every(id => adeq[id]?.conforme));
+    const ok = essai || (tous && visiteOk && photoOk && declOk && ids.every(id => adeq[id]?.conforme));
     const zoneA = $('#prat-adeq');
     $('#prat-corps').hidden = !ok || !consignesVues; $('#prat-barre').hidden = !ok || !consignesVues;
+    const bandeauDecl = !essai && !declOk ? `<div class="adeq-banniere ko">DÉCLARATION DU CANDIDAT requise : « le testeur n'a pas été mon formateur » (référentiel §4.4.3.1).
+      <button type="button" id="prat-decl">Le candidat confirme</button></div>` : '';
     const alerteLieu = typeof incoherenceLieu === 'function' ? incoherenceLieu(S.session) : '';
     const bandeauPhoto = !essai && !photoOk ? `<div class="adeq-banniere ko">PHOTO DU CANDIDAT OBLIGATOIRE avant le test (identification du titulaire) — test bloqué.
       <button type="button" id="prat-photo">📷 Prendre la photo</button></div>` : '';
-    zoneA.innerHTML = (alerteLieu ? `<div class="adeq-banniere ko">⚠ ${esc(alerteLieu)}</div>` : '') + bandeauPhoto + (typeof mentionReclamation === 'function' ? mentionReclamation(S.session) : '') + (!essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
+    zoneA.innerHTML = (alerteLieu ? `<div class="adeq-banniere ko">⚠ ${esc(alerteLieu)}</div>` : '') + bandeauPhoto + bandeauDecl + (typeof mentionReclamation === 'function' ? mentionReclamation(S.session) : '') + (!essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
             — ${esc([e.designation, e.marque, e.modele].filter(Boolean).join(' '))}
             <button type="button" data-adeq="${id}">${a ? 'Revoir' : 'Examen d\'adéquation'}</button></div>`; }).join(''));
+    $('#prat-decl', zoneA)?.addEventListener('click', async () => {
+      const t = testeurDeLEpreuve(); if (!t) return toast('Testeur inconnu : choisissez le testeur avant la déclaration.', 'erreur');
+      const { error } = await sb.from('declarations_testeur').upsert({ session_id: S.session.id, stagiaire_id: st.id, testeur_id: t }, { onConflict: 'stagiaire_id,testeur_id' });
+      if (error) return erreurSupabase('Enregistrement de la déclaration', error);
+      declOk = true; majAdeq();
+    });
     $('#prat-photo', zoneA)?.addEventListener('click', () => ouvrirPhoto(st.id));
     $$('[data-adeq]', zoneA).forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.adeq;

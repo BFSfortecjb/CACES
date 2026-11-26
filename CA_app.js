@@ -72,6 +72,7 @@ const ONGLETS = {
   categories:   'Catégories',
   testeurs:     'Testeurs & UT',
   verification: 'Vérification',
+  qualite:      'Qualité',
   organisme:    'Organisme',
   comptes:      'Comptes',
   motsdepasse:  'Mots de passe',
@@ -79,7 +80,7 @@ const ONGLETS = {
 };
 
 // Onglets réservés à l'administrateur
-const ONGLETS_ADMIN = new Set(['categories', 'testeurs', 'verification', 'organisme', 'comptes', 'fise']);
+const ONGLETS_ADMIN = new Set(['categories', 'testeurs', 'verification', 'qualite', 'organisme', 'comptes', 'fise']);
 // Onglet ouvert au rôle Secrétariat en plus de l'administrateur
 const ONGLETS_SECRETARIAT = new Set(['motsdepasse']);
 
@@ -111,6 +112,7 @@ const RENDU = {
   categories:   z => (typeof rendreCategories === 'function' ? rendreCategories : rendreAVenir('Catégories'))(z),
   testeurs:     z => (typeof rendreTesteurs === 'function' ? rendreTesteurs : rendreAVenir('Testeurs & UT'))(z),
   verification: z => (typeof rendreVerification === 'function' ? rendreVerification : rendreAVenir('Vérification'))(z),
+  qualite:      z => (typeof rendreQualite === 'function' ? rendreQualite : rendreAVenir('Qualité'))(z),
   organisme:    z => (typeof rendreOrganisme === 'function' ? rendreOrganisme : rendreAVenir('Organisme'))(z),
   comptes:      z => (typeof rendreComptes === 'function' ? rendreComptes : rendreAVenir('Comptes'))(z),
   motsdepasse:  z => (typeof rendreMotsDePasse === 'function' ? rendreMotsDePasse : rendreAVenir('Mots de passe'))(z),
