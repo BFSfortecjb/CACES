@@ -13,7 +13,7 @@ const CONFIG = {
 };
 
 /* Numéro de version affiché en pied de page : permet de vérifier que le navigateur a bien la dernière version. */
-const APP_VERSION = 'v129 — 26/11/2026';
+const APP_VERSION = 'v130 — 26/11/2026';
 /* BFS-VL-c011dbe5 */
 console.log('%c© 2026 Jérémy Bizeul — Vigie-lance, pour BFS Prévention.', 'color:#c9a227; font-weight:bold; font-size:12px;');
 console.log('BFS CACES — outil original. Toute reproduction ou réutilisation de ce code sans autorisation écrite est interdite. Contact : https://www.bfs-prevention.fr');

@@ -69,7 +69,10 @@ function formDocQualite(base) {
       <label>Lien (site officiel, Drive…) <input type="url" name="lien" value="${esc(base?.lien || '')}" placeholder="https://…"></label>
       <label>Fichier <input type="file" name="fichier"></label></div></fieldset>
     <fieldset><legend>Validation et révision</legend><div class="grille-3">
-      <label>Validé par <input type="text" name="valide_par"></label>
+      <label>Validé par <select name="valide_par"><option value="">— choisir —</option>${(S.formateurs || [])
+        .filter(f => f.actif !== false && ['formateur', 'admin'].includes(f.role) && f.statut_bfs !== 'externe')
+        .map(f => `${f.nom || ''} ${f.prenom || ''}`.trim() || f.email).sort((a, b) => a.localeCompare(b, 'fr'))
+        .map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label>
       <label>Validé le <input type="date" name="valide_le"></label>
       <label>À réviser avant le <input type="date" name="revision_avant"></label></div></fieldset>
     <fieldset><legend>Diffusion</legend>
@@ -93,7 +96,7 @@ function formDocQualite(base) {
       if (e1) return erreurSupabase('Envoi du fichier', e1);
     }
     const { error } = await sb.from('documents_qualite').insert({ ref: f.ref.value.trim(), categorie: base?.categorie || f.categorie.value, titre: f.titre.value.trim(),
-      version: f.version.value.trim(), date_version: f.date_version.value, valide_par: f.valide_par.value.trim() || null, valide_le: f.valide_le.value || null,
+      version: f.version.value.trim(), date_version: f.date_version.value, valide_par: f.valide_par.value || null, valide_le: f.valide_le.value || null,
       revision_avant: f.revision_avant.value || null, lien: f.lien.value.trim() || null, fichier_path: chemin, notes: f.notes.value.trim() || null, actuelle: true,
       diffusion_tracee: f.diffusion.checked, diffusion_cibles: f.diffusion.checked ? cibles : [] });
     if (error) return erreurSupabase('Enregistrement du document', error);
