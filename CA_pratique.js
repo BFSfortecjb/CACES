@@ -215,6 +215,8 @@ async function afficherPratique(st, cat) {
   let photoOk = !!st.photo_path;
   sb.from('stagiaires').select('photo_path').eq('id', st.id).maybeSingle().then(({ data }) => { photoOk = !!data?.photo_path; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
   document.addEventListener('photo-enregistree', e => { if (e.detail === st.id) { photoOk = true; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); } });
+  let alertePerim = '';
+  alertePerimetreCdt(S.session, cat.referentiel_code, cat.categorie_code).then(m => { alertePerim = m; if (m && $('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); });
   let declOk = false;
   const chargerDecl = async () => { const t = testeurDeLEpreuve(); if (!t) return; const { data } = await sb.from('declarations_testeur').select('id').eq('stagiaire_id', st.id).eq('testeur_id', t).maybeSingle(); declOk = !!data; if ($('#prat-prepa') && !$('#prat-prepa').hidden) majAdeq(); };
   chargerDecl();
@@ -233,7 +235,7 @@ async function afficherPratique(st, cat) {
     const alerteLieu = typeof incoherenceLieu === 'function' ? incoherenceLieu(S.session) : '';
     const bandeauPhoto = !essai && !photoOk ? `<div class="adeq-banniere ko">PHOTO DU CANDIDAT OBLIGATOIRE avant le test (identification du titulaire) — test bloqué.
       <button type="button" id="prat-photo">📷 Prendre la photo</button></div>` : '';
-    zoneA.innerHTML = (alerteLieu ? `<div class="adeq-banniere ko">⚠ ${esc(alerteLieu)}</div>` : '') + bandeauPhoto + bandeauDecl + (typeof mentionReclamation === 'function' ? mentionReclamation(S.session) : '') + (!essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
+    zoneA.innerHTML = (alertePerim ? `<div class="adeq-banniere ko">⚠ ${esc(alertePerim)}</div>` : '') + (alerteLieu ? `<div class="adeq-banniere ko">⚠ ${esc(alerteLieu)}</div>` : '') + bandeauPhoto + bandeauDecl + (typeof mentionReclamation === 'function' ? mentionReclamation(S.session) : '') + (!essai && !visiteOk ? '<div class="adeq-banniere ko">VISITE PRÉALABLE du site client non conforme ou non faite — pratique bloquée (voir la fiche de la session).</div>' : essai ? '<div class="adeq-banniere ko">MODE ESSAI — aucun engin ni examen d\'adéquation requis (résultat marqué « essai »).</div>' : !tous ? '<div class="adeq-banniere ko">Choisis l\'engin utilisé (et son type) pour démarrer.</div>'
       : [...new Set(ids)].map(id => { const e = enginParId(id), a = adeq[id];
           return `<div class="adeq-banniere ${a?.conforme ? 'ok' : 'ko'}">EXAMEN D'ADÉQUATION : ${a ? (a.conforme ? 'OUI' : 'NON CONFORME — test bloqué') : 'à effectuer'}
             — ${esc([e.designation, e.marque, e.modele].filter(Boolean).join(' '))}

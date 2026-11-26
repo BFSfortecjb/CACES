@@ -8,12 +8,13 @@ const STATUT_AUDIT = { planifie: 'Planifié', realise: 'Réalisé', actions_sold
 
 async function rendreQualite(zone) {
   zone.innerHTML = `<div class="barre-actions"><h2>✅ Qualité</h2></div>
-    <nav class="stat-onglets">${[['reclamations', 'Réclamations'], ['audits', 'Audits internes & revue de direction']]
+    <nav class="stat-onglets">${[['reclamations', 'Réclamations'], ['audits', 'Audits internes & revue de direction'], ['perimetre', 'Périmètre des CDT']]
       .map(([k, l]) => `<button data-q="${k}" class="${QUALITE.onglet === k ? 'actif' : ''}">${l}</button>`).join('')}</nav>
     <div id="qualite-corps"></div>`;
   $$('[data-q]', zone).forEach(b => b.addEventListener('click', () => { QUALITE.onglet = b.dataset.q; rendreQualite(zone); }));
   const corps = $('#qualite-corps', zone);
   if (QUALITE.onglet === 'audits') return qualiteAudits(corps);
+  if (QUALITE.onglet === 'perimetre') return qualitePerimetre(corps);
   return qualiteReclamations(corps);
 }
 
@@ -93,4 +94,48 @@ async function qualiteAudits(corps) {
   };
   $('#q-nouv', corps).addEventListener('click', () => form(null));
   $$('[data-e]', corps).forEach(b => b.addEventListener('click', () => form(l.find(x => x.id === b.dataset.e))));
+}
+
+/* ---------- Périmètre de chaque CDT (paramétrable, historisé) ---------- */
+async function qualitePerimetre(corps) {
+  const { data, error } = await sb.from('cdt_perimetre').select('*').order('centre_id').order('referentiel_code').order('date_debut', { ascending: false });
+  if (error) return erreurSupabase('Lecture du périmètre', error);
+  const l = data || [], centres = S.referentiel.centres || [], refs = S.referentiel.referentiels || [];
+  const nomC = id => (centres.find(c => c.id === id) || {}).nom || id;
+  corps.innerHTML = `<div class="carte"><p class="aide">Recommandations / catégories pour lesquelles chaque CDT est habilité (référentiel §6.7.1). Un centre sans ligne n'est pas contrôlé. Un retrait conserve la ligne (date de fin) pour l'historique.</p>
+    <form id="p-form" class="barre-actions">
+      <select name="centre" required>${centres.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select>
+      <select name="ref" required>${refs.map(r => `<option value="${esc(r.code)}">${esc(r.code)}</option>`).join('')}</select>
+      <select name="cat"><option value="">Toutes les catégories</option></select>
+      <button class="principal" type="submit">+ Ajouter au périmètre</button></form>
+    <table class="tableau"><thead><tr><th>Centre</th><th>Recommandation</th><th>Catégorie</th><th>Depuis</th><th>Jusqu'au</th><th></th></tr></thead><tbody>
+    ${l.map(p => `<tr class="${p.date_fin ? 'aide' : ''}"><td>${esc(nomC(p.centre_id))}</td><td>${esc(p.referentiel_code)}</td><td>${esc(p.categorie_code || 'toutes')}</td>
+      <td>${dateFr(p.date_debut)}</td><td>${p.date_fin ? dateFr(p.date_fin) : ''}</td><td>${p.date_fin ? '' : `<button data-r="${p.id}">Retirer</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="aide">Aucun périmètre défini.</td></tr>'}</tbody></table></div>`;
+  const f = $('#p-form', corps), majCats = () => {
+    f.cat.innerHTML = '<option value="">Toutes les catégories</option>' + (S.referentiel.categories || []).filter(c => c.referentiel_code === f.ref.value)
+      .map(c => `<option value="${esc(c.categorie_code)}">${esc(c.categorie_code)}</option>`).join('');
+  };
+  f.ref.addEventListener('change', majCats); majCats();
+  f.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const { error: e } = await sb.from('cdt_perimetre').insert({ centre_id: Number(f.centre.value), referentiel_code: f.ref.value, categorie_code: f.cat.value || null });
+    if (e) return erreurSupabase('Ajout au périmètre', e);
+    rendreQualite($('#contenu'));
+  });
+  $$('[data-r]', corps).forEach(b => b.addEventListener('click', async () => {
+    const { error: e } = await sb.from('cdt_perimetre').update({ date_fin: new Date().toISOString().slice(0, 10) }).eq('id', b.dataset.r);
+    if (e) return erreurSupabase('Retrait', e);
+    rendreQualite($('#contenu'));
+  }));
+}
+
+/** Message si la catégorie est hors du périmètre du CDT de la session ('' si OK ou si le centre n'a pas de périmètre défini). */
+async function alertePerimetreCdt(s, ref, cat) {
+  if (!s || s.lieu_type === 'client' || !s.centre_examen_id) return '';
+  const centreId = s.centre_examen_id;
+  const { data } = await sb.from('cdt_perimetre').select('referentiel_code, categorie_code, date_fin').eq('centre_id', centreId);
+  const actives = (data || []).filter(p => !p.date_fin);
+  if (!actives.length) return '';
+  return actives.some(p => p.referentiel_code === ref && (!p.categorie_code || p.categorie_code === cat)) ? ''
+    : `Catégorie ${ref} ${cat} hors du périmètre déclaré de ce CDT : vérifier le centre ou le périmètre (Qualité > Périmètre des CDT).`;
 }
