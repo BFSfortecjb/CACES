@@ -76,11 +76,12 @@ const ONGLETS = {
 };
 // Libellés des écrans accessibles en sous-onglet
 const LIBELLE_ECRAN = { tableaubord: 'Tableau de bord', organisme: 'Réglages', testeurs: 'Testeurs & UT', qualite: 'Qualité', categories: 'Catégories', fise: 'Catalogue FISE',
-  grilles: 'Grilles pratiques', comptes: 'Comptes', motsdepasse: 'Mots de passe', moncompte: 'Mes paramètres', messtats: 'Mes statistiques' };
+  grilles: 'Grilles pratiques', comptes: 'Comptes', motsdepasse: 'Mots de passe', moncompte: 'Mes paramètres', messtats: 'Mes statistiques', docqualite: 'Documents', faqcaces: 'FAQ CACES®' };
 // Sous-onglets de chaque groupe (onglet principal)
 const GROUPES_ONGLETS = {
   organisme: ['tableaubord', 'organisme', 'testeurs', 'qualite', 'categories', 'fise', 'grilles', 'comptes', 'motsdepasse'],
   moncompte: ['moncompte', 'messtats', 'grilles'],
+  docqualite: ['docqualite', 'faqcaces'],
 };
 const estAdmin = () => S.vision === 'admin';
 const estTesteurConnecte = () => !['secretariat', 'auditeur'].includes(S.profil?.role) && S.profil?.est_testeur !== false;
@@ -100,7 +101,7 @@ function groupeDe(ecran) {
   return Object.keys(GROUPES_ONGLETS).find(g => sousOnglets(g).includes(ecran)) || '';
 }
 
-const ONGLETS_AUDITEUR = new Set(['sessions', 'statistiques', 'qualite', 'docqualite', 'moncompte']);
+const ONGLETS_AUDITEUR = new Set(['sessions', 'statistiques', 'qualite', 'docqualite', 'faqcaces', 'moncompte']);
 function ongletsVisibles() {
   const role = S.profil?.role;
   return Object.entries(ONGLETS).filter(([id]) => {
@@ -133,6 +134,7 @@ const RENDU = {
   categories:   z => (typeof rendreCategories === 'function' ? rendreCategories : rendreAVenir('Catégories'))(z),
   testeurs:     z => (typeof rendreTesteurs === 'function' ? rendreTesteurs : rendreAVenir('Testeurs & UT'))(z),
   verification: z => (typeof rendreVerification === 'function' ? rendreVerification : rendreAVenir('Vérification'))(z),
+  faqcaces:     z => (typeof rendreFaq === 'function' ? rendreFaq : rendreAVenir('FAQ CACES®'))(z),
   docqualite:   z => (typeof rendreEspaceDoc === 'function' ? rendreEspaceDoc : rendreAVenir('Documents'))(z),
   qualite:      z => (typeof rendreQualite === 'function' ? rendreQualite : rendreAVenir('Qualité'))(z),
   tableaubord:  z => (typeof rendreTableauBord === 'function' ? rendreTableauBord : rendreAVenir('Tableau de bord'))(z),

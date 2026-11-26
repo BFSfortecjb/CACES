@@ -880,3 +880,18 @@ body.qg-projection .qg-pied { display: none; }
 /* Alerte rouge : engins de location (jauge + défauts) */
 .carte.alerte-rouge { background: #fdecec; border: 1px solid #b2181a; border-left: 6px solid #b2181a; color: #8a1113; }
 .carte.alerte-rouge ul { margin: .4rem 0 .6rem 1.2rem; }
+
+/* FAQ CACES® */
+.faq-recherche input[type=search] { width: 100%; padding: 12px 14px; font-size: 1.05rem; border: 2px solid #c9ced6; border-radius: 10px; }
+.faq-recherche input[type=search]:focus { border-color: #f3ab12; outline: none; }
+.faq-filtres { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 6px 0; }
+.faq-q { margin: 6px 0; border: 1px solid #dde1e6; border-radius: 8px; background: #fff; }
+.faq-q > summary { cursor: pointer; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; list-style: none; }
+.faq-q > summary::-webkit-details-marker { display: none; }
+.faq-code { font-weight: 700; padding: 2px 8px; border-radius: 6px; color: #fff; font-size: .85rem; }
+.faq-code.u { background: #2c6fbb; } .faq-code.c { background: #6a5acd; }
+.faq-titre { font-weight: 600; flex: 1 1 260px; } .faq-fam { color: #555; font-size: .85rem; }
+.faq-nouveau { background: #e6f0ff; color: #0000c8; font-size: .75rem; padding: 2px 8px; border-radius: 10px; }
+.faq-corps { padding: 0 14px 12px; } .faq-corps h4 { margin: 10px 0 2px; color: #555; font-size: .8rem; text-transform: uppercase; }
+.faq-corps p { margin: 0 0 6px; line-height: 1.45; }
+mark { background: #ffe58a; padding: 0 1px; border-radius: 2px; }
