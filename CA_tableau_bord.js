@@ -35,7 +35,7 @@ async function rendreTableauBord(zone) {
   const vigilance = [
     ...(vig.data || []).filter(v => v.urgence && v.urgence !== 'ok' && v.urgence !== 'aucune').map(v => `${esc(v.libelle || v.categorie)}${v.nombre ? ' (' + v.nombre + ')' : ''}${v.echeance ? ' — échéance ' + dateFr(v.echeance) : ''}`),
     rec.count ? `${rec.count} réclamation(s) non clôturée(s)` : '', docsARevoir ? `${docsARevoir} document(s) à réviser` : '',
-    nbExp ? `${nbExp} CACES expirant d'ici ${prm.data?.delai_liste_expirant_mois || 3} mois (ou déjà expirés)` : '',
+    nbExp ? `${nbExp} CACES® expirant d'ici ${prm.data?.delai_liste_expirant_mois || 3} mois (ou déjà expirés)` : '',
     aSurveiller.length ? `${aSurveiller.length} testeur(s) sous 15 jours de tests sur 3 ans : ${aSurveiller.map(f => esc(nom(f.id))).join(', ')}` : '',
   ].filter(Boolean);
   zone.innerHTML = `<div class="barre-actions"><h2>📈 Tableau de bord — ${an}</h2></div>

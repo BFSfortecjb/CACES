@@ -1,5 +1,5 @@
 /* =====================================================================
-   CA_photo.js — Photo du titulaire (carton CACES), prise avec l'appareil
+   CA_photo.js — Photo du titulaire (carton CACES®), prise avec l'appareil
    photo du téléphone / de la tablette du formateur.
    Recadrée en portrait 3:4 (format photo d'identité), enregistrée dans le
    stockage privé « caces-photos-stagiaires » (accès par lien temporaire).

@@ -21,7 +21,7 @@ async function envoyerSecretariat() {
 
   ouvrirModale('Envoi au secrétariat', `
     <p class="aide">Destinataire : <b>${esc(destinataire)}</b> (${esc(agence.agence || agence.nom)}).
-      ${autorisation ? 'Autorisations de conduite' : 'Cartons CACES (les n° sont attribués à la génération)'} en pièces jointes,
+      ${autorisation ? 'Autorisations de conduite' : 'Cartons CACES® (les n° sont attribués à la génération)'} en pièces jointes,
       et copie sur le Drive de la session.</p>
     <form class="formulaire" id="form-secretariat">
       <fieldset><legend>Stagiaires (${eligibles.length})</legend>
@@ -42,8 +42,8 @@ async function envoyerSecretariat() {
         try { await envoyerSurDrive(['Sessions', s.nom, 'Titres'], pdf.nom, 'application/pdf', pdf.base64); }
         catch (e) { echecsDrive.push(pdf.nom + ' : ' + e.message); }
       }
-      const sujet = autorisation ? `Autorisations de conduite — ${s.nom}` : `CACES — session Galaxy ${s.numero_session_galaxy} — ${s.nom}`;
-      const texte = `Bonjour,\n\nCi-joint ${pieces.length} ${autorisation ? 'autorisation(s) de conduite' : 'carton(s) CACES'} de la session « ${s.nom} »`
+      const sujet = autorisation ? `Autorisations de conduite — ${s.nom}` : `CACES® — session Galaxy ${s.numero_session_galaxy} — ${s.nom}`;
+      const texte = `Bonjour,\n\nCi-joint ${pieces.length} ${autorisation ? 'autorisation(s) de conduite' : 'carton(s) CACES®'} de la session « ${s.nom} »`
         + (s.entreprise ? ` (${s.entreprise})` : '') + '.\n\nCordialement,\n' + (agence.agence || 'BFS');
       const { data, error } = await sb.functions.invoke('envoyer-mail', { body: { a: destinataire, sujet, texte, pieces_jointes: pieces } });
       if (error) throw new Error(error.message || 'Envoi du mail impossible');

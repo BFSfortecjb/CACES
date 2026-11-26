@@ -1,5 +1,5 @@
 /* =====================================================================
-   CA_verification.js — vérification d'un titre CACES.
+   CA_verification.js — vérification d'un titre CACES®.
    - Page publique #verification?n=<numéro> (cible du QR code du carton)
    - Onglet admin « Vérification » : saisie d'un numéro
    Tout passe par la fonction SQL anon caces_verifier_titre (aussi utilisable

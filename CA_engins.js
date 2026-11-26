@@ -124,7 +124,7 @@ async function ouvrirFicheEngin(id, contexte = {}) {
         (ex. conducteur accompagnant) : vérification annuelle de l'état de conservation à la place</span></label>
       <fieldset id="fs-centres" ${e.provenance === 'propriete' ? '' : 'hidden'}><legend>Centres de rattachement <span class="aide">(un engin en propriété peut naviguer sur plusieurs centres)</span></legend>
         ${(S.referentiel.centres || []).map(c => `<label class="case"><input type="checkbox" name="centre" value="${c.id}" ${centresActuels.has(c.id) ? 'checked' : ''}> ${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</label>`).join('')}</fieldset>
-      <fieldset><legend>Catégories CACES pour lesquelles il sert aux tests</legend>
+      <fieldset><legend>Catégories CACES® pour lesquelles il sert aux tests</legend>
         ${cats.map(c => `<label class="case"><input type="checkbox" name="cat" value="${esc(c.code)}|${esc(c.referentiel_code)}"
           ${(e.categories || []).includes(c.referentiel_code + ' ' + c.code) ? 'checked' : ''}> ${esc(c.referentiel_code)} ${esc(c.code)}</label>`).join('')}
       </fieldset>

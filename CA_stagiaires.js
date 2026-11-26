@@ -29,7 +29,7 @@ async function editerStagiaire(id) {
         <label>Date de naissance
           <input name="date_naissance" type="date" max="${dateNaissanceMax()}" value="${esc(st.date_naissance || '')}"></label>
       </div>
-      <fieldset><legend>Catégories de CACES visées par ce stagiaire</legend>
+      <fieldset><legend>Catégories de CACES® visées par ce stagiaire</legend>
         ${categoriesSession.map(c => `<label class="case"><input type="checkbox" name="categorie"
           value="${esc(c.referentiel_code)}|${esc(c.categorie_code)}"
           ${visees.has(c.referentiel_code + '|' + c.categorie_code) ? 'checked' : ''}>
@@ -112,9 +112,9 @@ function ouvrirActionsStagiaire(id, nom, prenom) {
     <div class="liste-actions-stagiaire">
       ${d.ecriture ? `<button onclick="fermerModale();editerStagiaire('${id}')">✎ Modifier le stagiaire et ses catégories</button>` : ''}
       <button onclick="fermerModale();appelModule('ouvrirPhoto','${id}')">📷 Photo du titulaire</button>
-      <button onclick="fermerModale();appelModule('ouvrirParcours','${id}')">🔁 Parcours : recyclage / autre catégorie (photo ancien CACES)</button>
+      <button onclick="fermerModale();appelModule('ouvrirParcours','${id}')">🔁 Parcours : recyclage / autre catégorie (photo ancien CACES®)</button>
       <button onclick="fermerModale();appelModule('voirCopie','${id}')">📄 Voir la copie corrigée du QCM</button>
-      <button onclick="fermerModale();appelModule('${S.session.type_session === 'autorisation' ? 'genererAutorisationPdf' : 'genererCartonPdf'}','${id}')">${S.session.type_session === 'autorisation' ? '🪪 Générer l\'autorisation de conduite (PDF)' : '🪪 Générer le carton CACES (PDF)'}</button>
+      <button onclick="fermerModale();appelModule('${S.session.type_session === 'autorisation' ? 'genererAutorisationPdf' : 'genererCartonPdf'}','${id}')">${S.session.type_session === 'autorisation' ? '🪪 Générer l\'autorisation de conduite (PDF)' : '🪪 Générer le carton CACES® (PDF)'}</button>
       ${d.ecriture ? `<button class="danger" onclick="fermerModale();supprimerStagiaire('${id}')">🗑 Supprimer le stagiaire</button>` : ''}
     </div>`);
 }

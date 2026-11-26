@@ -47,7 +47,14 @@ async function statConformiteCdt(z) {
       et lui propose un plan d'action (atteindre le taux en 6 mois de plus, soit jusqu'au 30 juin ${an + 1}). Sans cela : non-conformité majeure, puis retrait de la famille du périmètre.
       Le taux se calcule par famille pour l'ensemble de l'organisme (tous les CDT réunis).</p></div>` : ''}
     <div class="carte"><h3>Tests réalisés en CDT par famille — année ${an}</h3>
-    <div class="tableau-defile"><table class="tableau"><thead><tr><th>Famille</th><th>Tests</th><th>En CDT</th><th>Hors CDT</th><th>Taux CDT</th><th>Minimum (T1)</th><th>État</th><th>Tests CDT à ajouter pour atteindre le minimum</th></tr></thead><tbody>
+    <div class="tableau-defile"><table class="tableau"><thead><tr><th title="Famille de recommandation (R482, R483, R484, R485, R486, R487, R489, R490). Le taux se calcule par famille.">Famille ⓘ</th>
+<th title="Nombre total d'épreuves pratiques passées sur l'année civile (essais exclus). Un échec puis une réussite comptent pour 2 tests.">Tests ⓘ</th>
+<th title="Tests passés dans un centre de déroulement de tests (CDT) : Briec ou Sèvremont. Le détail par centre est affiché en dessous.">En CDT ⓘ</th>
+<th title="Tests passés hors CDT, c'est-à-dire chez le client (session intra).">Hors CDT ⓘ</th>
+<th title="Tests en CDT ÷ total des tests, tous CDT confondus, sur l'année civile et par famille (référentiel §4.7).">Taux CDT ⓘ</th>
+<th title="Taux minimum de tests en CDT exigé par le référentiel pour cette famille (tableau T1, §4.7).">Minimum (T1) ⓘ</th>
+<th title="Conforme si le taux atteint le minimum. Sinon : informer l'organisme certificateur avant le 15 janvier de l'année suivante avec un plan d'action.">État ⓘ</th>
+<th title="Nombre de tests supplémentaires à passer en CDT, sans tests hors CDT en plus, pour atteindre le minimum.">Tests CDT à ajouter pour atteindre le minimum ⓘ</th></tr></thead><tbody>
     ${lignes.map(l => `<tr><td><b>${esc(l.f)}</b></td><td>${l.nb}</td><td>${l.cdt}</td><td>${l.hors}</td><td>${l.taux == null ? '—' : l.taux + ' %'}</td><td>${l.seuil ?? '—'} %</td>
       <td>${l.nb === 0 ? '<span class="etat neutre">aucun test</span>' : l.sous ? '<span class="etat erreur">⚠ sous le minimum</span>' : '<span class="etat ok">✔ conforme</span>'}</td>
       <td>${l.sous ? '<b>' + l.manque + '</b>' : ''}</td></tr>
@@ -74,7 +81,15 @@ async function statBilanAnnuel(z) {
     <div class="carte"><h3>Bilan annuel ${an} pour l'organisme certificateur</h3>
     <p class="aide">À transmettre <b>avant le 1er mars ${an + 1}</b> (référentiel §6.5.1) : candidats inscrits et reçus par catégorie, sessions organisées, tests réalisés en CDT et hors CDT par catégorie.
       Le chiffre d'affaires et les effectifs ne sont pas dans l'appli : à compléter hors appli. Sessions de l'année (hors autorisations de conduite) : <b>${nbSessions ?? '—'}</b>.</p>
-    <div class="tableau-defile"><table class="tableau"><thead><tr><th>Recommandation</th><th>Catégorie</th><th>Candidats inscrits</th><th>Candidats reçus</th><th>Tests réalisés</th><th>dont en CDT</th><th>dont hors CDT</th><th>Tests réussis</th><th>Sessions</th></tr></thead><tbody>
+    <div class="tableau-defile"><table class="tableau"><thead><tr><th title="Famille de recommandation.">Recommandation ⓘ</th>
+<th title="Catégorie de la recommandation.">Catégorie ⓘ</th>
+<th title="Candidats inscrits dans cette catégorie sur l'année.">Candidats inscrits ⓘ</th>
+<th title="Candidats ayant obtenu le CACES® (théorie et pratique validées).">Candidats reçus ⓘ</th>
+<th title="Épreuves pratiques passées (essais exclus).">Tests réalisés ⓘ</th>
+<th title="Tests passés dans un CDT (Briec ou Sèvremont).">dont en CDT ⓘ</th>
+<th title="Tests passés chez le client.">dont hors CDT ⓘ</th>
+<th title="Tests dont le résultat est réussi.">Tests réussis ⓘ</th>
+<th title="Nombre de sessions concernées.">Sessions ⓘ</th></tr></thead><tbody>
     ${L.map(x => `<tr><td>${esc(x.referentiel_code)}</td><td>${esc(x.categorie_code)}</td><td>${x.inscrits}</td><td>${x.recus}</td><td>${x.tests}</td><td>${x.tests_cdt}</td><td>${x.tests_hors_cdt}</td><td>${x.tests_reussis}</td><td>${x.sessions}</td></tr>`).join('')
       || '<tr><td colspan="9" class="vide">Aucune donnée pour cette année.</td></tr>'}
     ${L.length ? `<tr class="stat-total"><td colspan="2"><b>TOTAL</b></td><td><b>${tot.inscrits}</b></td><td><b>${tot.recus}</b></td><td><b>${tot.tests}</b></td><td><b>${tot.tests_cdt}</b></td><td><b>${tot.tests_hors_cdt}</b></td><td><b>${tot.tests_reussis}</b></td><td></td></tr>` : ''}
@@ -129,4 +144,26 @@ function mentionReclamation(s) {
   setTimeout(() => { const z = document.getElementById(id); if (z) { try { new QRCode(z, { text: lien, width: 72, height: 72 }); } catch (_e) { /* QR facultatif */ } } }, 0);
   return `<div class="aide" style="display:flex;gap:10px;align-items:center;margin:6px 0"><div id="${id}"></div>
     <span>Une réclamation sur ce test ? Écrire à <a href="${esc(lien)}">${MAIL_RECLAMATION}</a> (n° de session pré-rempli) ou scanner le QR code.</span></div>`;
+}
+
+/* ---------- Maintien des compétences des testeurs (§4.4.3.2) : 15 jours de tests sur 3 ans, ≥ 1 jour par catégorie ---------- */
+async function statMaintienTesteurs(z) {
+  const debut = new Date(); debut.setFullYear(debut.getFullYear() - 3);
+  const [{ data: eps, error }, { data: hab }] = await Promise.all([
+    sb.from('epreuves_pratique').select('testeur_id, referentiel_code, categorie_code, date_passage').eq('mode_essai', false).gte('date_passage', debut.toISOString()).limit(20000),
+    sb.from('formateur_habilitations').select('formateur_id, referentiel_code, categorie_code').eq('fonction', 'testeur'),
+  ]);
+  if (error) return erreurSupabase('Lecture des tests', error);
+  const jour = e => (e.date_passage || '').slice(0, 10);
+  const testeurs = (S.formateurs || []).filter(f => f.est_testeur !== false && !['secretariat', 'auditeur'].includes(f.role) && f.actif !== false);
+  z.innerHTML = `<div class="carte"><p class="aide">Du ${dateFr(debut.toISOString().slice(0, 10))} à aujourd'hui (3 ans glissants), hors essais : au moins <b>15 jours</b> de tests au total et <b>1 jour par catégorie</b> d'habilitation (référentiel §4.4.3.2). Un jour = une date avec au moins un test.</p>
+    <table class="tableau"><thead><tr><th>Testeur</th><th title="Jours distincts où le testeur a fait passer au moins un test, sur 3 ans glissants (objectif : 15).">Jours (3 ans) ⓘ</th><th title="Catégories d'habilitation du testeur pour lesquelles il n'a fait aucun test sur 3 ans (il en faut au moins un jour par catégorie).">Catégories sans jour de test ⓘ</th><th></th></tr></thead><tbody>
+    ${testeurs.map(f => {
+      const L = (eps || []).filter(e => e.testeur_id === f.id), n = new Set(L.map(jour)).size;
+      const habs = (hab || []).filter(h => h.formateur_id === f.id).map(h => `${h.referentiel_code} ${h.categorie_code}`);
+      const faites = new Set(L.map(e => `${e.referentiel_code} ${e.categorie_code}`));
+      const manque = habs.filter(c => !faites.has(c));
+      const ok = n >= 15 && !manque.length;
+      return `<tr><td>${esc(statNomTesteur(f.id))}</td><td>${n} / 15</td><td>${manque.length ? esc(manque.join(', ')) : (habs.length ? '—' : '<span class="aide">habilitations non listées (toutes catégories)</span>')}</td>
+        <td><b style="color:${ok ? '#1b7c3c' : '#b2181a'}">${ok ? 'Conforme' : 'À surveiller'}</b></td></tr>`; }).join('')}</tbody></table></div>`;
 }

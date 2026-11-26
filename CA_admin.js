@@ -9,6 +9,10 @@ const AD = { banque: { ref: null, theme: '', q: '' }, grilles: { ref: null, cat:
 const optRefs = sel => S.referentiel.referentiels.map(r =>
   `<option value="${esc(r.code)}" ${r.code === sel ? 'selected' : ''}>${esc(r.code)} — ${esc(r.libelle)}</option>`).join('');
 const zoneAdmin = () => $('#contenu');
+/** Section repliable, repliée d'office ; l'état ouvert est mémorisé pendant la session (survit aux rechargements d'écran). */
+const OUVERTS = new Set();
+const repliable = (cle, titreHtml, contenuHtml) => `<details class="repliable" data-k="${esc(cle)}" ${OUVERTS.has(cle) ? 'open' : ''}><summary>${titreHtml}</summary>${contenuHtml}</details>`;
+document.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details.repliable')) { if (d.open) OUVERTS.add(d.dataset.k); else OUVERTS.delete(d.dataset.k); } }, true);
 const champ = (f, n) => f.elements[n];
 
 /* ============================ Banque de questions ============================ */
@@ -110,23 +114,23 @@ async function rendreGrilles(zone) {
         `<option value="${esc(c.code)}" ${c.code === g.cat ? 'selected' : ''}>${esc(c.code)} — ${esc(c.libelle)}</option>`).join('')}</select></label></div></div>
     <p class="aide">${crit.length} critère(s) — total des points par variante : <b>${detailTot}</b> ${totalOk ? '✔' : '⚠ (attendu : 100 par variante)'}.
       ${crit.some(c => !c.point_numero) ? '⚠ Des critères n\'ont pas de « point d\'évaluation » (n°) : la règle « > 0 par point » ne peut pas être appliquée.' : ''}</p>
-    ${themes.map(t => `<h4 class="titre-theme">${esc(crit.find(c => c.theme_code === t).theme_libelle || t)}</h4>
-      <table class="tableau"><thead><tr><th>Ordre</th><th>Critère</th><th>Pts</th><th>Point n°</th><th>Éliminatoire</th><th>En continu</th><th>Variante</th><th></th></tr></thead><tbody>
+    ${themes.map(t => repliable(`grille:${g.ref}:${g.cat}:${t}`, `${esc(crit.find(c => c.theme_code === t).theme_libelle || t)} <span class="aide">(${crit.filter(c => c.theme_code === t).length} critère(s))</span>`,
+      `<table class="tableau"><thead><tr><th>Ordre</th><th>Critère</th><th>Pts</th><th>Point n°</th><th>Éliminatoire</th><th>En continu</th><th>Variante</th><th></th></tr></thead><tbody>
       ${crit.filter(c => c.theme_code === t).map(c => `<tr><td>${c.ordre}</td><td>${esc(c.libelle)}</td><td>${c.bareme_points}</td>
         <td>${c.point_numero ?? '—'}</td><td>${c.eliminatoire ? 'Oui' : ''}</td><td>${c.en_continu ? 'Oui' : ''}</td><td>${esc(c.variante || '')}</td>
-        <td><button class="lien" onclick="modifierCritere(${c.id})">Modifier</button></td></tr>`).join('')}</tbody></table>`).join('')
+        <td><button class="lien" onclick="modifierCritere(${c.id})">Modifier</button></td></tr>`).join('')}</tbody></table>`)).join('')
       || '<p class="vide">Aucun critère pour cette catégorie : à saisir d\'après le référentiel (+ Critère).</p>'}
-    <div class="carte"><h3>Pénalités — ${esc(g.ref)} ${esc(g.cat)}</h3>
+    ${repliable(`pen:${g.ref}:${g.cat}`, `Pénalités — ${esc(g.ref)} ${esc(g.cat)}`, `<div class="carte">
       <p class="aide">Pénalités prédéfinies que le testeur coche pendant l'évaluation : chacune retire des points au critère choisi (la note est plafonnée), ce qui justifie la note de façon objective. Ex. : « Déplacement avec charge haute » −2.</p>
       ${(S.referentiel.penalites || []).filter(p => p.referentiel_code === g.ref && p.categorie_code === g.cat).map(p => {
         const cr = crit.find(c => c.id === p.critere_id);
         return `<div>${esc(p.libelle)} <b>−${esc(p.points_retires)}</b> — critère : <i>${esc(cr ? cr.libelle.slice(0, 70) : '(critère supprimé)')}</i> ${p.actif ? '' : '<i>(inactive)</i>'}
           <button class="lien" onclick="modifierPenalite(${p.id})">Modifier</button></div>`; }).join('') || '<i>Aucune pénalité pour cette catégorie.</i>'}
-      <button onclick="modifierPenalite(null)">+ Pénalité</button></div>
-    <div class="carte"><h3>Opérations éliminatoires — ${esc(g.ref)}</h3>
+      <button onclick="modifierPenalite(null)">+ Pénalité</button></div>`)}
+    ${repliable(`elim:${g.ref}`, `Opérations éliminatoires — ${esc(g.ref)}`, `<div class="carte">
       ${S._elim.map(e => `<div>${esc(e.libelle)} ${e.actif ? '' : '<i>(inactive)</i>'}
         <button class="lien" onclick="basculerElim(${e.id},${!e.actif})">${e.actif ? 'Désactiver' : 'Réactiver'}</button></div>`).join('') || '<i>Aucune.</i>'}
-      <button onclick="ajouterElim()">+ Ajouter</button></div>`;
+      <button onclick="ajouterElim()">+ Ajouter</button></div>`)}`;
   // Consultation seule pour les testeurs : on retire les boutons de modification (les listes déroulantes restent actives)
   if (S.vision !== 'admin') $$('button', zone).forEach(b => b.remove());
 }
@@ -217,11 +221,11 @@ async function rendreCatalogueFise(zone) {
   zone.innerHTML = `
     <div class="barre-actions"><h2>Catalogue FISE</h2><button class="principal" onclick="modifierCapacite(null)">+ Capacité</button></div>
     <label>Référentiel <select onchange="AD.fise.ref=this.value;rendreCatalogueFise(zoneAdmin())">${optRefs(F.ref)}</select></label>
-    ${themes.map(t => `<h4 class="titre-theme">${esc(S._fise.find(c => c.theme_code === t).theme_libelle)}</h4>
-      <table class="tableau"><thead><tr><th>Ordre</th><th>Capacité évaluée</th><th>Catégories</th><th></th></tr></thead><tbody>
+    ${themes.map(t => repliable('fise:' + F.ref + ':' + t, `${esc(S._fise.find(c => c.theme_code === t).theme_libelle)} <span class="aide">(${S._fise.filter(c => c.theme_code === t).length})</span>`,
+      `<table class="tableau"><thead><tr><th>Ordre</th><th>Capacité évaluée</th><th>Catégories</th><th></th></tr></thead><tbody>
       ${S._fise.filter(c => c.theme_code === t).map(c => `<tr><td>${c.ordre}</td><td>${esc(c.libelle)}</td>
         <td>${S._fiseLiens.filter(l => l.capacite_id === c.id).map(l => esc(l.categorie_code)).join(', ') || 'toutes ?'}</td>
-        <td><button class="lien" onclick="modifierCapacite(${c.id})">Modifier</button></td></tr>`).join('')}</tbody></table>`).join('')
+        <td><button class="lien" onclick="modifierCapacite(${c.id})">Modifier</button></td></tr>`).join('')}</tbody></table>`)).join('')
       || '<p class="vide">Aucune capacité.</p>'}`;
 }
 
@@ -265,20 +269,22 @@ function modifierCapacite(id) {
 function rendreCategories(zone) {
   const refs = S.referentiel.referentiels, cats = S.referentiel.categories;
   zone.innerHTML = `<div class="barre-actions"><h2>Catégories et référentiels</h2></div>
-    ${refs.map(r => `<div class="carte"><h3>${esc(r.code)} — ${esc(r.libelle)} ${r.actif === false ? '<i>(inactif)</i>' : ''}
-        <button class="lien" onclick="modifierReferentiel('${esc(r.code)}')">Modifier</button></h3>
+    ${refs.map(r => repliable('ref:' + r.code, `${esc(r.code)} — ${esc(r.libelle)} ${r.actif === false ? '<i>(inactif)</i>' : ''}`, `<div class="carte">
+        <button class="lien" onclick="modifierReferentiel('${esc(r.code)}')">Modifier le référentiel</button>
       <p class="aide">Validité ${r.duree_validite_mois} mois · seuil théorie ${r.seuil_reussite_global_pct} % · UT théorie ${r.ut_theorique}</p>
-      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th>UT pratique</th><th>Temps de référence</th><th></th></tr></thead><tbody>
+      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th>
+        <th title="Unité de test : mesure de la charge de travail du testeur pour la pratique d'un candidat dans cette catégorie. Le total de la journée est plafonné (Testeurs & UT).">UT pratique ⓘ</th>
+        <th title="Durée totale prévue de l'épreuve pratique en minutes (T1 prise de poste + T2 production + T3 fin de poste). Au-delà de 130 % de ce temps, la note 0 est appliquée au(x) point(s) concerné(s). Vide = pas de contrôle du temps.">Temps de référence ⓘ</th><th></th></tr></thead><tbody>
       ${cats.filter(c => c.referentiel_code === r.code).map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.libelle)}</td><td>${c.ut_pratique}</td><td>${c.temps_reference_min ? c.temps_reference_min + ' min' : '<i>non défini</i>'}</td>
         <td><button class="lien" onclick="modifierCategorie('${esc(r.code)}','${esc(c.code)}')">Modifier</button></td></tr>`).join('')}</tbody></table>
-      <button onclick="modifierCategorie('${esc(r.code)}',null)">+ Catégorie</button></div>`).join('')}
-    <div class="carte"><h3>Options (porte-engins, télécommande…)</h3>
+      <button onclick="modifierCategorie('${esc(r.code)}',null)">+ Catégorie</button></div>`)).join('')}
+    ${repliable('options', 'Options (porte-engins, télécommande…)', `<div class="carte">
       <p class="aide">Une option est évaluée à part (+ UT dans la charge du testeur) et s'imprime sur le carton selon l'annexe de la recommandation.
         Pour qu'une catégorie la propose, ajoute dans <b>Grilles pratiques</b> des critères dont le code de thème est <code>opt_</code> + le code de l'option (ex. <code>opt_porte_engins</code>).</p>
-      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th>UT</th><th></th></tr></thead><tbody>
+      <table class="tableau"><thead><tr><th>Code</th><th>Libellé</th><th title="Unité de test ajoutée à la charge du testeur quand cette option est évaluée.">UT ⓘ</th><th></th></tr></thead><tbody>
       ${(S.referentiel.options || []).map(o => `<tr><td>${esc(o.code)}</td><td>${esc(o.libelle)} ${o.actif === false ? '<i>(inactive)</i>' : ''}</td><td>${esc(o.ut)}</td>
         <td><button class="lien" onclick="modifierOption('${esc(o.code)}')">Modifier</button></td></tr>`).join('')}</tbody></table>
-      <button onclick="modifierOption(null)">+ Option</button></div>`;
+      <button onclick="modifierOption(null)">+ Option</button></div>`)}`;
 }
 
 function modifierOption(code) {

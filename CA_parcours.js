@@ -1,7 +1,7 @@
 /* =====================================================================
    CA_parcours.js — parcours du stagiaire par catégorie :
    - initial
-   - recyclage : photo de l'ancien CACES obligatoire (théorie à repasser)
+   - recyclage : photo de l'ancien CACES® obligatoire (théorie à repasser)
    - autre catégorie dans l'année suivant la validation de la théorie :
      photo du CACES valide + date de validation de la théorie ; la théorie
      (valable 1 an) n'est pas repassée (dispense).
@@ -37,18 +37,18 @@ async function ouvrirParcours(stagiaireId) {
   const cats = st.stagiaire_categories || [];
   ouvrirModale(`Parcours — ${st.nom} ${st.prenom}`, `
     <p class="aide">Recyclage ou nouvelle catégorie dans l'année suivant la validation de la théorie : prends en photo
-      l'ancien CACES. Pour une nouvelle catégorie, la théorie (valable 1 an) n'est pas repassée.</p>
+      l'ancien CACES®. Pour une nouvelle catégorie, la théorie (valable 1 an) n'est pas repassée.</p>
     ${cats.map((c, i) => `<form class="carte parcours-form" data-i="${i}">
       <h3>${esc(c.referentiel_code)} ${esc(c.categorie_code)}</h3>
       <label>Parcours <select name="parcours" ${peut ? '' : 'disabled'}>
         ${Object.entries(LIBELLE_PARCOURS).map(([k, v]) => `<option value="${k}" ${c.parcours === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <div class="zone-ancien" ${c.parcours === 'initial' ? 'hidden' : ''}>
-        <label>N° de l'ancien CACES <input name="numero" value="${esc(c.ancien_caces_numero || '')}"></label>
-        <label class="lbl-theorie">Date de validation de la théorie (ancien CACES)
+        <label>N° de l'ancien CACES® <input name="numero" value="${esc(c.ancien_caces_numero || '')}"></label>
+        <label class="lbl-theorie">Date de validation de la théorie (ancien CACES®)
           <input type="date" name="date_theorie" value="${esc(c.ancien_caces_date_theorie || '')}" max="${new Date().toISOString().slice(0, 10)}"></label>
-        <label class="lbl-echeance">Date d'échéance de l'ancien CACES (reprise pour la nouvelle catégorie)
+        <label class="lbl-echeance">Date d'échéance de l'ancien CACES® (reprise pour la nouvelle catégorie)
           <input type="date" name="date_echeance" value="${esc(c.ancien_caces_date_echeance || '')}"></label>
-        <div class="doc-ancien">${c.ancien_caces_path ? '✔ Photo de l\'ancien CACES enregistrée' : '<i>Aucune photo</i>'}</div>
+        <div class="doc-ancien">${c.ancien_caces_path ? '✔ Photo de l\'ancien CACES® enregistrée' : '<i>Aucune photo</i>'}</div>
         ${peut ? `<div class="photo-actions">
           <label class="bouton-fichier">📁 Choisir un fichier / une photo<input type="file" accept="image/*,.heic" hidden name="fichier"></label>
           <label class="bouton-fichier">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" hidden name="camera"></label></div>
@@ -77,7 +77,7 @@ async function ouvrirParcours(stagiaireId) {
       const maj_ = { parcours, dispense_theorie: false };
       try {
         if (parcours !== 'initial') {
-          if (!fichier && !c.ancien_caces_path) return toast('La photo de l\'ancien CACES est obligatoire.', 'erreur');
+          if (!fichier && !c.ancien_caces_path) return toast('La photo de l\'ancien CACES® est obligatoire.', 'erreur');
           maj_.ancien_caces_numero = form.numero.value.trim() || null;
           if (fichier) {
             const blob = await reduireImage(fichier);
@@ -89,11 +89,11 @@ async function ouvrirParcours(stagiaireId) {
         }
         if (parcours === 'autre_categorie') {
           const d = form.date_theorie.value;
-          if (!d) return toast('Indique la date de validation de la théorie de l\'ancien CACES.', 'erreur');
+          if (!d) return toast('Indique la date de validation de la théorie de l\'ancien CACES®.', 'erreur');
           if (d < dateIlYaUnAn()) return toast('La théorie date de plus d\'un an : elle doit être repassée (parcours Initial ou Recyclage).', 'erreur', 8000);
           const ech = form.date_echeance.value;
-          if (!ech) return toast('Indique la date d\'échéance de l\'ancien CACES : la nouvelle catégorie aura la même échéance.', 'erreur', 8000);
-          if (ech < new Date().toISOString().slice(0, 10)) return toast('L\'ancien CACES est expiré : ce n\'est plus une extension (parcours Initial ou Recyclage).', 'erreur', 8000);
+          if (!ech) return toast('Indique la date d\'échéance de l\'ancien CACES® : la nouvelle catégorie aura la même échéance.', 'erreur', 8000);
+          if (ech < new Date().toISOString().slice(0, 10)) return toast('L\'ancien CACES® est expiré : ce n\'est plus une extension (parcours Initial ou Recyclage).', 'erreur', 8000);
           maj_.ancien_caces_date_echeance = ech;
           Object.assign(maj_, { ancien_caces_date_theorie: d, dispense_theorie: true,
             theorie_validee: true, date_validation_theorie: d });

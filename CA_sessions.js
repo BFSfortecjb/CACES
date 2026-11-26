@@ -43,7 +43,7 @@ const testeurDeLEpreuve = (s = S.session) => testeursSession(s).includes(S.profi
 /** Une même personne peut-elle être formateur ET testeur ? (autorisation de conduite, ou dérogation individuelle) */
 const peutCumuler = id => !!(S.formateurs || []).find(f => f.id === id)?.cumul_formateur_testeur;
 const cumulAutorise = (typeSession, formateurId) => typeSession === 'autorisation' || peutCumuler(formateurId);
-const LIBELLE_TYPE_SESSION = { caces: 'CACES', autorisation: 'Autorisation de conduite' };
+const LIBELLE_TYPE_SESSION = { caces: 'CACES®', autorisation: 'Autorisation de conduite' };
 
 function genererCodeAcces(longueur = 6) {
   // Sans caractères ambigus (0/O, 1/I) : le code est dicté à voix haute en salle
@@ -62,7 +62,7 @@ async function rendreSessions(zone) {
 
   zone.innerHTML = `
     <div id="alerte-testeurs"></div>
-    <div id="alerte-cdt"></div>
+    <div id="alerte-cdt"></div><div id="alerte-doc"></div>
     <details class="repliable" id="det-vgp" hidden><summary><b>VGP des engins du centre</b> <span id="sum-vgp"></span></summary><div id="alerte-vgp"></div></details>
     <details class="repliable" id="det-reperages"><summary><b>Repérages clients (visites préalables intra)</b> <span id="sum-reperages"></span></summary><div id="reperages"></div></details>
     <div class="barre-actions">
@@ -93,7 +93,7 @@ async function rendreSessions(zone) {
   if (typeof rendreReperages === 'function') rendreReperages($('#reperages'));
   if (typeof rendreAlerteVgp === 'function') rendreAlerteVgp($('#alerte-vgp'));
   if (typeof rendreAlerteTesteurs === 'function') rendreAlerteTesteurs($('#alerte-testeurs'));
-  if (typeof rendreAlerteCdt === 'function') rendreAlerteCdt($('#alerte-cdt'));
+  if (typeof rendreAlerteCdt === 'function') rendreAlerteCdt($('#alerte-cdt')); if (typeof rendreAlerteDocuments === 'function') rendreAlerteDocuments($('#alerte-doc'));
 }
 
 /* ====================== Création d'une session ====================== */
@@ -121,13 +121,13 @@ function nouvelleSession() {
       <div class="grille-2">
         <label>Type de session
           <select name="type_session" id="type-session">
-            <option value="caces">CACES (test + carton)</option>
+            <option value="caces">CACES® (test + carton)</option>
             <option value="autorisation">Autorisation de conduite</option></select></label>
         <label>N° de session Galaxy <b id="galaxy-oblig">(obligatoire)</b>
           <input name="galaxy" id="galaxy-champ" required placeholder="Ex : 12345">
           <button type="button" onclick="galaxyDansNouvelleSession()" title="Préremplit l'intitulé, les dates, le lieu et les catégories depuis Galaxy">⬇ Récupérer depuis Galaxy</button>
           <span class="aide" id="msg-galaxy"></span></label>
-        <label>Intitulé <input name="nom" required value="CACES — ${new Date().getFullYear()}"></label>
+        <label>Intitulé <input name="nom" required value="CACES® — ${new Date().getFullYear()}"></label>
         <label>Entreprise (client) <input name="entreprise"></label>
         <label>Date de début <input type="date" name="date_debut" value="${new Date().toISOString().slice(0, 10)}"></label>
         <label>Date de fin <span class="aide">(si la formation dure plusieurs jours)</span> <input type="date" name="date_fin"></label>
@@ -141,7 +141,7 @@ function nouvelleSession() {
         <label id="bloc-agence-org" hidden>Agence organisatrice (cachet, secrétariat)
           <select name="agence_org"><option value="">—</option>${S.referentiel.centres.map(c => `<option value="${c.id}">${esc(c.nom)}${c.agence ? ' — ' + esc(c.agence) : ''}</option>`).join('')}</select></label>
       </div>
-      <fieldset><legend>Catégories de CACES visées</legend>${cases_categories()}</fieldset>
+      <fieldset><legend>Catégories de CACES® visées</legend>${cases_categories()}</fieldset>
       <div class="pied-modale">
         <button type="button" onclick="fermerModale()">Annuler</button>
         <button type="submit" class="principal">Créer la session</button>
@@ -164,7 +164,7 @@ function nouvelleSession() {
     $('#galaxy-champ').required = !aut;
     $('#galaxy-oblig').textContent = aut ? '(facultatif)' : '(obligatoire)';
     $('#aide-testeur').textContent = aut ? '(peut être le formateur)' : '(différent du formateur)';
-    $('#form-session [name=nom]').value = (aut ? 'Autorisation de conduite — ' : 'CACES — ') + new Date().getFullYear();
+    $('#form-session [name=nom]').value = (aut ? 'Autorisation de conduite — ' : 'CACES® — ') + new Date().getFullYear();
   });
   $('#form-session').addEventListener('submit', async ev => {
     ev.preventDefault();
@@ -244,7 +244,7 @@ async function modifierCategoriesSession() {
   const sess = S.session;
   ouvrirModale('Catégories de la session', `
     <form id="form-cats" class="formulaire">
-      <fieldset><legend>Catégories de CACES visées</legend>${cases_categories(sess._categories || [])}</fieldset>
+      <fieldset><legend>Catégories de CACES® visées</legend>${cases_categories(sess._categories || [])}</fieldset>
       <p class="aide">Les catégories déjà attribuées aux stagiaires et leurs résultats ne sont pas modifiés : à régler stagiaire par stagiaire. Le formateur et le testeur doivent être habilités pour les catégories choisies.</p>
       <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button><button type="submit" class="principal">Enregistrer</button></div>
     </form>`);

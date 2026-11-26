@@ -23,7 +23,7 @@ async function genererFicheNonConformite(engin, points, nc) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('FICHE DE NON-CONFORMITÉ', 15, 20);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); gris();
   doc.text('Examen d\'adéquation — évaluation pratique CACES® (annexe 1, procédure n° 4)', 15, 26); noir();
-  doc.setFontSize(8); gris(); doc.text('Modèle provisoire BFS CACES — édité le ' + dateHeure, 15, 31); noir();
+  doc.setFontSize(8); gris(); doc.text('Modèle provisoire CACES® — édité le ' + dateHeure, 15, 31); noir();
 
   let y = 38;
   ligne(y, 'Organisme / agence', centre.agence || centre.nom || 'BFS'); y += 10;

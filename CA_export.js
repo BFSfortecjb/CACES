@@ -85,7 +85,7 @@ async function demanderEnvoiSecretariat() {
   if (!autorisation && !(s.numero_session_galaxy || '').trim()) return toast('N° de session Galaxy obligatoire.', 'erreur');
 
   ouvrirModale('Envoi au secrétariat', `
-    <p class="aide">Destinataire : <b>${esc(destinataire)}</b>. ${autorisation ? 'Autorisations de conduite' : 'Cartons CACES (les n° sont attribués à la génération)'} en pièces jointes d'un seul mail, copie sur le Drive de la session.</p>
+    <p class="aide">Destinataire : <b>${esc(destinataire)}</b>. ${autorisation ? 'Autorisations de conduite' : 'Cartons CACES® (les n° sont attribués à la génération)'} en pièces jointes d'un seul mail, copie sur le Drive de la session.</p>
     <form class="formulaire" id="form-secretariat">
       <fieldset><legend>Stagiaires (${eligibles.length})</legend>
         ${eligibles.map(st => `<label class="case"><input type="checkbox" name="st" value="${st.id}" checked> ${esc(st.nom)} ${esc(st.prenom)}</label>`).join('')}

@@ -7,13 +7,13 @@ const CONFIG = {
   // Adresse encodée dans le QR code du carton (le numéro est ajouté : ?n=...).
   // Tant que le site BFS n'a pas de page dédiée, c'est la page de vérification de l'appli.
   // Plus tard : 'https://bfs-prevention.fr/verification' (la page appellera la fonction caces_verifier_titre).
-  URL_VERIFICATION: 'https://bfs-prevention.fr/verification-titres/',   // page du site BFS : seule interface client (CACES + habilitation électrique)
-  NOM_APPLICATION: 'BFS CACES',
+  URL_VERIFICATION: 'https://bfs-prevention.fr/verification-titres/',   // page du site BFS : seule interface client (CACES® + habilitation électrique)
+  NOM_APPLICATION: 'CACES®',
   DEBUG: false,
 };
 
 /* Numéro de version affiché en pied de page : permet de vérifier que le navigateur a bien la dernière version. */
-const APP_VERSION = 'v121 — 26/11/2026';
+const APP_VERSION = 'v124 — 26/11/2026';
 /* BFS-VL-c011dbe5 */
 console.log('%c© 2026 Jérémy Bizeul — Vigie-lance, pour BFS Prévention.', 'color:#c9a227; font-weight:bold; font-size:12px;');
 console.log('BFS CACES — outil original. Toute reproduction ou réutilisation de ce code sans autorisation écrite est interdite. Contact : https://www.bfs-prevention.fr');

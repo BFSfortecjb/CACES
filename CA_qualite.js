@@ -8,7 +8,7 @@ const STATUT_AUDIT = { planifie: 'Planifié', realise: 'Réalisé', actions_sold
 
 async function rendreQualite(zone) {
   zone.innerHTML = `<div class="barre-actions"><h2>✅ Qualité</h2></div>
-    <nav class="stat-onglets">${[['reclamations', 'Réclamations'], ['audits', 'Audits internes & revue de direction'], ['perimetre', 'Périmètre des CDT'], ['expirant', 'CACES expirant']]
+    <nav class="stat-onglets">${[['reclamations', 'Réclamations'], ['audits', 'Audits internes & revue de direction'], ['perimetre', 'Périmètre des CDT'], ['expirant', 'CACES® expirant']]
       .map(([k, l]) => `<button data-q="${k}" class="${QUALITE.onglet === k ? 'actif' : ''}">${l}</button>`).join('')}</nav>
     <div id="qualite-corps"></div>`;
   $$('[data-q]', zone).forEach(b => b.addEventListener('click', () => { QUALITE.onglet = b.dataset.q; rendreQualite(zone); }));
@@ -148,13 +148,13 @@ async function qualiteExpirant(corps) {
   const lim = new Date(); lim.setMonth(lim.getMonth() + mois);
   const { data, error } = await sb.from('certificats').select('numero, referentiel_code, categorie_code, date_expiration, stagiaires(nom, prenom, entreprise)')
     .lte('date_expiration', lim.toISOString().slice(0, 10)).order('date_expiration').limit(2000);
-  if (error) return erreurSupabase('Lecture des CACES', error);
+  if (error) return erreurSupabase('Lecture des CACES®', error);
   const auj = new Date().toISOString().slice(0, 10), l = data || [];
-  corps.innerHTML = `<div class="carte"><p class="aide">CACES expirant dans les <input type="number" id="x-mois" min="1" max="24" value="${mois}" style="width:4em"> prochains mois (déjà expirés inclus).
+  corps.innerHTML = `<div class="carte"><p class="aide">CACES® expirant dans les <input type="number" id="x-mois" min="1" max="24" value="${mois}" style="width:4em"> prochains mois (déjà expirés inclus).
     <button id="x-ok">Enregistrer le délai</button> <button id="x-csv">Export CSV</button></p>
-    <table class="tableau"><thead><tr><th>Stagiaire</th><th>Entreprise</th><th>CACES</th><th>N°</th><th>Expire le</th><th></th></tr></thead><tbody>
+    <table class="tableau"><thead><tr><th>Stagiaire</th><th>Entreprise</th><th>CACES®</th><th>N°</th><th>Expire le</th><th></th></tr></thead><tbody>
     ${l.map(c => `<tr><td>${esc(`${c.stagiaires?.nom || ''} ${c.stagiaires?.prenom || ''}`.trim())}</td><td>${esc(c.stagiaires?.entreprise || '')}</td><td>${esc(c.referentiel_code)} ${esc(c.categorie_code)}</td>
-      <td>${esc(c.numero)}</td><td>${dateFr(c.date_expiration)}</td><td>${c.date_expiration < auj ? '<b style="color:#b2181a">Expiré</b>' : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="aide">Aucun CACES concerné.</td></tr>'}</tbody></table></div>`;
+      <td>${esc(c.numero)}</td><td>${dateFr(c.date_expiration)}</td><td>${c.date_expiration < auj ? '<b style="color:#b2181a">Expiré</b>' : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="aide">Aucun CACES® concerné.</td></tr>'}</tbody></table></div>`;
   $('#x-ok', corps).addEventListener('click', async () => {
     const v = Number($('#x-mois', corps).value);
     if (!(v >= 1 && v <= 24)) return toast('Délai entre 1 et 24 mois.', 'erreur');

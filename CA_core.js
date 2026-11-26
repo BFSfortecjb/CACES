@@ -243,7 +243,7 @@ async function chargerProfil() {
   if (error) throw new Error(error.message);
 
   if (!profil) {
-    DEBUG.erreur('Compte authentifié sans autorisation dans BFS CACES', user.email);
+    DEBUG.erreur('Compte authentifié sans autorisation dans CACES®', user.email);
     S.utilisateur = null; S.profil = null; S.organisme = null;
     await sb.auth.signOut();
     return 'non_autorise';

@@ -1,20 +1,24 @@
 /* ==========================================================================
-   BFS CACES — Onglet Organisme (admin) : parc d'engins + état Google Drive.
+   CACES® — Onglet Organisme (admin) : parc d'engins + état Google Drive.
    (Adresse secrétariat, mentions/signature/cachet du carton : à venir.)
    ========================================================================== */
+/** Onglet « Parc » (accessible à tous) : parc d'engins du centre. Écriture limitée par la base (formateur / admin). */
+async function rendreParc(zone) {
+  zone.innerHTML = `<div class="barre-actions"><h2>🚜 Parc d'engins</h2></div>
+    <p class="aide">Engins du centre, sélectionnables directement dans les sessions. Les engins de location y sont aussi mémorisés (même marque + n° de série = même engin : on ne remet à jour que les documents).</p>
+    <div id="zone-parc"></div>`;
+  await chargerTypesDocEngin();
+  rendreParcEngins($('#zone-parc'));
+}
+
 async function rendreOrganisme(zone) {
   zone.innerHTML = `
     <div class="barre-actions"><h2>Organisme</h2></div>
-    <div class="carte"><h3>Parc d'engins du centre</h3>
-      <p class="aide">Engins du centre, sélectionnables directement dans les sessions. Les engins de location y sont aussi mémorisés (même marque + n° de série = même engin : on ne remet à jour que les documents).</p>
-      <div id="zone-parc"></div></div>
     <div class="carte"><h3>Logo de l'organisme</h3><div id="zone-logo"></div></div>
     <div class="carte"><h3>Secrétariat (envois et exports)</h3><div id="zone-secr"></div></div>
     <div class="carte"><h3>Agences (cachet, signataire)</h3><div id="zone-carton"><p class="chargement">Chargement…</p></div></div>
     <div class="carte"><h3>Données personnelles (RGPD)</h3><div id="zone-rgpd"><p class="chargement">Chargement…</p></div></div>
     <div class="carte"><h3>Google Drive</h3><div id="zone-drive"><p class="chargement">Chargement…</p></div></div>`;
-  await chargerTypesDocEngin();
-  rendreParcEngins($('#zone-parc'));
   rendreEtatDrive();
   rendreLogoOrganisme();
   rendreSecretariatOrganisme($('#zone-secr'));

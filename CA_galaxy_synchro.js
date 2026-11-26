@@ -139,7 +139,7 @@ async function ouvrirSynchroGalaxy() {
       ${intervAjout.map((i, k) => `<p><label class="case"><input type="checkbox" data-ta="${k}" checked> Ajouter <b>${esc(i.nom)}</b> comme testeur de la session</label></p>`).join('')}
       ${formAChanger.map((i, k) => `<p><label class="case"><input type="checkbox" data-fo="${k}"> Remplacer le formateur de la session par <b>${esc(i.nom)}</b> (actuel : ${esc(nomFormateur(s.formateur_id)) || '—'})</label></p>`).join('')}
       ${testeursAbsents.length ? `<p class="aide">Testeur(s) de l'appli absent(s) de Galaxy (conservé(s)) : ${testeursAbsents.map(id => esc(nomFormateur(id))).join(', ')}.</p>` : ''}
-      ${intervInconnus.length ? `<p class="aide">Sans compte BFS CACES : ${intervInconnus.map(i => esc(i.nom)).join(', ')} — à créer par l'administrateur si besoin.</p>` : ''}`}
+      ${intervInconnus.length ? `<p class="aide">Sans compte CACES® : ${intervInconnus.map(i => esc(i.nom)).join(', ')} — à créer par l'administrateur si besoin.</p>` : ''}`}
       ${presErr ? `<p class="aide"><b>Présences : lecture Galaxy impossible</b> (${esc(presErr)}).</p>` : (nbPres ? `
       <p><label class="case"><input type="checkbox" id="sy-pres" checked> <b>Présences</b> : ${presAjout.length} demi-journée(s) à cocher, ${presRetrait.length} à décocher d'après Galaxy</label></p>
       <p class="aide">${[...new Set([...presAjout, ...presRetrait].map(x => `${esc(x.a.nom)} ${esc(x.a.prenom)} (${esc(dateFr(x.jour))})`))].slice(0, 12).join(' ; ')}${nbPres > 12 ? '…' : ''}</p>` : '<p class="aide">Présences : identiques à Galaxy.</p>')}

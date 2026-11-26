@@ -17,6 +17,34 @@ async function imageEnDataUrl(url) {
   return blobVersDataUrl(await r.blob());
 }
 
+/** Texte centré (colonne « Type » du carton) : « <= » devient le vrai symbole ≤ dessiné en vectoriel (la police standard ne l'a pas, et « <= » prend 2 signes),
+ *  « ≤ 6 t » reste insécable (jamais de « t » seul sur une ligne), le bloc est centré verticalement autour de yMilieu. */
+function texteCentreInferieurEgal(doc, libelle, cx, yMilieu, largeurMax) {
+  const mots = String(libelle || '').replace(/<=/g, '≤').split(/\s+/).filter(Boolean), unites = [];
+  for (let i = 0; i < mots.length; i++) {
+    if (mots[i] === '≤' && mots[i + 1]) { let u = mots[i] + ' ' + mots[i + 1]; i++; if (mots[i + 1] && mots[i + 1].length <= 2) { u += ' ' + mots[i + 1]; i++; } unites.push(u); }
+    else unites.push(mots[i]);
+  }
+  const taille = doc.getFontSize(), mm = taille * 0.3528, gw = mm * 0.55, interligne = mm * 1.15;
+  const largeur = s => doc.getTextWidth(s.replace(/≤/g, '')) + (s.split('≤').length - 1) * gw;
+  const lignes = []; let cur = '';
+  unites.forEach(u => { const essai = cur ? cur + ' ' + u : u; if (cur && largeur(essai) > largeurMax) { lignes.push(cur); cur = u; } else cur = essai; });
+  if (cur) lignes.push(cur);
+  let yb = yMilieu - ((lignes.length - 1) * interligne) / 2;
+  lignes.forEach(l => {
+    let x = cx - largeur(l) / 2;
+    l.split(/(≤)/).forEach(seg => {
+      if (seg === '≤') {
+        const h = mm * 0.55, y0 = yb;
+        doc.setLineWidth(0.15);
+        doc.line(x + gw * 0.9, y0 - h * 1.15, x + gw * 0.1, y0 - h * 0.65); doc.line(x + gw * 0.1, y0 - h * 0.65, x + gw * 0.9, y0 - h * 0.15);
+        doc.line(x + gw * 0.1, y0 + 0.15, x + gw * 0.9, y0 + 0.15); x += gw;
+      } else if (seg) { doc.text(seg, x, yb); x += doc.getTextWidth(seg); }
+    });
+    yb += interligne;
+  });
+}
+
 /** Catégories validées (théorie ET pratique) d'un stagiaire. */
 async function categoriesValidees(stagiaireId) {
   const { data } = await sb.from('stagiaire_categories').select('referentiel_code, categorie_code, theorie_validee, pratique_validee')
@@ -80,7 +108,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
 
   let certs = {};
   if (avecCarton) {
-    if (!opts.silencieux && !confirmer('Générer le carton attribue définitivement les numéros CACES aux catégories validées. Continuer ?')) return;
+    if (!opts.silencieux && !confirmer('Générer le carton attribue définitivement les numéros CACES® aux catégories validées. Continuer ?')) return;
     try {
       for (const c of cats) {
         const { data, error: e } = await sb.rpc('caces_emettre_certificat',
@@ -88,7 +116,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
         if (e) throw new Error(e.message);
         certs[c.referentiel_code + '|' + c.categorie_code] = data;
       }
-    } catch (e) { return erreurSupabase('Numérotation CACES', e); }
+    } catch (e) { return erreurSupabase('Numérotation CACES®', e); }
   }
   if (!opts.silencieux) toast('Génération du PDF…');
   try {
@@ -156,7 +184,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
           const ce = certs[ref + '|' + c.categorie_code] || {};
           boite(X0, y, W, 11); xs.slice(1, -1).forEach(x => doc.line(x, y, x, y + 11));
           doc.setFontSize(8); doc.text(c.categorie_code, xs[0] + cols[0] / 2, y + 6.5, { align: 'center' });
-          doc.setFontSize(7); doc.text(doc.splitTextToSize(libelleCategorie(ref, c.categorie_code), cols[1] - 2), xs[1] + cols[1] / 2, y + 4.5, { align: 'center' });
+          doc.setFontSize(7); texteCentreInferieurEgal(doc, libelleCategorie(ref, c.categorie_code), xs[1] + cols[1] / 2, y + 5.5, cols[1] - 2);
           const opts = optionsCarton(ref, c.categorie_code, ce);
           doc.setFontSize(7.5); bleu(); doc.text([ce.numero || '', ...opts], xs[2] + cols[2] / 2, y + 3.2, { align: 'center', lineHeightFactor: 1.1 });
           doc.text(nomFormateur(ce.testeur_id) || '', xs[3] + cols[3] / 2, y + 6.5, { align: 'center' });
@@ -217,7 +245,7 @@ async function genererDocumentPdf(stagiaireId, avecCarton, opts = {}) {
         doc.setFontSize(7); doc.text(`Inscrit dans la base INRS sous le n° ${NUMERO_INRS}`, 70, 92, { align: 'center' });
         doc.setFillColor(238, 238, 238); doc.setDrawColor(0); doc.rect(8, 95, 124, 9, 'FD');
         doc.setFontSize(6); doc.text(['Pour vérifier l\'authenticité de ce(s) CACES®, scanner le QR code ci-contre',
-          'ou consulter le site : https://bfsfortecjb.github.io/CACES/#verification'], 70, 98.5, { align: 'center' });
+          `ou consulter le site : ${CONFIG.URL_VERIFICATION.replace(/^https?:\/\//, '')}`], 70, 98.5, { align: 'center' });
         doc.setFontSize(6.5); gris(); doc.text('Document Recto/Verso. Toute copie doit comporter les 2 faces', 136, 104, { angle: 90 }); noir();
         // colonne droite
         doc.addImage(logo, 'PNG', 150, 8, 40, 21.7);

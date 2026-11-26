@@ -26,7 +26,7 @@ async function rendreStatistiques(zone) {
       <label class="case"><input type="checkbox" id="st-audit" ${STAT.audit ? 'checked' : ''}> Uniquement les sessions clôturées (audit)</label>
       <button class="principal" id="st-go">Actualiser</button>
     </div>
-    <nav class="stat-onglets">${[['synthese', 'Synthèse CDT'], ['cdt', 'Conformité CDT'], ['bilan', 'Bilan annuel'], ['matrice', 'Testeur × catégorie'], ['detail', 'Détail candidats'], ['jours', 'Journées de tests']]
+    <nav class="stat-onglets">${[['synthese', 'Synthèse CDT'], ['cdt', 'Conformité CDT'], ['bilan', 'Bilan annuel'], ['maintien', 'Maintien testeurs'], ['matrice', 'Testeur × catégorie'], ['detail', 'Détail candidats'], ['jours', 'Journées de tests']]
       .map(([k, l]) => `<button data-st="${k}" class="${STAT.onglet === k ? 'actif' : ''}">${l}</button>`).join('')}</nav>
     <div id="st-corps"><p class="chargement">Chargement…</p></div>`;
   const lire = () => { STAT.debut = $('#st-debut').value; STAT.fin = $('#st-fin').value; STAT.centre = $('#st-centre').value; STAT.client = $('#st-client').value.trim(); STAT.audit = $('#st-audit').checked; };
@@ -53,8 +53,8 @@ async function chargerStatistiques() {
 
 function dessinerStatistiques() {
   const z = $('#st-corps'); if (!z) return;
-  if (STAT.onglet === 'cdt' || STAT.onglet === 'bilan') {   // indépendants des filtres de période (année civile propre)
-    return (typeof statConformiteCdt === 'function' ? { cdt: statConformiteCdt, bilan: statBilanAnnuel }[STAT.onglet] : () => {})(z);
+  if (['cdt', 'bilan', 'maintien'].includes(STAT.onglet)) {   // indépendants des filtres de période (année civile propre)
+    return (typeof statConformiteCdt === 'function' ? { cdt: statConformiteCdt, bilan: statBilanAnnuel, maintien: statMaintienTesteurs }[STAT.onglet] : () => {})(z);
   }
   if (!STAT.lignes.length) { z.innerHTML = '<div class="carte"><p class="vide">Aucun test sur cette période avec ces filtres.</p></div>'; return; }
   ({ synthese: statSynthese, matrice: statMatrice, detail: statDetail, jours: statJours })[STAT.onglet](z);
@@ -72,7 +72,7 @@ function statSynthese(z) {
       return `<div class="stat-ligne"><div class="stat-nom">${esc(r)}</div>
         <div class="stat-piste">${n ? `<div class="stat-barre" style="width:${pct}%;background:${obj && pct < obj ? '#e67e22' : '#1b7c3c'}"></div>` : ''}${obj ? `<div class="stat-objectif" style="left:${obj}%" title="Objectif ${obj} %"><i>${obj} %</i></div>` : ''}
           <span class="stat-pct">${n ? pct + ' %' : 'pas de test réalisé'}</span></div>
-        <div class="stat-detail">${n} test${n > 1 ? 's' : ''} réalisé${n > 1 ? 's' : ''} dont ${c} en CDT et ${h} hors CDT · <label>objectif % <input type="number" min="0" max="100" value="${obj || ''}" data-obj="${esc(r)}" style="width:4em"></label></div></div>`;
+        <div class="stat-detail">${n} test${n > 1 ? 's' : ''} réalisé${n > 1 ? 's' : ''} dont ${c} en CDT et ${h} hors CDT · <label title="Objectif que tu te fixes pour la part de tests passés en CDT (trait sur la barre ; la barre passe en orange en dessous). Facultatif et propre à ce poste. Le minimum officiel du certificateur est dans l'onglet Conformité CDT.">objectif interne en CDT (%) ⓘ <input type="number" min="0" max="100" value="${obj || ''}" placeholder="${typeof SEUILS_CDT_T1 !== 'undefined' ? (SEUILS_CDT_T1[r.slice(0, 4)] || '') : ''}" data-obj="${esc(r)}" style="width:4em"></label></div></div>`;
     }).join('')}</div>`;
   $$('[data-obj]', z).forEach(i => i.onchange = () => { statDefinirObjectif(i.dataset.obj, i.value); statSynthese(z); });
 }

@@ -9,8 +9,8 @@
    stagiaire concerné pour la session (documents de session : récapitulatif).
    ===================================================================== */
 
-const LIBELLE_ENVOI_GALAXY = { carton: 'Carton CACES', preuve_test: 'Preuve de test', copie_qcm: 'Copie du QCM',
-  recapitulatif: 'Récapitulatif de la session', resultats: 'Résultats CACES' };
+const LIBELLE_ENVOI_GALAXY = { carton: 'Carton CACES®', preuve_test: 'Preuve de test', copie_qcm: 'Copie du QCM',
+  recapitulatif: 'Récapitulatif de la session', resultats: 'Résultats CACES®' };
 const jjmmaaaaGalaxy = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
 
 async function typeDocumentGalaxyCertificats() {
@@ -95,7 +95,7 @@ async function ouvrirEnvoiGalaxy() {
   const eRecap = deja(null, 'recapitulatif');
   ouvrirModale(`Envoyer vers Galaxy — session ${s.numero_session_galaxy}`, `
     <p class="aide">Les documents sont déposés dans la fiche Galaxy de chaque stagiaire, pour cette session, avec le type <b>CERTIFICATS</b>.
-      Rien n'est envoyé tant que tu n'as pas cliqué sur « 2. Envoyer ». Générer un carton attribue définitivement son numéro CACES.</p>
+      Rien n'est envoyé tant que tu n'as pas cliqué sur « 2. Envoyer ». Générer un carton attribue définitivement son numéro CACES®.</p>
     <table class="tableau"><thead><tr><th>Stagiaire</th><th>Titres</th><th>Carton</th><th>Preuve de test</th><th>Copie QCM</th><th>Résultats</th><th>Contrôle / envoi</th></tr></thead>
       <tbody>${(stags || []).map(ligne).join('') || '<tr><td colspan="7" class="vide">Aucun stagiaire.</td></tr>'}</tbody></table>
     <label class="case"><input type="checkbox" id="gx-recap" checked> Récapitulatif de la session (sur la session)
@@ -115,7 +115,7 @@ async function ouvrirEnvoiGalaxy() {
       const aFaire = coches.filter(c => renvoi || !deja({ id: c.id }, c.type));
       const recap = $('#gx-recap').checked && (renvoi || !eRecap);
       if (!aFaire.length && !recap) { msg.textContent = 'Rien à envoyer : tout est déjà envoyé (coche « Renvoyer » pour forcer).'; return; }
-      if (aFaire.some(c => c.type === 'carton') && !confirm('Générer les cartons attribue définitivement leurs numéros CACES. Continuer ?')) return;
+      if (aFaire.some(c => c.type === 'carton') && !confirm('Générer les cartons attribue définitivement leurs numéros CACES®. Continuer ?')) return;
       const typeDoc = await typeDocumentGalaxyCertificats();
       const lot = 'BFSCACES-' + new Date().toISOString().slice(0, 16);
       const ordre = ['carton', 'preuve_test', 'copie_qcm', 'resultats'];

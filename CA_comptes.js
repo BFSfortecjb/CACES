@@ -11,7 +11,7 @@ async function rendreComptes(zone) {
   zone.innerHTML = `
     <div class="barre-actions"><h2>Comptes</h2>
       <button class="principal" onclick="ajouterCompte()">+ Rattacher un compte</button></div>
-    <p class="aide">Chaque application BFS gère ses comptes : un compte de l'Univers BFS n'accède à BFS CACES
+    <p class="aide">Chaque application BFS gère ses comptes : un compte de l'Univers BFS n'accède à CACES®
       que s'il est listé ici.</p>
     <table class="tableau"><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Testeur</th><th>Échéance testeur</th><th>Catégories (formateur / testeur)</th><th>Actif</th><th></th></tr></thead><tbody>
     ${liste.map(f => `<tr class="${f.actif === false ? 'termine' : ''}">

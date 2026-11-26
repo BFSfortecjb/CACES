@@ -4,7 +4,7 @@
    Visible par l'administrateur et par les formateurs / testeurs de la session.
    ===================================================================== */
 const LIBELLE_TABLE_JOURNAL = {
-  sessions_formation: 'Session', stagiaires: 'Stagiaire', stagiaire_categories: 'Catégories du stagiaire', certificats: 'Titre CACES',
+  sessions_formation: 'Session', stagiaires: 'Stagiaire', stagiaire_categories: 'Catégories du stagiaire', certificats: 'Titre CACES®',
   epreuves_pratique: 'Évaluation pratique', fise_evaluations: 'FISE', fise_avis: 'Avis FISE', suivi_horometre: 'Horomètre',
   planning_tests: 'Planning des épreuves', presences_stagiaires: 'Présence', session_jours: 'Jours de la session', session_engins: 'Engins de la session',
   session_groupes: 'Groupes', session_testeurs: 'Testeurs de la session', session_categories: 'Catégories de la session', qcm_seances: 'Test théorique (séance)',
