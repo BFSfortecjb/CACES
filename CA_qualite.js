@@ -8,15 +8,15 @@ const STATUT_AUDIT = { planifie: 'Planifié', realise: 'Réalisé', actions_sold
 
 async function rendreQualite(zone) {
   zone.innerHTML = `<div class="barre-actions"><h2>✅ Qualité</h2></div>
-    <nav class="stat-onglets">${[['reclamations', 'Réclamations'], ['audits', 'Audits internes & revue de direction'], ['perimetre', 'Périmètre des CDT'], ['expirant', 'CACES® expirant']]
+    <nav class="stat-onglets">${[['reclamations', 'Réclamations'], ['audits', 'Audits internes & revue de direction'], ['perimetre', 'Périmètre des CDT'], ['expirant', 'CACES® expirant'], ...(typeof AUDIT_ONGLETS !== 'undefined' ? AUDIT_ONGLETS : [])]
       .map(([k, l]) => `<button data-q="${k}" class="${QUALITE.onglet === k ? 'actif' : ''}">${l}</button>`).join('')}</nav>
     <div id="qualite-corps"></div>`;
   $$('[data-q]', zone).forEach(b => b.addEventListener('click', () => { QUALITE.onglet = b.dataset.q; rendreQualite(zone); }));
   const corps = $('#qualite-corps', zone);
-  const f = QUALITE.onglet === 'audits' ? qualiteAudits : QUALITE.onglet === 'perimetre' ? qualitePerimetre : QUALITE.onglet === 'expirant' ? qualiteExpirant : qualiteReclamations;
+  const f = (typeof auditOngletFn === 'function' && auditOngletFn(QUALITE.onglet)) || (QUALITE.onglet === 'audits' ? qualiteAudits : QUALITE.onglet === 'perimetre' ? qualitePerimetre : QUALITE.onglet === 'expirant' ? qualiteExpirant : qualiteReclamations);
   await f(corps);
   // Auditeur : lecture seule (on garde uniquement les exports CSV)
-  if (S.profil?.role === 'auditeur') { $$('button', corps).forEach(b => { if (!/csv/i.test(b.id)) b.remove(); }); $$('form', corps).forEach(x => x.remove()); }
+  if (S.profil?.role === 'auditeur') { $$('button', corps).forEach(b => { if (!/csv|aud-ret|aud-pdf/i.test(b.id) && !b.dataset.ouv && !b.dataset.pdf) b.remove(); }); $$('form', corps).forEach(x => x.remove()); }
 }
 
 function qualiteCsv(nom, entetes, lignes) {

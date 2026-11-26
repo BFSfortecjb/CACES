@@ -4,7 +4,7 @@
    Chaque document a une version, une date, « validé par / le », une échéance de révision (alerte) et un lien ou un fichier.
    Lecture : tous les comptes. Ajout / nouvelle version : administrateur. L'historique des versions est conservé.
    ===================================================================== */
-const CAT_DOC = { recommandation: 'Recommandations CACES® et textes de référence', faq_caces: 'FAQ CACES® officielle', fiche_exercice: 'Fiches d\'exercice', circuit_test: 'Circuits de test (par CDT)', grille_inrs: 'Grille INRS', procedure: 'Procédures', veille: 'Veille réglementaire', autre: 'Autres' };
+const CAT_DOC = { recommandation: 'Recommandations CACES® et textes de référence', faq_caces: 'FAQ CACES® officielle', fiche_exercice: 'Fiches d\'exercice', circuit_test: 'Circuits de test (par CDT)', dossier_cdt: 'Dossier CDT (plans, photos, conventions)', grille_inrs: 'Grille INRS', procedure: 'Procédures', veille: 'Veille réglementaire', autre: 'Autres' };
 
 function docEtatRevision(d) {
   if (!d.revision_avant) return '';
