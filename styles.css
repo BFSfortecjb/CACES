@@ -895,3 +895,8 @@ body.qg-projection .qg-pied { display: none; }
 .faq-corps { padding: 0 14px 12px; } .faq-corps h4 { margin: 10px 0 2px; color: #555; font-size: .8rem; text-transform: uppercase; }
 .faq-corps p { margin: 0 0 6px; line-height: 1.45; }
 mark { background: #ffe58a; padding: 0 1px; border-radius: 2px; }
+
+/* Présences Galaxy (lecture seule) */
+.pg-table th.pg-c, .pg-table td.pg-c { text-align: center; white-space: nowrap; }
+.pg-r { display: block; margin: 1px auto; padding: 1px 8px; border-radius: 6px; font-size: .78rem; font-weight: 700; width: fit-content; }
+.pg-ok { background: #e3f4e8; color: #1b7c3c; } .pg-ko { background: #fde8e8; color: #b2181a; } .pg-na { background: #eceff1; color: #8a9199; font-weight: 400; }

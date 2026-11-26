@@ -479,6 +479,7 @@ async function rendreDetailSession(zone) {
       ${d.ecriture && s.numero_session_galaxy && s.type_session !== 'autorisation' ? `<button onclick="ouvrirEnvoiGalaxy()">⬆ Envoyer vers Galaxy</button>` : ''}
       <button onclick="appelModule('ouvrirJournalSession')" title="Qui a fait quoi sur cette session">📜 Journal</button>
     </div>
+    <div id="presences-galaxy"></div>
     <div class="barre-actions">
       <h3>Stagiaires (${(stagiaires || []).length})</h3>
       <div>
@@ -499,6 +500,7 @@ async function rendreDetailSession(zone) {
       </tbody>
     </table>`;
 
+  try { if (typeof rendrePresencesGalaxy === 'function') rendrePresencesGalaxy($('#presences-galaxy'), s); } catch (e) { /* bloc facultatif */ }
   try {
     if (s.lieu_type === 'client') statutVisiteHtml(s).then(h => { const z = $('#visite-statut'); if (z) z.innerHTML = h; });
   } catch (e) { /* statut de visite non critique */ }
