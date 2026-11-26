@@ -912,3 +912,10 @@ mark { background: #ffe58a; padding: 0 1px; border-radius: 2px; }
 .diffusion-ecran { max-width: 760px; margin: 40px auto; padding: 0 16px; }
 .diff-doc { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid #dde1e6; }
 .diff-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Grille INRS consultable pendant le test */
+.btn-grille-inrs { margin: 0 0 .6rem; }
+#grille-inrs-ecran { position: fixed; inset: 0; z-index: 9999; background: #fff; display: flex; flex-direction: column; }
+#grille-inrs-ecran .gi-barre { display: flex; gap: 1rem; align-items: center; padding: .6rem 1rem; background: #f2f4f8; border-bottom: 1px solid #ccd; }
+#grille-inrs-ecran .gi-barre b { flex: 1; }
+#grille-inrs-ecran iframe { flex: 1; width: 100%; border: 0; }

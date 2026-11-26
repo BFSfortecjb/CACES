@@ -169,6 +169,7 @@ async function afficherPratique(st, cat) {
   zone.innerHTML = `
     ${(passages || []).length ? `<p class="aide">Passages précédents : ${(passages || []).map(p =>
       `${new Date(p.date_passage).toLocaleDateString('fr-FR')} — ${p.score_global}/100 ${p.reussi ? 'ADMIS' : 'NON ADMIS'}`).join(' ; ')}</p>` : ''}
+    ${typeof boutonGrilleInrs === 'function' ? boutonGrilleInrs(cat.referentiel_code, cat.categorie_code) : ''}
     <div id="prat-consignes"></div>
     <div id="prat-prepa" hidden>
       <div class="grille-2">
