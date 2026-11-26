@@ -127,6 +127,8 @@ async function rendreGrilles(zone) {
       ${S._elim.map(e => `<div>${esc(e.libelle)} ${e.actif ? '' : '<i>(inactive)</i>'}
         <button class="lien" onclick="basculerElim(${e.id},${!e.actif})">${e.actif ? 'Désactiver' : 'Réactiver'}</button></div>`).join('') || '<i>Aucune.</i>'}
       <button onclick="ajouterElim()">+ Ajouter</button></div>`;
+  // Consultation seule pour les testeurs : on retire les boutons de modification (les listes déroulantes restent actives)
+  if (S.vision !== 'admin') $$('button', zone).forEach(b => b.remove());
 }
 
 function modifierPenalite(id) {

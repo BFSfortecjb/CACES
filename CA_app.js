@@ -67,29 +67,47 @@ const ONGLETS = {
   sessions:     'Sessions',
   statistiques: 'Statistiques',
   banque:       'Banque de questions',
-  grilles:      'Grilles pratiques',
-  fise:         'Catalogue FISE',
-  categories:   'Catégories',
-  testeurs:     'Testeurs & UT',
+  docqualite:   'Documents',
   verification: 'Vérification',
-  qualite:      'Qualité',
   organisme:    'Organisme',
-  comptes:      'Comptes',
-  motsdepasse:  'Mots de passe',
-  moncompte:    'Mon compte',
+  moncompte:    'Mon espace',
+  qualite:      'Qualité',   // onglet direct pour l'auditeur seulement (les autres le trouvent sous Organisme)
 };
+// Libellés des écrans accessibles en sous-onglet
+const LIBELLE_ECRAN = { tableaubord: 'Tableau de bord', organisme: 'Réglages', testeurs: 'Testeurs & UT', qualite: 'Qualité', categories: 'Catégories', fise: 'Catalogue FISE',
+  grilles: 'Grilles pratiques', comptes: 'Comptes', motsdepasse: 'Mots de passe', moncompte: 'Mes paramètres', messtats: 'Mes statistiques' };
+// Sous-onglets de chaque groupe (onglet principal)
+const GROUPES_ONGLETS = {
+  organisme: ['tableaubord', 'organisme', 'testeurs', 'qualite', 'categories', 'fise', 'grilles', 'comptes', 'motsdepasse'],
+  moncompte: ['moncompte', 'messtats', 'grilles'],
+};
+const estAdmin = () => S.vision === 'admin';
+const estTesteurConnecte = () => !['secretariat', 'auditeur'].includes(S.profil?.role) && S.profil?.est_testeur !== false;
 
-// Onglets réservés à l'administrateur
-const ONGLETS_ADMIN = new Set(['categories', 'testeurs', 'verification', 'qualite', 'organisme', 'comptes', 'fise']);
-// Onglet ouvert au rôle Secrétariat en plus de l'administrateur
-const ONGLETS_SECRETARIAT = new Set(['motsdepasse']);
+/** Écrans (sous-onglets) visibles pour l'utilisateur dans un groupe. */
+function sousOnglets(groupe) {
+  const role = S.profil?.role;
+  return (GROUPES_ONGLETS[groupe] || []).filter(id => {
+    if (groupe === 'organisme') return estAdmin() || (role === 'secretariat' && id === 'motsdepasse');
+    if (id === 'messtats') return estTesteurConnecte();
+    if (id === 'grilles') return !estAdmin() && estTesteurConnecte();
+    return true;
+  });
+}
+/** Onglet principal qui porte un écran donné ('' si l'écran n'est pas dans un groupe). */
+function groupeDe(ecran) {
+  return Object.keys(GROUPES_ONGLETS).find(g => sousOnglets(g).includes(ecran)) || '';
+}
 
-const ONGLETS_AUDITEUR = new Set(['sessions', 'statistiques', 'qualite', 'moncompte']);
+const ONGLETS_AUDITEUR = new Set(['sessions', 'statistiques', 'qualite', 'docqualite', 'moncompte']);
 function ongletsVisibles() {
+  const role = S.profil?.role;
   return Object.entries(ONGLETS).filter(([id]) => {
-    if (S.profil?.role === 'auditeur') return ONGLETS_AUDITEUR.has(id);
-    if (ONGLETS_ADMIN.has(id)) return S.vision === 'admin';
-    if (ONGLETS_SECRETARIAT.has(id)) return S.vision === 'admin' || S.profil?.role === 'secretariat';
+    if (role === 'auditeur') return ONGLETS_AUDITEUR.has(id);
+    if (id === 'qualite') return false;
+    if (id === 'statistiques') return estAdmin() || role === 'secretariat';
+    if (id === 'verification') return estAdmin();
+    if (id === 'organisme') return sousOnglets('organisme').length > 0;
     return true;
   });
 }
@@ -114,10 +132,13 @@ const RENDU = {
   categories:   z => (typeof rendreCategories === 'function' ? rendreCategories : rendreAVenir('Catégories'))(z),
   testeurs:     z => (typeof rendreTesteurs === 'function' ? rendreTesteurs : rendreAVenir('Testeurs & UT'))(z),
   verification: z => (typeof rendreVerification === 'function' ? rendreVerification : rendreAVenir('Vérification'))(z),
+  docqualite:   z => (typeof rendreEspaceDoc === 'function' ? rendreEspaceDoc : rendreAVenir('Documents'))(z),
   qualite:      z => (typeof rendreQualite === 'function' ? rendreQualite : rendreAVenir('Qualité'))(z),
+  tableaubord:  z => (typeof rendreTableauBord === 'function' ? rendreTableauBord : rendreAVenir('Tableau de bord'))(z),
   organisme:    z => (typeof rendreOrganisme === 'function' ? rendreOrganisme : rendreAVenir('Organisme'))(z),
   comptes:      z => (typeof rendreComptes === 'function' ? rendreComptes : rendreAVenir('Comptes'))(z),
   motsdepasse:  z => (typeof rendreMotsDePasse === 'function' ? rendreMotsDePasse : rendreAVenir('Mots de passe'))(z),
+  messtats:     z => (typeof rendreMesStats === 'function' ? rendreMesStats : rendreAVenir('Mes statistiques'))(z),
   moncompte:    z => (typeof rendreMonCompte === 'function' ? rendreMonCompte : rendreAVenir('Mon compte'))(z),
 };
 
@@ -128,17 +149,20 @@ function ecranFormateur(cible) {
         ${S.organisme?.raison_sociale ? `<span class="badge">${esc(S.organisme.raison_sociale)}</span>` : ''}</div>
       <nav class="onglets">
         ${ongletsVisibles().map(([id, lib]) =>
-          `<button data-onglet="${id}" class="${S.ecran === id ? 'actif' : ''}">${esc(lib)}</button>`).join('')}
+          `<button data-onglet="${id}" class="${(S.ecran === id || groupeDe(S.ecran) === id) ? 'actif' : ''}">${esc(lib)}</button>`).join('')}
       </nav>
       <div class="compte">
         <span>${esc(S.utilisateur.email)}</span>
         <button class="lien" onclick="deconnexion()" title="Se déconnecter">Déconnexion</button>
       </div>
     </header>
+    ${(() => { const g = groupeDe(S.ecran), l = g ? sousOnglets(g) : [];
+      return l.length > 1 ? `<nav class="stat-onglets sous-onglets">${l.map(id => `<button data-sous="${id}" class="${S.ecran === id ? 'actif' : ''}">${esc(LIBELLE_ECRAN[id] || id)}</button>`).join('')}</nav>` : ''; })()}
     <main id="contenu"></main>`;
+  $$('.sous-onglets button').forEach(b => b.addEventListener('click', () => { S.ecran = b.dataset.sous; S.session = null; ecranFormateur(cible); }));
 
   $$('.onglets button').forEach(b => b.addEventListener('click', () => {
-    S.ecran = b.dataset.onglet; S.session = null; ecranFormateur(cible);
+    S.ecran = GROUPES_ONGLETS[b.dataset.onglet] ? sousOnglets(b.dataset.onglet)[0] : b.dataset.onglet; S.session = null; ecranFormateur(cible);
   }));
 
   (RENDU[S.ecran] || RENDU.sessions)($('#contenu'));

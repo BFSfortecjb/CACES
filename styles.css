@@ -802,6 +802,7 @@ body.qg-projection .qg-pied { display: none; }
 .stat-onglets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .stat-onglets button { padding: 6px 14px; border-radius: 18px; border: 1px solid #c9ced6; background: #fff; cursor: pointer; }
 .stat-onglets button.actif { background: #f3ab12; border-color: #f3ab12; font-weight: 700; color: #080808; }
+.sous-onglets { margin: 0; padding: 8px 16px; background: #f4f5f7; border-bottom: 1px solid #dde1e6; }
 .stat-barre-outils { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 .stat-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 10px 0; }
 .stat-kpi { background: #fff; border-radius: 10px; border-top: 4px solid #2c6fbb; padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: flex; flex-direction: column; }

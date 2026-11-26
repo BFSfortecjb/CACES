@@ -200,8 +200,10 @@ async function exigerCodeTesteur(sessionId) {
 
 /* ---- Mon compte : code testeur personnel ---- */
 function rendreMonCompte(zone) {
-  zone.innerHTML = `<div class="barre-actions"><h2>Mon compte</h2></div>
-    <div class="carte"><h3>Mon code testeur (4 chiffres)</h3>
-      <p class="aide">Demandé avant de démarrer les tests d'une session dont tu es le testeur.</p>
-      <button class="principal" onclick="definirCodeTesteur(null)">Définir / changer mon code</button></div>`;
+  const testeur = typeof estTesteurConnecte === 'function' ? estTesteurConnecte() : true;
+  zone.innerHTML = `<div class="barre-actions"><h2>Mes paramètres</h2></div>
+    <div class="carte"><h3>Mon compte</h3><p>${esc(S.utilisateur?.email || '')} — ${esc(`${S.profil?.prenom || ''} ${S.profil?.nom || ''}`.trim())}</p></div>
+    ${testeur ? `<div class="carte"><h3>Mon code testeur (4 chiffres)</h3>
+      <p class="aide">Demandé avant de démarrer les tests d'une session dont tu es le testeur. Il vaut engagement d'indépendance (testeur ≠ formateur). Il ne peut pas être relu, seulement redéfini ; il est verrouillé après 5 erreurs (un administrateur le débloque).</p>
+      <button class="principal" onclick="definirCodeTesteur(null)">Définir / changer mon code</button></div>` : ''}`;
 }
