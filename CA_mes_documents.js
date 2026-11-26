@@ -57,11 +57,13 @@ function formMesDocuments(personne, base) {
     <label>Fichier <input type="file" name="fichier" required></label>
     <div class="aide"><button type="button" id="md-ocr">🔍 Lire le document pour pré-remplir</button> <span id="md-ocr-etat"></span>
       <br>Lecture faite sur cet appareil (rien n'est envoyé). Vérifie toujours les valeurs proposées.</div>
+    <div id="md-lignes" hidden></div>
     <label id="md-l-doc">Date du document (attestation) <input type="date" name="date_document" value="${base?.date_document || ''}"></label>
     <label id="md-l-val">Valable jusqu'au <input type="date" name="date_validite" value="${base?.date_validite || ''}"></label>
     <p class="aide" id="md-aide-bp" hidden>Validité calculée automatiquement : date du document + 5 ans.</p>
     <label>Notes <textarea name="notes" rows="2">${esc(base?.notes || '')}</textarea></label>
     <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button><button type="submit" class="principal">Enregistrer</button></div></form>`);
+  let lignesOcr = [];
   const f0 = $('#md-form'), maj = () => { const bp = (base?.type || f0.type.value) === 'base_prevention';
     $('#md-aide-bp').hidden = !bp; $('#md-l-val').hidden = bp; f0.date_document.required = bp; };
   f0.type.addEventListener('change', maj); maj();
@@ -69,12 +71,23 @@ function formMesDocuments(personne, base) {
     const fic = f0.fichier.files[0], etat = $('#md-ocr-etat'); if (!fic) return toast('Choisis d\'abord un fichier.', 'erreur');
     try {
       etat.textContent = 'Lecture en cours (le premier usage charge le module)…';
-      const r = analyserDocument(await lireTexteDocument(fic, p => { etat.textContent = 'Lecture… ' + p + ' %'; }));
+      const lu = await lireDocument(fic, p => { etat.textContent = 'Lecture… ' + p + ' %'; }), r = analyserDocument(lu.texte, lu.items);
       if (!base && r.type) { f0.type.value = r.type; maj(); }
       if ((!f0.titre.value || f0.titre.dataset.auto === '1') && r.titre) { f0.titre.value = r.titre; f0.titre.dataset.auto = '1'; }
-      if (r.date_document) f0.date_document.value = r.date_document;
-      if (r.date_validite && !f0.date_validite.value) f0.date_validite.value = r.date_validite;
-      etat.textContent = (r.date_document || r.date_validite || r.titre) ? 'Valeurs proposées : à vérifier avant d\'enregistrer.' : 'Rien de fiable trouvé : saisis les champs à la main.';
+      lignesOcr = r.type === 'caces' ? r.lignes : [];
+      const zl = $('#md-lignes'); zl.hidden = !lignesOcr.length;
+      $('#md-l-doc').hidden = $('#md-l-val').hidden = !!lignesOcr.length;
+      zl.innerHTML = lignesOcr.length ? `<b>CACES® lus sur le document</b> <span class="aide">(une ligne par catégorie, avec ses propres dates — corrige si besoin)</span>
+        <table class="tableau"><thead><tr><th>N° du CACES®</th><th>Obtenu le</th><th>Échéance</th></tr></thead><tbody>
+        ${lignesOcr.map((l, i) => `<tr><td>${esc(l.numero)}<div class="aide">${esc(l.ref)} cat. ${esc(l.cat)}</div></td>
+          <td><input type="date" data-l="${i}" data-c="date_document" value="${l.date_document}"></td>
+          <td><input type="date" data-l="${i}" data-c="date_validite" value="${l.date_validite}"></td></tr>`).join('')}</tbody></table>` : '';
+      $$('#md-lignes input').forEach(x => x.addEventListener('change', () => { lignesOcr[x.dataset.l][x.dataset.c] = x.value; }));
+      if (!lignesOcr.length) {
+        if (r.date_document) f0.date_document.value = r.date_document;
+        if (r.date_validite && !f0.date_validite.value) f0.date_validite.value = r.date_validite;
+      }
+      etat.textContent = (lignesOcr.length || r.date_document || r.date_validite || r.titre) ? 'Valeurs proposées : à vérifier avant d\'enregistrer.' : 'Rien de fiable trouvé : saisis les champs à la main.';
     } catch (e) { etat.textContent = 'Lecture impossible (' + (e.message || e) + ') : saisie manuelle.'; }
   });
   $('#md-form').addEventListener('submit', async ev => {
@@ -83,6 +96,14 @@ function formMesDocuments(personne, base) {
     const chemin = `${personne}/${type}/${Date.now()}_${fic.name.replace(/[^\w.-]+/g, '_')}`;
     const { error: e1 } = await sb.storage.from('caces-personnel').upload(chemin, fic, { upsert: false });
     if (e1) return erreurSupabase('Envoi du fichier', e1);
+    if (type === 'caces' && lignesOcr.length) {          // carton lu : une fiche par catégorie, avec ses propres dates
+      const lignes = lignesOcr.map(l => ({ personne_id: personne, type, titre: `CACES® ${l.ref} — cat. ${l.cat}`, fichier_path: chemin, date_document: l.date_document || null,
+        date_validite: l.date_validite || null, notes: 'N° ' + l.numero, actuelle: true }));
+      for (const l of lignes) { const { error: ea } = await sb.from('documents_personnels').update({ actuelle: false }).eq('personne_id', personne).eq('type', type).eq('titre', l.titre).eq('actuelle', true); if (ea) return erreurSupabase('Archivage', ea); }
+      const { error: eb } = await sb.from('documents_personnels').insert(lignes);
+      if (eb) return erreurSupabase('Enregistrement', eb);
+      fermerModale(); return rendreMesDocuments($('#contenu'));
+    }
     // photo / signature : un seul « actuel » par type ; sinon l'ancien version du même titre est archivé
     const q = sb.from('documents_personnels').update({ actuelle: false }).eq('personne_id', personne).eq('type', type).eq('actuelle', true);
     const { error: e2 } = await (['photo', 'signature', 'base_prevention'].includes(type) ? q : q.eq('titre', f.titre.value.trim()));
