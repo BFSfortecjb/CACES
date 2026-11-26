@@ -27,7 +27,7 @@ async function rendreMesDocuments(zone) {
       const l = docs.filter(d => d.type === k && d.actuelle), h = docs.filter(d => d.type === k && !d.actuelle);
       return `<div class="carte"><h3>${lib}</h3>${l.length ? `<table class="tableau"><thead><tr><th>Document</th><th>Document du / Validité</th><th></th></tr></thead><tbody>
         ${l.map(d => { const e = etat(d); return `<tr><td><b>${esc(d.titre)}</b>${['photo', 'signature'].includes(d.type) ? `<div><img data-prev="${d.id}" alt="" style="max-height:70px;background:#fff;border:1px solid #ddd;border-radius:6px"></div>` : ''}${d.notes ? `<div class="aide">${esc(d.notes)}</div>` : ''}</td>
-          <td>${d.date_document ? 'du ' + dateFr(d.date_document) + ' → ' : ''}${d.date_validite ? dateFr(d.date_validite) : '—'} ${e === 'retard' ? '<b style="color:#b2181a">Expiré</b>' : e === 'proche' ? '<b style="color:#c97a02">Bientôt</b>' : ''}</td>
+          <td>${d.date_document ? 'du ' + dateFr(d.date_document) + ' → ' : ''}${d.date_validite ? dateFr(d.date_validite) : '—'} ${e === 'retard' ? `<b style="color:#b2181a">Expiré${d.type === 'base_prevention' ? ' — ne peut plus tester' : d.categorie_code ? ' — ne peut plus évaluer ' + esc(d.referentiel_code || '') + ' ' + esc(d.categorie_code) : ''}</b>` : e === 'proche' ? '<b style="color:#c97a02">Bientôt</b>' : ''}</td>
           <td><button data-o="${d.id}">Ouvrir</button> <button data-r="${d.id}">Remplacer</button> <button data-x="${d.id}" class="danger">Supprimer</button></td></tr>`; }).join('')}</tbody></table>`
         : '<p class="aide">Aucun document.</p>'}
         ${h.length ? `<details><summary class="aide">Anciennes versions (${h.length})</summary>${h.map(d => `<div><button data-o="${d.id}">${esc(d.titre)} — ${dateFr(d.created_at.slice(0, 10))}</button></div>`).join('')}</details>` : ''}</div>`;
@@ -63,6 +63,10 @@ function formMesDocuments(personne, base) {
     <div class="aide"><button type="button" id="md-ocr">🔍 Lire le document pour pré-remplir</button> <span id="md-ocr-etat"></span>
       <br>Lecture faite sur cet appareil (rien n'est envoyé). Vérifie toujours les valeurs proposées.</div>
     <div id="md-lignes" hidden></div>
+    <div id="md-rc" class="grille-2" hidden>
+      <label>Référentiel concerné <select name="refcode"><option value="">—</option>${['R482', 'R483', 'R484', 'R485', 'R486', 'R487', 'R489', 'R490'].map(r => `<option ${base?.referentiel_code === r ? 'selected' : ''}>${r}</option>`).join('')}</select></label>
+      <label>Catégorie concernée <input type="text" name="catcode" value="${esc(base?.categorie_code || '')}" placeholder="ex. B1, 3, A"></label>
+      <p class="aide" style="grid-column:1/-1">Si la date de validité est dépassée, le testeur ne peut plus évaluer cette catégorie.</p></div>
     <label id="md-l-doc">Date du document (attestation) <input type="date" name="date_document" value="${base?.date_document || ''}"></label>
     <label id="md-l-val">Valable jusqu'au <input type="date" name="date_validite" value="${base?.date_validite || ''}"></label>
     <p class="aide" id="md-aide-bp" hidden>Validité calculée automatiquement : date du document + 5 ans.</p>
@@ -75,6 +79,7 @@ function formMesDocuments(personne, base) {
   const arreterCamera = () => { flux?.getTracks().forEach(t => t.stop()); flux = null; };
   const majCapture = () => {
     const t = base?.type || f0.type.value, z = $('#md-capture'); capture = null; arreterCamera();
+    $('#md-rc').hidden = !['caces', 'justificatif'].includes(t);
     z.hidden = !['photo', 'signature'].includes(t); f0.fichier.required = z.hidden; $('#md-l-fic').querySelector('input').required = z.hidden;
     $('#md-ocr').parentElement.hidden = ['photo', 'signature'].includes(t);
     if (t === 'photo') initSelfie(z); else if (t === 'signature') initSignature(z); else z.innerHTML = '';
@@ -149,7 +154,7 @@ function formMesDocuments(personne, base) {
     if (e1) return erreurSupabase('Envoi du fichier', e1);
     if (type === 'caces' && lignesOcr.length) {          // carton lu : une fiche par catégorie, avec ses propres dates
       const lignes = lignesOcr.map(l => ({ personne_id: personne, type, titre: `CACES® ${l.ref} — cat. ${l.cat}`, fichier_path: chemin, date_document: l.date_document || null,
-        date_validite: l.date_validite || null, notes: 'N° ' + l.numero, actuelle: true }));
+        date_validite: l.date_validite || null, notes: 'N° ' + l.numero, referentiel_code: l.ref, categorie_code: l.cat, actuelle: true }));
       for (const l of lignes) { const { error: ea } = await sb.from('documents_personnels').update({ actuelle: false }).eq('personne_id', personne).eq('type', type).eq('titre', l.titre).eq('actuelle', true); if (ea) return erreurSupabase('Archivage', ea); }
       const { error: eb } = await sb.from('documents_personnels').insert(lignes);
       if (eb) return erreurSupabase('Enregistrement', eb);
@@ -161,6 +166,7 @@ function formMesDocuments(personne, base) {
     if (e2) return erreurSupabase('Archivage de l\'ancienne version', e2);
     const { error: e3 } = await sb.from('documents_personnels').insert({ personne_id: personne, type, titre: f.titre.value.trim(), fichier_path: chemin,
       date_document: f.date_document.value || null,
+      referentiel_code: f.refcode?.value || null, categorie_code: (f.catcode?.value || '').trim().toUpperCase() || null,
       date_validite: type === 'base_prevention' ? (() => { const d = new Date(f.date_document.value); d.setFullYear(d.getFullYear() + VALIDITE_BASE_PREVENTION_ANS); return d.toISOString().slice(0, 10); })() : (f.date_validite.value || null), notes: f.notes.value.trim() || null, actuelle: true });
     if (e3) return erreurSupabase('Enregistrement', e3);
     fermerModale(); rendreMesDocuments($('#contenu'));

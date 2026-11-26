@@ -118,6 +118,8 @@ async function afficherPratique(st, cat) {
       <p class="aide">Seul ce testeur peut évaluer cette catégorie (répartition par catégorie de la session).</p></div>`;
     return;
   }
+  const bloque = typeof blocageTesteur === 'function' && S.profil?.role !== 'admin' ? blocageTesteur(S.profil?.id, cat.referentiel_code, cat.categorie_code) : '';
+  if (bloque) { zone.innerHTML = `<div class="carte" style="border-left:4px solid #b2181a"><p><b>Évaluation impossible : ${esc(bloque)}.</b></p><p class="aide">Mets à jour tes documents dans « Mon espace › Mes documents », ou demande à l'administrateur de le faire.</p></div>`; return; }
   zone.innerHTML = '<p class="chargement">Chargement…</p>';
   const [{ data: criteres, error }, { data: passages }, { data: liens }, { data: ops }, { data: adeqs }] = await Promise.all([
     sb.from('criteres_pratique').select('*').eq('referentiel_code', cat.referentiel_code)

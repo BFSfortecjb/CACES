@@ -267,9 +267,11 @@ async function chargerFormateurs() {
   S.formateurs = (data || []).filter(f => f.actif !== false);
   const { data: hab } = await sb.from('formateur_habilitations').select('formateur_id, fonction, referentiel_code, categorie_code');
   S.habilitations = hab || [];   // vide (ou table absente) = toutes catégories
+  if (typeof chargerVeille === 'function') await chargerVeille();   // échéances des documents des testeurs + blocages
 }
 /** Habilité pour toutes les catégories données ? Aucune ligne pour (personne, fonction) = toutes les catégories. */
 function habilite(personneId, fonction, categories) {
+  if (fonction === 'testeur' && typeof blocageTesteur === 'function' && (categories || []).some(c => blocageTesteur(personneId, c.referentiel_code, c.categorie_code))) return false;
   const lignes = (S.habilitations || []).filter(h => h.formateur_id === personneId && h.fonction === fonction);
   if (!lignes.length) return true;
   return (categories || []).every(c => lignes.some(h => h.referentiel_code === c.referentiel_code && h.categorie_code === c.categorie_code));
