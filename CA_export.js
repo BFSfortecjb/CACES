@@ -62,6 +62,7 @@ async function telechargerZipSession() {
     const preuves = await genererPreuvesTest(eligibles.map(x => x.id)), dp = zip.folder('Preuves_de_test');
     preuves.forEach(p => dp.file(p.nom, p.base64, { base64: true }));
     try { const rc = await genererRecapSessionPdf(); if (rc) zip.file(rc.nom, rc.base64, { base64: true }); } catch (e) { console.warn('Récapitulatif', e); }
+    try { const da = await genererDossierAuditPdf(); if (da) zip.file(da.nom, da.base64, { base64: true }); } catch (e) { console.warn('Dossier audit', e); }
     const copies = await genererCopiesQcm(eligibles.map(x => x.id)), dq = zip.folder('Copies_QCM');
     copies.forEach(p => dq.file(p.nom, p.base64, { base64: true }));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
