@@ -45,12 +45,13 @@
   window.analyserDocument = function (texte) {
     const t = texte.replace(/[ \t]+/g, ' '), bas = t.toLowerCase(), ds = dates(t), auj = new Date().toISOString().slice(0, 10);
     let type = 'administratif';
-    if (/inrs/.test(bas) && /pr[ée]vention/.test(bas)) type = 'base_prevention';
+    if (/bases?\s+en\s+pr[ée]vention/.test(bas) || (/inrs/.test(bas) && /pr[ée]vention/.test(bas))) type = 'base_prevention';
     else if (/caces/.test(bas)) type = 'caces';
     else if (/(certificat|dipl[oô]me|attestation|habilitation|formation)/.test(bas)) type = 'justificatif';
     const val = ds.find(x => /(valable|validit[ée]|jusqu|expire|[ée]ch[ée]ance)/.test(x.ctx));
     const emis = ds.find(x => /(d[ée]livr|fait le|[ée]tabli|date|le )/.test(x.ctx) && x.d <= auj && x !== val) || ds.filter(x => x.d <= auj && x !== val).sort((a, b) => a.d < b.d ? 1 : -1)[0];
     const ligne = t.split('\n').map(l => l.trim()).find(l => l.length > 6 && /(attestation|certificat|caces|inrs|dipl[oô]me|habilitation)/i.test(l));
-    return { type, titre: ligne ? ligne.slice(0, 90) : '', date_document: emis?.d || '', date_validite: val?.d || '' };
+    const titre = type === 'base_prevention' ? 'Attestation « Acquérir des bases en prévention » — INRS' : (ligne ? ligne.slice(0, 90) : '');
+    return { type, titre, date_document: emis?.d || '', date_validite: val?.d || '' };
   };
 })();

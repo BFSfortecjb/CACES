@@ -26,7 +26,19 @@
 // à servir indéfiniment les anciens fichiers en cache (voir la règle
 // ci-dessus), même après un rechargement forcé (Ctrl+F5 ne contourne PAS
 // le service worker).
-const CACHE_VERSION = 'caces-shell-v139';
+const CACHE_VERSION = 'caces-shell-v141';
+
+// Fichiers lourds (grilles INRS en PDF, ≈ 1,3 Mo) : chargés en arrière-plan APRÈS l'installation, pour ne pas ralentir le premier affichage.
+const FICHIERS_DIFFERES = [
+  './assets/grilles_inrs/R482.pdf',
+  './assets/grilles_inrs/R483.pdf',
+  './assets/grilles_inrs/R484.pdf',
+  './assets/grilles_inrs/R485.pdf',
+  './assets/grilles_inrs/R486.pdf',
+  './assets/grilles_inrs/R487.pdf',
+  './assets/grilles_inrs/R489.pdf',
+  './assets/grilles_inrs/R490.pdf',
+];
 
 const FICHIERS_APP_SHELL = [
   './',
@@ -42,14 +54,6 @@ const FICHIERS_APP_SHELL = [
   './CA_docs_session.js',
   './CA_ocr.js',
   './CA_mes_documents.js',
-  './assets/grilles_inrs/R482.pdf',
-  './assets/grilles_inrs/R483.pdf',
-  './assets/grilles_inrs/R484.pdf',
-  './assets/grilles_inrs/R485.pdf',
-  './assets/grilles_inrs/R486.pdf',
-  './assets/grilles_inrs/R487.pdf',
-  './assets/grilles_inrs/R489.pdf',
-  './assets/grilles_inrs/R490.pdf',
   './assets/logo_bfs.png',
   './assets/logo_assurance_maladie.jpg',
   './CA_documents.js',
@@ -113,6 +117,7 @@ self.addEventListener('activate', event => {
         noms.filter(n => n !== CACHE_VERSION).map(n => caches.delete(n))
       ))
       .then(() => self.clients.claim())
+      .then(() => caches.open(CACHE_VERSION).then(c => Promise.all(FICHIERS_DIFFERES.map(f => c.add(f).catch(() => null)))))
   );
 });
 

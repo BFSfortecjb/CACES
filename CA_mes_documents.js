@@ -57,13 +57,13 @@ function formMesDocuments(personne, base) {
     <label>Fichier <input type="file" name="fichier" required></label>
     <div class="aide"><button type="button" id="md-ocr">🔍 Lire le document pour pré-remplir</button> <span id="md-ocr-etat"></span>
       <br>Lecture faite sur cet appareil (rien n'est envoyé). Vérifie toujours les valeurs proposées.</div>
-    <label id="md-l-doc" hidden>Date du document (attestation) <input type="date" name="date_document" value="${base?.date_document || ''}"></label>
+    <label id="md-l-doc">Date du document (attestation) <input type="date" name="date_document" value="${base?.date_document || ''}"></label>
     <label id="md-l-val">Valable jusqu'au <input type="date" name="date_validite" value="${base?.date_validite || ''}"></label>
     <p class="aide" id="md-aide-bp" hidden>Validité calculée automatiquement : date du document + 5 ans.</p>
     <label>Notes <textarea name="notes" rows="2">${esc(base?.notes || '')}</textarea></label>
     <div class="pied-modale"><button type="button" onclick="fermerModale()">Annuler</button><button type="submit" class="principal">Enregistrer</button></div></form>`);
   const f0 = $('#md-form'), maj = () => { const bp = (base?.type || f0.type.value) === 'base_prevention';
-    $('#md-l-doc').hidden = !bp; $('#md-aide-bp').hidden = !bp; $('#md-l-val').hidden = bp; f0.date_document.required = bp; };
+    $('#md-aide-bp').hidden = !bp; $('#md-l-val').hidden = bp; f0.date_document.required = bp; };
   f0.type.addEventListener('change', maj); maj();
   $('#md-ocr').addEventListener('click', async () => {
     const fic = f0.fichier.files[0], etat = $('#md-ocr-etat'); if (!fic) return toast('Choisis d\'abord un fichier.', 'erreur');
@@ -71,7 +71,7 @@ function formMesDocuments(personne, base) {
       etat.textContent = 'Lecture en cours (le premier usage charge le module)…';
       const r = analyserDocument(await lireTexteDocument(fic, p => { etat.textContent = 'Lecture… ' + p + ' %'; }));
       if (!base && r.type) { f0.type.value = r.type; maj(); }
-      if (!f0.titre.value && r.titre) f0.titre.value = r.titre;
+      if ((!f0.titre.value || f0.titre.dataset.auto === '1') && r.titre) { f0.titre.value = r.titre; f0.titre.dataset.auto = '1'; }
       if (r.date_document) f0.date_document.value = r.date_document;
       if (r.date_validite && !f0.date_validite.value) f0.date_validite.value = r.date_validite;
       etat.textContent = (r.date_document || r.date_validite || r.titre) ? 'Valeurs proposées : à vérifier avant d\'enregistrer.' : 'Rien de fiable trouvé : saisis les champs à la main.';
@@ -88,7 +88,7 @@ function formMesDocuments(personne, base) {
     const { error: e2 } = await (['photo', 'signature', 'base_prevention'].includes(type) ? q : q.eq('titre', f.titre.value.trim()));
     if (e2) return erreurSupabase('Archivage de l\'ancienne version', e2);
     const { error: e3 } = await sb.from('documents_personnels').insert({ personne_id: personne, type, titre: f.titre.value.trim(), fichier_path: chemin,
-      date_document: type === 'base_prevention' ? f.date_document.value : null,
+      date_document: f.date_document.value || null,
       date_validite: type === 'base_prevention' ? (() => { const d = new Date(f.date_document.value); d.setFullYear(d.getFullYear() + VALIDITE_BASE_PREVENTION_ANS); return d.toISOString().slice(0, 10); })() : (f.date_validite.value || null), notes: f.notes.value.trim() || null, actuelle: true });
     if (e3) return erreurSupabase('Enregistrement', e3);
     fermerModale(); rendreMesDocuments($('#contenu'));
